@@ -1,0 +1,316 @@
+#%RAML 1.0
+title: Shipping System API
+description: |
+  System Layer API for shipping and logistics operations.
+  Provides shipment creation, tracking, and rate calculation services.
+  Part of the System Layer in the API-Led Connectivity architecture.
+version: v1
+baseUri: https://api.company.com/system/shipping/{version}
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  systemTypes: !include RAML DataTypes/SystemAPIs.raml
+  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+
+securitySchemes:
+  client_credentials:
+    description: OAuth 2.0 Client Credentials for system-to-system communication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          type: string
+          pattern: ^Bearer .+$
+          example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        401:
+          description: Unauthorized - Invalid or expired token
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+        403:
+          description: Forbidden - Insufficient permissions
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [client_credentials]
+
+/shipments:
+  displayName: Shipment Management
+  description: Create and manage shipments
+
+  post:
+    displayName: Create Shipment
+    description: |
+      Create a new shipment for an order including carrier selection,
+      label generation, and tracking number assignment.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.CreateShipmentRequest
+    responses:
+      201:
+        description: Shipment created successfully
+        headers:
+          Location:
+            description: URL of the created shipment
+            type: string
+            example: /shipments/SHIP456789012
+        body:
+          application/json:
+            type: systemTypes.CreateShipmentResponse
+      400:
+        description: Bad Request - Invalid shipment request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Shipment creation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/shipments/{shipmentId}:
+  displayName: Individual Shipment
+  description: Operations on a specific shipment
+  uriParameters:
+    shipmentId:
+      displayName: Shipment ID
+      description: Unique shipment identifier
+      type: string
+      pattern: ^SHIP[0-9]{6,12}$
+      example: SHIP456789012
+
+  get:
+    displayName: Get Shipment Details
+    description: |
+      Retrieve detailed information about a specific shipment
+      including status, tracking details, and delivery information.
+    securedBy: [client_credentials]
+    responses:
+      200:
+        description: Successfully retrieved shipment details
+        body:
+          application/json:
+            type: systemTypes.CreateShipmentResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Shipment not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/shipments/{shipmentId}/track:
+  displayName: Shipment Tracking
+  description: Track shipment status and location
+  uriParameters:
+    shipmentId:
+      displayName: Shipment ID
+      description: Unique shipment identifier
+      type: string
+      pattern: ^SHIP[0-9]{6,12}$
+      example: SHIP456789012
+
+  get:
+    displayName: Track Shipment
+    description: |
+      Track a shipment using shipment ID or tracking number.
+      Provides real-time status updates and delivery estimates.
+    securedBy: [client_credentials]
+    queryParameters:
+      trackingNumber:
+        displayName: Tracking Number
+        description: Alternative tracking using carrier tracking number
+        type: string
+        maxLength: 50
+        example: 1Z999AA1234567890
+        required: false
+      includeHistory:
+        displayName: Include History
+        description: Include full tracking history
+        type: boolean
+        default: true
+        example: true
+        required: false
+    responses:
+      200:
+        description: Successfully retrieved tracking information
+        body:
+          application/json:
+            type: systemTypes.TrackShipmentResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Shipment or tracking number not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/shipping/rates:
+  displayName: Shipping Rate Calculation
+  description: Calculate shipping rates and delivery options
+
+  post:
+    displayName: Get Shipping Rates
+    description: |
+      Calculate shipping rates for different carriers and service levels
+      based on origin, destination, package details, and delivery preferences.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.GetShippingRatesRequest
+    responses:
+      200:
+        description: Successfully calculated shipping rates
+        body:
+          application/json:
+            type: systemTypes.GetShippingRatesResponse
+      400:
+        description: Bad Request - Invalid rate calculation request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Invalid addresses or package details
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/tracking/{trackingNumber}:
+  displayName: Tracking by Number
+  description: Track shipment using carrier tracking number
+  uriParameters:
+    trackingNumber:
+      displayName: Tracking Number
+      description: Carrier tracking number
+      type: string
+      maxLength: 50
+      example: 1Z999AA1234567890
+
+  get:
+    displayName: Track by Tracking Number
+    description: |
+      Track a shipment using the carrier-provided tracking number.
+      Alternative to shipment ID based tracking.
+    securedBy: [client_credentials]
+    queryParameters:
+      includeHistory:
+        displayName: Include History
+        description: Include full tracking history
+        type: boolean
+        default: true
+        example: true
+        required: false
+    responses:
+      200:
+        description: Successfully retrieved tracking information
+        body:
+          application/json:
+            type: systemTypes.TrackShipmentResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Tracking number not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse

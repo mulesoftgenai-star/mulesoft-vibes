@@ -1,0 +1,397 @@
+#%RAML 1.0
+title: Order Experience API
+description: |
+  Customer-facing API for order management operations.
+  Provides endpoints for creating, retrieving, and managing orders.
+  Part of the Experience Layer in the API-Led Connectivity architecture.
+version: v1
+baseUri: https://api.company.com/experience/orders/{version}
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  orderTypes: !include RAML DataTypes/OrderExperienceAPI.raml
+  commonTypes: !include RAML Fragments/DataTypes/Order.raml
+  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+
+securitySchemes:
+  oauth_2_0:
+    description: OAuth 2.0 authentication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          type: string
+          pattern: ^Bearer .+$
+          example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        401:
+          description: Unauthorized - Invalid or expired token
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+        403:
+          description: Forbidden - Insufficient permissions
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [authorization_code, client_credentials]
+
+/orders:
+  displayName: Orders Collection
+  description: Operations on the orders collection
+  
+  get:
+    displayName: List Orders
+    description: |
+      Retrieve a paginated list of orders based on filter criteria.
+      Supports filtering by customer, status, date range, and amount.
+    securedBy: [oauth_2_0]
+    queryParameters:
+      customerId:
+        displayName: Customer ID Filter
+        description: Filter orders by customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: CUST123456789
+        required: false
+      status:
+        displayName: Status Filter
+        description: Filter orders by status (multiple values allowed)
+        type: array
+        items:
+          type: string
+          enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+        example: [CONFIRMED, PROCESSING]
+        required: false
+      dateFrom:
+        displayName: Date From
+        description: Filter orders from date (inclusive)
+        type: date-only
+        example: "2026-03-01"
+        required: false
+      dateTo:
+        displayName: Date To  
+        description: Filter orders to date (inclusive)
+        type: date-only
+        example: "2026-03-31"
+        required: false
+      minAmount:
+        displayName: Minimum Amount
+        description: Filter orders by minimum total amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 100.00
+        required: false
+      maxAmount:
+        displayName: Maximum Amount
+        description: Filter orders by maximum total amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1000.00
+        required: false
+      page:
+        displayName: Page Number
+        description: Page number for pagination
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+        required: false
+      limit:
+        displayName: Page Size
+        description: Number of orders per page
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+        required: false
+      sortBy:
+        displayName: Sort Field
+        description: Field to sort by
+        type: string
+        enum: [orderDate, totalAmount, status, customerId]
+        default: orderDate
+        example: orderDate
+        required: false
+      sortOrder:
+        displayName: Sort Order
+        description: Sort order direction
+        type: string
+        enum: [ASC, DESC]
+        default: DESC
+        example: DESC
+        required: false
+      includeItems:
+        displayName: Include Order Items
+        description: Whether to include order items in response
+        type: boolean
+        default: false
+        example: true
+        required: false
+    responses:
+      200:
+        description: Successfully retrieved orders list
+        headers:
+          X-Total-Count:
+            description: Total number of orders matching criteria
+            type: integer
+            example: 287
+          X-Page-Count:
+            description: Total number of pages
+            type: integer
+            example: 15
+        body:
+          application/json:
+            type: orderTypes.ListOrdersResponse
+      400:
+        description: Bad Request - Invalid query parameters
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+  post:
+    displayName: Create Order
+    description: |
+      Create a new order with customer information, items, and preferences.
+      Validates customer, checks inventory, and processes payment authorization.
+    securedBy: [oauth_2_0]
+    body:
+      application/json:
+        type: orderTypes.CreateOrderRequest
+    responses:
+      201:
+        description: Order successfully created
+        headers:
+          Location:
+            description: URL of the created order
+            type: string
+            example: /orders/ORD789012345
+        body:
+          application/json:
+            type: orderTypes.CreateOrderResponse
+      400:
+        description: Bad Request - Invalid order data
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Business validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/orders/{orderId}:
+  displayName: Individual Order
+  description: Operations on a specific order
+  uriParameters:
+    orderId:
+      displayName: Order ID
+      description: Unique order identifier
+      type: string
+      pattern: ^ORD[0-9]{6,12}$
+      example: ORD789012345
+
+  get:
+    displayName: Get Order
+    description: |
+      Retrieve detailed information for a specific order including
+      items, status history, payment details, and shipping information.
+    securedBy: [oauth_2_0]
+    responses:
+      200:
+        description: Successfully retrieved order details
+        body:
+          application/json:
+            type: orderTypes.GetOrderResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Order not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/orders/{orderId}/status:
+  displayName: Order Status
+  description: Operations for updating order status
+  uriParameters:
+    orderId:
+      displayName: Order ID
+      description: Unique order identifier
+      type: string
+      pattern: ^ORD[0-9]{6,12}$
+      example: ORD789012345
+
+  patch:
+    displayName: Update Order Status
+    description: |
+      Update order status (primarily for cancellation).
+      Only allows customer-initiated status changes like cancellation.
+    securedBy: [oauth_2_0]
+    body:
+      application/json:
+        type: orderTypes.UpdateOrderStatusRequest
+    responses:
+      200:
+        description: Order status successfully updated
+        body:
+          application/json:
+            type: orderTypes.UpdateOrderStatusResponse
+      400:
+        description: Bad Request - Invalid status update
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Order not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Invalid status transition
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Business validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/orders/calculate-total:
+  displayName: Calculate Order Total
+  description: Calculate order totals and pricing breakdown before order placement
+
+  post:
+    displayName: Calculate Total
+    description: |
+      Calculate order totals including taxes, shipping, and discounts
+      without actually creating the order. Used for price preview.
+    securedBy: [oauth_2_0]
+    body:
+      application/json:
+        type: orderTypes.CalculateOrderTotalRequest
+    responses:
+      200:
+        description: Successfully calculated order total
+        body:
+          application/json:
+            type: orderTypes.CalculateOrderTotalResponse
+      400:
+        description: Bad Request - Invalid calculation data
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse

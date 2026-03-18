@@ -1,0 +1,399 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Customer Data Type Fragment
+# Represents customer information and profile data
+# Used across Experience, Process, and System layer APIs
+
+displayName: Customer
+description: Complete customer information including profile, preferences, and account details
+type: object
+properties:
+  customerId:
+    displayName: Customer ID
+    description: Unique customer identifier
+    type: string
+    pattern: ^CUST[0-9]{6,12}$
+    example: "CUST123456789"
+    required: true
+  customerNumber:
+    displayName: Customer Number
+    description: Human-readable customer number
+    type: string
+    maxLength: 20
+    example: "C-2024-001234"
+    required: false
+  firstName:
+    displayName: First Name
+    description: Customer's first name
+    type: string
+    maxLength: 50
+    example: "John"
+    required: true
+  lastName:
+    displayName: Last Name
+    description: Customer's last name
+    type: string
+    maxLength: 50
+    example: "Smith"
+    required: true
+  middleName:
+    displayName: Middle Name
+    description: Customer's middle name
+    type: string
+    maxLength: 50
+    example: "William"
+    required: false
+  title:
+    displayName: Title
+    description: Customer's title or prefix
+    type: string
+    maxLength: 20
+    example: "Mr."
+    required: false
+  suffix:
+    displayName: Suffix
+    description: Customer's suffix
+    type: string
+    maxLength: 20
+    example: "Jr."
+    required: false
+  email:
+    displayName: Email Address
+    description: Primary email address
+    type: string
+    pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+    example: "john.smith@email.com"
+    required: true
+  emailVerified:
+    displayName: Email Verified
+    description: Whether the email address has been verified
+    type: boolean
+    example: true
+    default: false
+    required: false
+  phoneNumber:
+    displayName: Phone Number
+    description: Primary phone number
+    type: string
+    pattern: ^\+?[1-9]\d{1,14}$
+    example: "+14155551234"
+    required: false
+  phoneNumberVerified:
+    displayName: Phone Number Verified
+    description: Whether the phone number has been verified
+    type: boolean
+    example: true
+    default: false
+    required: false
+  alternatePhoneNumber:
+    displayName: Alternate Phone Number
+    description: Secondary phone number
+    type: string
+    pattern: ^\+?[1-9]\d{1,14}$
+    example: "+14155555678"
+    required: false
+  dateOfBirth:
+    displayName: Date of Birth
+    description: Customer's date of birth
+    type: date-only
+    example: "1985-06-15"
+    required: false
+  gender:
+    displayName: Gender
+    description: Customer's gender
+    type: string
+    enum: [MALE, FEMALE, OTHER, NOT_SPECIFIED]
+    example: "MALE"
+    required: false
+  customerType:
+    displayName: Customer Type
+    description: Type of customer account
+    type: string
+    enum: [INDIVIDUAL, BUSINESS, ENTERPRISE, GOVERNMENT]
+    example: "INDIVIDUAL"
+    default: "INDIVIDUAL"
+    required: false
+  customerSegment:
+    displayName: Customer Segment
+    description: Customer segmentation for business rules
+    type: string
+    enum: [STANDARD, PREMIUM, VIP, CORPORATE]
+    example: "STANDARD"
+    default: "STANDARD"
+    required: false
+  accountStatus:
+    displayName: Account Status
+    description: Current account status
+    type: string
+    enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED, PENDING_VERIFICATION]
+    example: "ACTIVE"
+    default: "PENDING_VERIFICATION"
+    required: true
+  accountCreatedDate:
+    displayName: Account Created Date
+    description: When the customer account was created
+    type: datetime
+    format: rfc3339
+    example: "2024-01-15T10:30:00Z"
+    required: false
+  lastLoginDate:
+    displayName: Last Login Date
+    description: When the customer last logged in
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T16:45:00Z"
+    required: false
+  company:
+    displayName: Company
+    description: Company information (for business customers)
+    type: object
+    properties:
+      companyName:
+        displayName: Company Name
+        type: string
+        maxLength: 100
+        example: "Tech Solutions Inc."
+      taxId:
+        displayName: Tax ID
+        type: string
+        maxLength: 50
+        example: "12-3456789"
+      industry:
+        displayName: Industry
+        type: string
+        maxLength: 100
+        example: "Technology"
+      companySize:
+        displayName: Company Size
+        type: string
+        enum: [SMALL, MEDIUM, LARGE, ENTERPRISE]
+        example: "MEDIUM"
+      website:
+        displayName: Website
+        type: string
+        maxLength: 200
+        example: "https://www.techsolutions.com"
+    required: false
+  addresses:
+    displayName: Addresses
+    description: Customer addresses
+    type: array
+    items: !include Address.raml
+    maxItems: 10
+    required: false
+  defaultShippingAddress:
+    displayName: Default Shipping Address
+    description: Default shipping address
+    type: !include Address.raml
+    required: false
+  defaultBillingAddress:
+    displayName: Default Billing Address
+    description: Default billing address
+    type: !include Address.raml
+    required: false
+  paymentMethods:
+    displayName: Payment Methods
+    description: Customer's saved payment methods
+    type: array
+    items: !include Payment.raml
+    maxItems: 10
+    required: false
+  defaultPaymentMethod:
+    displayName: Default Payment Method
+    description: Default payment method
+    type: !include Payment.raml
+    required: false
+  preferences:
+    displayName: Customer Preferences
+    description: Customer preferences and settings
+    type: object
+    properties:
+      language:
+        displayName: Preferred Language
+        type: string
+        pattern: ^[a-z]{2}(-[A-Z]{2})?$
+        example: "en-US"
+        default: "en-US"
+      currency:
+        displayName: Preferred Currency
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        default: "USD"
+      timezone:
+        displayName: Timezone
+        type: string
+        example: "America/New_York"
+      communicationPreferences:
+        displayName: Communication Preferences
+        type: object
+        properties:
+          emailMarketing:
+            type: boolean
+            default: false
+          smsNotifications:
+            type: boolean
+            default: false
+          pushNotifications:
+            type: boolean
+            default: true
+          orderUpdates:
+            type: boolean
+            default: true
+      shippingPreferences:
+        displayName: Shipping Preferences
+        type: object
+        properties:
+          preferredCarrier:
+            type: string
+            maxLength: 50
+            example: "UPS"
+          preferredDeliverySpeed:
+            type: string
+            enum: [STANDARD, EXPEDITED, OVERNIGHT]
+            example: "STANDARD"
+          signatureRequired:
+            type: boolean
+            default: false
+          leaveAtDoor:
+            type: boolean
+            default: false
+    required: false
+  loyaltyProgram:
+    displayName: Loyalty Program
+    description: Customer loyalty program information
+    type: object
+    properties:
+      programId:
+        displayName: Program ID
+        type: string
+        maxLength: 50
+        example: "REWARDS-PLUS"
+      membershipLevel:
+        displayName: Membership Level
+        type: string
+        enum: [BRONZE, SILVER, GOLD, PLATINUM, DIAMOND]
+        example: "SILVER"
+      memberSince:
+        displayName: Member Since
+        type: date-only
+        example: "2024-01-15"
+      pointsBalance:
+        displayName: Points Balance
+        type: integer
+        minimum: 0
+        example: 2500
+      pointsEarned:
+        displayName: Total Points Earned
+        type: integer
+        minimum: 0
+        example: 15000
+      pointsRedeemed:
+        displayName: Total Points Redeemed
+        type: integer
+        minimum: 0
+        example: 12500
+    required: false
+  orderHistory:
+    displayName: Order History Summary
+    description: Summary of customer's order history
+    type: object
+    properties:
+      totalOrders:
+        displayName: Total Orders
+        type: integer
+        minimum: 0
+        example: 25
+      totalSpent:
+        displayName: Total Amount Spent
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 5250.75
+      averageOrderValue:
+        displayName: Average Order Value
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 210.03
+      lastOrderDate:
+        displayName: Last Order Date
+        type: date-only
+        example: "2026-03-10"
+      lastOrderAmount:
+        displayName: Last Order Amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 299.99
+    required: false
+  riskProfile:
+    displayName: Risk Profile
+    description: Customer risk assessment information
+    type: object
+    properties:
+      riskScore:
+        displayName: Risk Score
+        type: integer
+        minimum: 0
+        maximum: 100
+        example: 15
+      riskLevel:
+        displayName: Risk Level
+        type: string
+        enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        example: "LOW"
+      fraudFlags:
+        displayName: Fraud Flags
+        type: array
+        items:
+          type: string
+          maxLength: 50
+        example: []
+      lastRiskAssessment:
+        displayName: Last Risk Assessment
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T10:00:00Z"
+    required: false
+  tags:
+    displayName: Customer Tags
+    description: Tags for customer classification
+    type: array
+    items:
+      type: string
+      maxLength: 50
+    maxItems: 20
+    example: ["frequent-buyer", "tech-enthusiast"]
+    required: false
+  notes:
+    displayName: Customer Notes
+    description: Internal notes about the customer
+    type: string
+    maxLength: 2000
+    example: "Preferred contact method is email. Orders primarily business equipment."
+    required: false
+  createdBy:
+    displayName: Created By
+    description: User or system that created the customer record
+    type: string
+    maxLength: 100
+    example: "customer-portal"
+    required: false
+  lastUpdatedBy:
+    displayName: Last Updated By
+    description: User or system that last updated the customer
+    type: string
+    maxLength: 100
+    example: "crm-system"
+    required: false
+  lastUpdatedDate:
+    displayName: Last Updated Date
+    description: When the customer record was last updated
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:07:00Z"
+    required: false

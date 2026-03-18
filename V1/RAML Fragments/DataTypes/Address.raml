@@ -1,0 +1,214 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Address Data Type Fragment
+# Represents shipping and billing address information
+# Used across Experience, Process, and System layer APIs
+
+displayName: Address
+description: Complete address information for shipping and billing
+type: object
+properties:
+  addressId:
+    displayName: Address ID
+    description: Unique address identifier
+    type: string
+    pattern: ^ADDR[0-9]{6,12}$
+    example: "ADDR123456789"
+    required: false
+  addressType:
+    displayName: Address Type
+    description: Type of address (shipping, billing, etc.)
+    type: string
+    enum: [SHIPPING, BILLING, BOTH]
+    example: "SHIPPING"
+    required: false
+  firstName:
+    displayName: First Name
+    description: Recipient's first name
+    type: string
+    maxLength: 50
+    example: "John"
+    required: true
+  lastName:
+    displayName: Last Name
+    description: Recipient's last name
+    type: string
+    maxLength: 50
+    example: "Smith"
+    required: true
+  company:
+    displayName: Company
+    description: Company or organization name
+    type: string
+    maxLength: 100
+    example: "Tech Solutions Inc."
+    required: false
+  addressLine1:
+    displayName: Address Line 1
+    description: Primary address line (street address)
+    type: string
+    maxLength: 100
+    example: "456 Technology Blvd"
+    required: true
+  addressLine2:
+    displayName: Address Line 2
+    description: Secondary address line (apartment, suite, etc.)
+    type: string
+    maxLength: 100
+    example: "Suite 200"
+    required: false
+  addressLine3:
+    displayName: Address Line 3
+    description: Additional address line
+    type: string
+    maxLength: 100
+    example: "Building A"
+    required: false
+  city:
+    displayName: City
+    description: City or locality
+    type: string
+    maxLength: 50
+    example: "San Francisco"
+    required: true
+  state:
+    displayName: State/Province
+    description: State, province, or region
+    type: string
+    maxLength: 50
+    example: "CA"
+    required: true
+  postalCode:
+    displayName: Postal Code
+    description: ZIP code or postal code
+    type: string
+    pattern: ^[0-9A-Za-z\s\-]{3,12}$
+    example: "94105"
+    required: true
+  country:
+    displayName: Country
+    description: Country code (ISO 3166-1 alpha-2)
+    type: string
+    pattern: ^[A-Z]{2}$
+    example: "US"
+    default: "US"
+    required: true
+  countryName:
+    displayName: Country Name
+    description: Full country name
+    type: string
+    maxLength: 100
+    example: "United States"
+    required: false
+  phoneNumber:
+    displayName: Phone Number
+    description: Contact phone number
+    type: string
+    pattern: ^\+?[1-9]\d{1,14}$
+    example: "+14155551234"
+    required: false
+  email:
+    displayName: Email Address
+    description: Contact email address
+    type: string
+    pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+    example: "john.smith@company.com"
+    required: false
+  isResidential:
+    displayName: Is Residential
+    description: Whether this is a residential address
+    type: boolean
+    example: false
+    default: true
+    required: false
+  isDefaultShipping:
+    displayName: Is Default Shipping
+    description: Whether this is the default shipping address
+    type: boolean
+    example: true
+    default: false
+    required: false
+  isDefaultBilling:
+    displayName: Is Default Billing
+    description: Whether this is the default billing address
+    type: boolean
+    example: false
+    default: false
+    required: false
+  deliveryInstructions:
+    displayName: Delivery Instructions
+    description: Special delivery instructions
+    type: string
+    maxLength: 500
+    example: "Leave package at front door if no one is home"
+    required: false
+  accessCode:
+    displayName: Access Code
+    description: Building or gate access code
+    type: string
+    maxLength: 20
+    example: "#1234"
+    required: false
+  coordinates:
+    displayName: Coordinates
+    description: Geographic coordinates for the address
+    type: object
+    properties:
+      latitude:
+        displayName: Latitude
+        description: Geographic latitude
+        type: number
+        format: double
+        minimum: -90
+        maximum: 90
+        example: 37.7749
+      longitude:
+        displayName: Longitude
+        description: Geographic longitude
+        type: number
+        format: double
+        minimum: -180
+        maximum: 180
+        example: -122.4194
+    required: false
+  timezone:
+    displayName: Timezone
+    description: Timezone for this address location
+    type: string
+    example: "America/Los_Angeles"
+    required: false
+  verified:
+    displayName: Address Verified
+    description: Whether the address has been verified
+    type: boolean
+    example: true
+    default: false
+    required: false
+  verificationSource:
+    displayName: Verification Source
+    description: Source of address verification
+    type: string
+    maxLength: 50
+    example: "USPS"
+    required: false
+  lastVerifiedDate:
+    displayName: Last Verified Date
+    description: When the address was last verified
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:07:00Z"
+    required: false
+  createdDate:
+    displayName: Created Date
+    description: When the address was created
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:07:00Z"
+    required: false
+  lastUpdatedDate:
+    displayName: Last Updated Date
+    description: When the address was last updated
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:07:00Z"
+    required: false

@@ -1,0 +1,1145 @@
+#%RAML 1.0 Library
+
+# Order Management System - System APIs Data Types
+# Request and response data types for System Layer APIs
+# Customer, Inventory, Payment, and Shipping System APIs
+
+types:
+  # ==============================
+  # CUSTOMER SYSTEM API DATA TYPES
+  # ==============================
+  
+  # Get Customer Request/Response
+  GetCustomerRequest:
+    displayName: Get Customer Request
+    description: Request to retrieve customer information
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      includeAddresses:
+        displayName: Include Addresses
+        type: boolean
+        default: true
+        example: true
+        required: false
+      includePaymentMethods:
+        displayName: Include Payment Methods
+        type: boolean
+        default: false
+        example: false
+        required: false
+      includeOrderHistory:
+        displayName: Include Order History
+        type: boolean
+        default: false
+        example: false
+        required: false
+
+  GetCustomerResponse:
+    displayName: Get Customer Response
+    description: Customer information response
+    type: !include Customer.raml
+
+  # Validate Customer Request/Response
+  ValidateCustomerRequest:
+    displayName: Validate Customer Request
+    description: Request to validate customer for order processing
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      orderAmount:
+        displayName: Order Amount
+        description: Order amount for credit validation
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1299.99
+        required: false
+      validationType:
+        displayName: Validation Type
+        description: Type of validation to perform
+        type: array
+        items:
+          type: string
+          enum: [ACCOUNT_STATUS, CREDIT_CHECK, ADDRESS_VALIDATION, IDENTITY_VERIFICATION]
+        example: ["ACCOUNT_STATUS", "CREDIT_CHECK"]
+        required: false
+
+  ValidateCustomerResponse:
+    displayName: Validate Customer Response
+    description: Customer validation results
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      validationStatus:
+        displayName: Validation Status
+        type: string
+        enum: [VALID, INVALID, WARNING]
+        example: "VALID"
+        required: true
+      validationResults:
+        displayName: Validation Results
+        type: object
+        properties:
+          accountStatus:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+                example: "ACTIVE"
+              message:
+                type: string
+                example: "Customer account is active and in good standing"
+          creditCheck:
+            type: object
+            properties:
+              approved:
+                type: boolean
+                example: true
+              creditScore:
+                type: integer
+                minimum: 300
+                maximum: 850
+                example: 750
+              creditLimit:
+                type: number
+                format: float
+                minimum: 0
+                multipleOf: 0.01
+                example: 5000.00
+              availableCredit:
+                type: number
+                format: float
+                minimum: 0
+                multipleOf: 0.01
+                example: 4200.00
+          addressValidation:
+            type: object
+            properties:
+              shippingAddressValid:
+                type: boolean
+                example: true
+              billingAddressValid:
+                type: boolean
+                example: true
+        required: true
+      issues:
+        displayName: Validation Issues
+        type: array
+        items:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "ACCOUNT_SUSPENDED"
+            severity:
+              type: string
+              enum: [ERROR, WARNING, INFO]
+              example: "ERROR"
+            message:
+              type: string
+              example: "Customer account is suspended"
+        required: false
+      validatedAt:
+        displayName: Validated At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:20:00Z"
+        required: true
+
+  # ==============================
+  # INVENTORY SYSTEM API DATA TYPES
+  # ==============================
+
+  # Check Inventory Request/Response
+  CheckInventoryRequest:
+    displayName: Check Inventory Request
+    description: Request to check product inventory availability
+    type: object
+    properties:
+      items:
+        displayName: Items to Check
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              displayName: Product ID
+              type: string
+              pattern: ^PROD[0-9]{6,12}$
+              example: "PROD987654321"
+              required: true
+            quantity:
+              displayName: Requested Quantity
+              type: integer
+              minimum: 1
+              example: 2
+              required: true
+            locationId:
+              displayName: Location ID
+              description: Specific warehouse or location
+              type: string
+              pattern: ^LOC[0-9]{6,12}$
+              example: "LOC123456789"
+              required: false
+        minItems: 1
+        maxItems: 100
+        required: true
+      reserveInventory:
+        displayName: Reserve Inventory
+        description: Whether to reserve inventory for this check
+        type: boolean
+        default: false
+        example: true
+        required: false
+      reservationDuration:
+        displayName: Reservation Duration
+        description: How long to reserve inventory (in minutes)
+        type: integer
+        minimum: 1
+        maximum: 1440
+        default: 30
+        example: 30
+        required: false
+
+  CheckInventoryResponse:
+    displayName: Check Inventory Response
+    description: Inventory availability results
+    type: object
+    properties:
+      inventoryStatus:
+        displayName: Overall Inventory Status
+        type: string
+        enum: [AVAILABLE, PARTIAL, UNAVAILABLE]
+        example: "AVAILABLE"
+        required: true
+      items:
+        displayName: Item Availability Results
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              displayName: Product ID
+              type: string
+              pattern: ^PROD[0-9]{6,12}$
+              example: "PROD987654321"
+              required: true
+            requestedQuantity:
+              displayName: Requested Quantity
+              type: integer
+              minimum: 1
+              example: 2
+              required: true
+            availableQuantity:
+              displayName: Available Quantity
+              type: integer
+              minimum: 0
+              example: 150
+              required: true
+            reservedQuantity:
+              displayName: Reserved Quantity
+              type: integer
+              minimum: 0
+              example: 2
+              required: false
+            status:
+              displayName: Item Status
+              type: string
+              enum: [AVAILABLE, PARTIAL, UNAVAILABLE, BACKORDERED, DISCONTINUED]
+              example: "AVAILABLE"
+              required: true
+            locationId:
+              displayName: Location ID
+              type: string
+              pattern: ^LOC[0-9]{6,12}$
+              example: "LOC123456789"
+              required: false
+            estimatedRestockDate:
+              displayName: Estimated Restock Date
+              type: date-only
+              example: "2026-03-25"
+              required: false
+            alternativeProducts:
+              displayName: Alternative Products
+              type: array
+              items:
+                type: object
+                properties:
+                  productId:
+                    type: string
+                    pattern: ^PROD[0-9]{6,12}$
+                    example: "PROD987654322"
+                  availableQuantity:
+                    type: integer
+                    minimum: 0
+                    example: 50
+                  similarity:
+                    type: number
+                    format: float
+                    minimum: 0
+                    maximum: 1
+                    example: 0.95
+              required: false
+        required: true
+      reservationId:
+        displayName: Reservation ID
+        description: ID for the inventory reservation (if reserved)
+        type: string
+        pattern: ^RES[0-9]{6,12}$
+        example: "RES456789012"
+        required: false
+      reservationExpiry:
+        displayName: Reservation Expiry
+        description: When the reservation expires
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T19:07:30Z"
+        required: false
+      checkedAt:
+        displayName: Checked At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:37:30Z"
+        required: true
+
+  # Reserve Inventory Request/Response
+  ReserveInventoryRequest:
+    displayName: Reserve Inventory Request
+    description: Request to reserve inventory for an order
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      items:
+        displayName: Items to Reserve
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              pattern: ^PROD[0-9]{6,12}$
+              example: "PROD987654321"
+              required: true
+            quantity:
+              type: integer
+              minimum: 1
+              example: 2
+              required: true
+            locationId:
+              type: string
+              pattern: ^LOC[0-9]{6,12}$
+              example: "LOC123456789"
+              required: false
+        minItems: 1
+        required: true
+      reservationDuration:
+        displayName: Reservation Duration
+        description: How long to reserve (in minutes)
+        type: integer
+        minimum: 1
+        maximum: 2880
+        default: 60
+        example: 120
+        required: false
+
+  ReserveInventoryResponse:
+    displayName: Reserve Inventory Response
+    description: Inventory reservation results
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      reservationId:
+        displayName: Reservation ID
+        type: string
+        pattern: ^RES[0-9]{6,12}$
+        example: "RES456789012"
+        required: true
+      reservationStatus:
+        displayName: Reservation Status
+        type: string
+        enum: [RESERVED, PARTIAL, FAILED]
+        example: "RESERVED"
+        required: true
+      reservedItems:
+        displayName: Reserved Items
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              pattern: ^PROD[0-9]{6,12}$
+              example: "PROD987654321"
+              required: true
+            requestedQuantity:
+              type: integer
+              minimum: 1
+              example: 2
+              required: true
+            reservedQuantity:
+              type: integer
+              minimum: 0
+              example: 2
+              required: true
+            locationId:
+              type: string
+              pattern: ^LOC[0-9]{6,12}$
+              example: "LOC123456789"
+              required: false
+        required: true
+      reservationExpiry:
+        displayName: Reservation Expiry
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T20:37:30Z"
+        required: true
+      reservedAt:
+        displayName: Reserved At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:37:30Z"
+        required: true
+
+  # ==============================
+  # PAYMENT SYSTEM API DATA TYPES
+  # ==============================
+
+  # Process Payment Request/Response
+  ProcessPaymentRequest:
+    displayName: Process Payment Request
+    description: Request to process payment for an order
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      paymentMethodId:
+        displayName: Payment Method ID
+        type: string
+        pattern: ^PM[0-9]{6,12}$
+        example: "PM987654321"
+        required: true
+      amount:
+        displayName: Payment Amount
+        type: number
+        format: float
+        minimum: 0.01
+        multipleOf: 0.01
+        example: 1359.97
+        required: true
+      currency:
+        displayName: Currency
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        default: "USD"
+        required: false
+      paymentType:
+        displayName: Payment Type
+        type: string
+        enum: [AUTHORIZE, CAPTURE, SALE, REFUND]
+        example: "AUTHORIZE"
+        default: "AUTHORIZE"
+        required: false
+      billingAddress:
+        displayName: Billing Address
+        type: !include Address.raml
+        required: false
+      metadata:
+        displayName: Payment Metadata
+        type: object
+        properties:
+          description:
+            type: string
+            maxLength: 255
+            example: "Order payment for ORD789012345"
+          invoiceNumber:
+            type: string
+            maxLength: 50
+            example: "INV-2026-001234"
+          merchantReference:
+            type: string
+            maxLength: 100
+            example: "ORDER-ORD789012345"
+        required: false
+
+  ProcessPaymentResponse:
+    displayName: Process Payment Response
+    description: Payment processing results
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      paymentId:
+        displayName: Payment ID
+        type: string
+        pattern: ^PAY[0-9]{6,12}$
+        example: "PAY123456789"
+        required: true
+      transactionId:
+        displayName: Transaction ID
+        type: string
+        maxLength: 100
+        example: "TXN987654321"
+        required: true
+      status:
+        displayName: Payment Status
+        type: string
+        enum: [AUTHORIZED, CAPTURED, PAID, FAILED, CANCELLED, DECLINED]
+        example: "AUTHORIZED"
+        required: true
+      amount:
+        displayName: Processed Amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1359.97
+        required: true
+      currency:
+        displayName: Currency
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        required: true
+      authorizationCode:
+        displayName: Authorization Code
+        type: string
+        maxLength: 50
+        example: "AUTH123456"
+        required: false
+      processorResponse:
+        displayName: Processor Response
+        type: object
+        properties:
+          code:
+            type: string
+            maxLength: 20
+            example: "00"
+          message:
+            type: string
+            maxLength: 200
+            example: "Transaction approved"
+          avsResult:
+            type: string
+            maxLength: 10
+            example: "Y"
+          cvvResult:
+            type: string
+            maxLength: 10
+            example: "M"
+        required: false
+      fees:
+        displayName: Processing Fees
+        type: object
+        properties:
+          processingFee:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 39.60
+          transactionFee:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 0.30
+        required: false
+      processedAt:
+        displayName: Processed At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:42:15Z"
+        required: true
+      expiresAt:
+        displayName: Authorization Expires At
+        description: When authorization expires (for AUTHORIZE transactions)
+        type: datetime
+        format: rfc3339
+        example: "2026-03-25T18:42:15Z"
+        required: false
+
+  # Validate Payment Method Request/Response
+  ValidatePaymentMethodRequest:
+    displayName: Validate Payment Method Request
+    description: Request to validate payment method
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      paymentMethodId:
+        displayName: Payment Method ID
+        type: string
+        pattern: ^PM[0-9]{6,12}$
+        example: "PM987654321"
+        required: true
+      amount:
+        displayName: Transaction Amount
+        description: Amount for validation purposes
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1359.97
+        required: false
+      validationType:
+        displayName: Validation Type
+        type: array
+        items:
+          type: string
+          enum: [ACTIVE, EXPIRED, FUNDS, LIMITS, FRAUD]
+        example: ["ACTIVE", "FUNDS"]
+        required: false
+
+  ValidatePaymentMethodResponse:
+    displayName: Validate Payment Method Response
+    description: Payment method validation results
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      paymentMethodId:
+        displayName: Payment Method ID
+        type: string
+        pattern: ^PM[0-9]{6,12}$
+        example: "PM987654321"
+        required: true
+      validationStatus:
+        displayName: Validation Status
+        type: string
+        enum: [VALID, INVALID, WARNING]
+        example: "VALID"
+        required: true
+      validationResults:
+        displayName: Validation Results
+        type: object
+        properties:
+          active:
+            type: boolean
+            example: true
+          expired:
+            type: boolean
+            example: false
+          sufficientFunds:
+            type: boolean
+            example: true
+          withinLimits:
+            type: boolean
+            example: true
+          fraudRisk:
+            type: string
+            enum: [LOW, MEDIUM, HIGH]
+            example: "LOW"
+        required: true
+      issues:
+        displayName: Validation Issues
+        type: array
+        items:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "CARD_EXPIRED"
+            severity:
+              type: string
+              enum: [ERROR, WARNING, INFO]
+              example: "ERROR"
+            message:
+              type: string
+              example: "Payment method has expired"
+        required: false
+      validatedAt:
+        displayName: Validated At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:25:00Z"
+        required: true
+
+  # ==============================
+  # SHIPPING SYSTEM API DATA TYPES
+  # ==============================
+
+  # Create Shipment Request/Response
+  CreateShipmentRequest:
+    displayName: Create Shipment Request
+    description: Request to create a shipment for an order
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      items:
+        displayName: Items to Ship
+        type: array
+        items: !include ShipmentItem.raml
+        minItems: 1
+        required: true
+      shippingAddress:
+        displayName: Shipping Address
+        type: !include Address.raml
+        required: true
+      shippingPreferences:
+        displayName: Shipping Preferences
+        type: object
+        properties:
+          carrier:
+            displayName: Preferred Carrier
+            type: string
+            enum: [UPS, FEDEX, DHL, USPS]
+            example: "UPS"
+          serviceLevel:
+            displayName: Service Level
+            type: string
+            enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY]
+            example: "STANDARD"
+          signatureRequired:
+            displayName: Signature Required
+            type: boolean
+            default: false
+            example: false
+          insuranceAmount:
+            displayName: Insurance Amount
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 1000.00
+          deliveryInstructions:
+            displayName: Delivery Instructions
+            type: string
+            maxLength: 500
+            example: "Leave at front door if no one is home"
+        required: false
+      packageDetails:
+        displayName: Package Details
+        type: object
+        properties:
+          weight:
+            displayName: Total Weight
+            type: number
+            format: float
+            minimum: 0.1
+            example: 5.2
+          weightUnit:
+            displayName: Weight Unit
+            type: string
+            enum: [LB, KG, OZ, G]
+            default: "LB"
+            example: "LB"
+          dimensions:
+            displayName: Package Dimensions
+            type: object
+            properties:
+              length:
+                type: number
+                format: float
+                minimum: 0.1
+                example: 12.0
+              width:
+                type: number
+                format: float
+                minimum: 0.1
+                example: 8.0
+              height:
+                type: number
+                format: float
+                minimum: 0.1
+                example: 6.0
+              unit:
+                type: string
+                enum: [IN, CM, FT, M]
+                default: "IN"
+                example: "IN"
+        required: false
+
+  CreateShipmentResponse:
+    displayName: Create Shipment Response
+    description: Shipment creation results
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      shipmentId:
+        displayName: Shipment ID
+        type: string
+        pattern: ^SHIP[0-9]{6,12}$
+        example: "SHIP456789012"
+        required: true
+      trackingNumber:
+        displayName: Tracking Number
+        type: string
+        maxLength: 50
+        example: "1Z999AA1234567890"
+        required: true
+      carrier:
+        displayName: Selected Carrier
+        type: string
+        enum: [UPS, FEDEX, DHL, USPS]
+        example: "UPS"
+        required: true
+      serviceLevel:
+        displayName: Service Level
+        type: string
+        enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY]
+        example: "STANDARD"
+        required: true
+      status:
+        displayName: Shipment Status
+        type: string
+        enum: [CREATED, PROCESSED, SHIPPED, IN_TRANSIT, DELIVERED, EXCEPTION]
+        example: "CREATED"
+        required: true
+      estimatedDelivery:
+        displayName: Estimated Delivery
+        type: datetime
+        format: rfc3339
+        example: "2026-03-20T18:00:00Z"
+        required: true
+      shippingCost:
+        displayName: Shipping Cost
+        type: object
+        properties:
+          baseRate:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 12.99
+          fuelSurcharge:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 1.50
+          insurance:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 2.50
+          total:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 16.99
+        required: false
+      labels:
+        displayName: Shipping Labels
+        type: array
+        items:
+          type: object
+          properties:
+            format:
+              type: string
+              enum: [PDF, PNG, ZPL, EPL]
+              example: "PDF"
+            url:
+              type: string
+              maxLength: 500
+              example: "https://api.shipping.com/labels/SHIP456789012.pdf"
+            expiresAt:
+              type: datetime
+              format: rfc3339
+              example: "2026-03-25T18:00:00Z"
+        required: false
+      createdAt:
+        displayName: Created At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:45:00Z"
+        required: true
+
+  # Get Shipping Rates Request/Response
+  GetShippingRatesRequest:
+    displayName: Get Shipping Rates Request
+    description: Request to get shipping rates for an order
+    type: object
+    properties:
+      originAddress:
+        displayName: Origin Address
+        type: !include Address.raml
+        required: true
+      destinationAddress:
+        displayName: Destination Address
+        type: !include Address.raml
+        required: true
+      packageDetails:
+        displayName: Package Details
+        type: object
+        properties:
+          weight:
+            type: number
+            format: float
+            minimum: 0.1
+            example: 5.2
+          weightUnit:
+            type: string
+            enum: [LB, KG, OZ, G]
+            default: "LB"
+            example: "LB"
+          dimensions:
+            type: object
+            properties:
+              length:
+                type: number
+                format: float
+                minimum: 0.1
+                example: 12.0
+              width:
+                type: number
+                format: float
+                minimum: 0.1
+                example: 8.0
+              height:
+                type: number
+                format: float
+                minimum: 0.1
+                example: 6.0
+              unit:
+                type: string
+                enum: [IN, CM, FT, M]
+                default: "IN"
+                example: "IN"
+          value:
+            type: number
+            format: float
+            minimum: 0
+            multipleOf: 0.01
+            example: 1299.99
+        required: true
+      carriers:
+        displayName: Carriers to Quote
+        type: array
+        items:
+          type: string
+          enum: [UPS, FEDEX, DHL, USPS]
+        example: ["UPS", "FEDEX"]
+        required: false
+
+  GetShippingRatesResponse:
+    displayName: Get Shipping Rates Response
+    description: Available shipping rates
+    type: object
+    properties:
+      rates:
+        displayName: Shipping Rates
+        type: array
+        items:
+          type: object
+          properties:
+            carrier:
+              type: string
+              enum: [UPS, FEDEX, DHL, USPS]
+              example: "UPS"
+              required: true
+            serviceLevel:
+              type: string
+              enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY]
+              example: "STANDARD"
+              required: true
+            serviceName:
+              type: string
+              example: "UPS Ground"
+              required: true
+            cost:
+              type: number
+              format: float
+              minimum: 0
+              multipleOf: 0.01
+              example: 12.99
+              required: true
+            estimatedDelivery:
+              type: datetime
+              format: rfc3339
+              example: "2026-03-20T18:00:00Z"
+              required: true
+            transitTime:
+              type: string
+              example: "1-3 business days"
+              required: false
+        required: true
+      quotedAt:
+        displayName: Quoted At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:30:00Z"
+        required: true
+      validUntil:
+        displayName: Valid Until
+        type: datetime
+        format: rfc3339
+        example: "2026-03-19T18:30:00Z"
+        required: false
+
+  # Track Shipment Request/Response
+  TrackShipmentRequest:
+    displayName: Track Shipment Request
+    description: Request to track a shipment
+    type: object
+    properties:
+      shipmentId:
+        displayName: Shipment ID
+        type: string
+        pattern: ^SHIP[0-9]{6,12}$
+        example: "SHIP456789012"
+        required: false
+      trackingNumber:
+        displayName: Tracking Number
+        type: string
+        maxLength: 50
+        example: "1Z999AA1234567890"
+        required: false
+      includeHistory:
+        displayName: Include History
+        description: Include full tracking history
+        type: boolean
+        default: true
+        example: true
+        required: false
+
+  TrackShipmentResponse:
+    displayName: Track Shipment Response
+    description: Shipment tracking information
+    type: object
+    properties:
+      shipmentId:
+        displayName: Shipment ID
+        type: string
+        pattern: ^SHIP[0-9]{6,12}$
+        example: "SHIP456789012"
+        required: true
+      trackingNumber:
+        displayName: Tracking Number
+        type: string
+        maxLength: 50
+        example: "1Z999AA1234567890"
+        required: true
+      status:
+        displayName: Current Status
+        type: string
+        enum: [CREATED, PROCESSED, SHIPPED, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, EXCEPTION, RETURNED]
+        example: "IN_TRANSIT"
+        required: true
+      estimatedDelivery:
+        displayName: Estimated Delivery
+        type: datetime
+        format: rfc3339
+        example: "2026-03-20T18:00:00Z"
+        required: false
+      actualDelivery:
+        displayName: Actual Delivery
+        type: datetime
+        format: rfc3339
+        example: "2026-03-20T16:30:00Z"
+        required: false
+      currentLocation:
+        displayName: Current Location
+        type: object
+        properties:
+          city:
+            type: string
+            example: "Chicago"
+          state:
+            type: string
+            example: "IL"
+          country:
+            type: string
+            example: "US"
+          facility:
+            type: string
+            example: "UPS Distribution Center"
+        required: false
+      trackingHistory:
+        displayName: Tracking History
+        type: array
+        items:
+          type: object
+          properties:
+            timestamp:
+              type: datetime
+              format: rfc3339
+              example: "2026-03-19T14:30:00Z"
+              required: true
+            status:
+              type: string
+              example: "IN_TRANSIT"
+              required: true
+            location:
+              type: string
+              example: "Chicago, IL"
+              required: true
+            description:
+              type: string
+              example: "Package arrived at facility"
+              required: true
+        required: false
+      lastUpdated:
+        displayName: Last Updated
+        type: datetime
+        format: rfc3339
+        example: "2026-03-19T14:30:00Z"
+        required: true

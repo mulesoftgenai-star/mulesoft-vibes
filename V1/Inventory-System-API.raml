@@ -1,0 +1,225 @@
+#%RAML 1.0
+title: Inventory System API
+description: |
+  System Layer API for inventory management operations.
+  Provides inventory checking, reservation, and availability services.
+  Part of the System Layer in the API-Led Connectivity architecture.
+version: v1
+baseUri: https://api.company.com/system/inventory/{version}
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  systemTypes: !include RAML DataTypes/SystemAPIs.raml
+  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+
+securitySchemes:
+  client_credentials:
+    description: OAuth 2.0 Client Credentials for system-to-system communication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          type: string
+          pattern: ^Bearer .+$
+          example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        401:
+          description: Unauthorized - Invalid or expired token
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+        403:
+          description: Forbidden - Insufficient permissions
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [client_credentials]
+
+/inventory/check:
+  displayName: Inventory Check
+  description: Check product inventory availability
+
+  post:
+    displayName: Check Inventory
+    description: |
+      Check product availability across multiple items and locations.
+      Optionally reserve inventory for order processing.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.CheckInventoryRequest
+    responses:
+      200:
+        description: Successfully retrieved inventory status
+        body:
+          application/json:
+            type: systemTypes.CheckInventoryResponse
+      400:
+        description: Bad Request - Invalid inventory check request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Invalid product IDs or quantities
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/inventory/reserve:
+  displayName: Inventory Reservation
+  description: Reserve inventory for order processing
+
+  post:
+    displayName: Reserve Inventory
+    description: |
+      Reserve inventory items for a specific order to prevent overselling.
+      Supports partial reservations and configurable expiry times.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.ReserveInventoryRequest
+    responses:
+      200:
+        description: Successfully reserved inventory
+        body:
+          application/json:
+            type: systemTypes.ReserveInventoryResponse
+      400:
+        description: Bad Request - Invalid reservation request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Insufficient inventory available
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Invalid order or product data
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/inventory/reservations/{reservationId}:
+  displayName: Inventory Reservation Management
+  description: Manage existing inventory reservations
+  uriParameters:
+    reservationId:
+      displayName: Reservation ID
+      description: Unique reservation identifier
+      type: string
+      pattern: ^RES[0-9]{6,12}$
+      example: RES456789012
+
+  get:
+    displayName: Get Reservation Details
+    description: |
+      Retrieve details of a specific inventory reservation
+      including expiry time and reserved items.
+    securedBy: [client_credentials]
+    responses:
+      200:
+        description: Successfully retrieved reservation details
+        body:
+          application/json:
+            type: systemTypes.ReserveInventoryResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Reservation not found or expired
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+  delete:
+    displayName: Cancel Reservation
+    description: |
+      Cancel an active inventory reservation to release
+      the reserved items back to available inventory.
+    securedBy: [client_credentials]
+    responses:
+      204:
+        description: Reservation successfully cancelled
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Reservation not found or already expired
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Reservation cannot be cancelled (already consumed)
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse

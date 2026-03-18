@@ -1,0 +1,230 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Order History Data Type Fragment
+# Represents audit trail of order status changes and events
+# Used across Experience, Process, and System layer APIs
+
+displayName: Order History
+description: Audit trail entry for order status changes and events
+type: object
+properties:
+  historyId:
+    displayName: History ID
+    description: Unique identifier for this history entry
+    type: string
+    pattern: ^HIST[0-9]{6,12}$
+    example: "HIST123456789"
+    required: false
+  orderId:
+    displayName: Order ID
+    description: Associated order identifier
+    type: string
+    pattern: ^ORD[0-9]{6,12}$
+    example: "ORD789012345"
+    required: true
+  eventType:
+    displayName: Event Type
+    description: Type of event or change
+    type: string
+    enum: [STATUS_CHANGE, PAYMENT_UPDATE, SHIPMENT_UPDATE, ITEM_UPDATE, CUSTOMER_UPDATE, SYSTEM_UPDATE, MANUAL_UPDATE, ERROR_EVENT, NOTIFICATION_SENT]
+    example: "STATUS_CHANGE"
+    required: true
+  fromStatus:
+    displayName: From Status
+    description: Previous order status (for status change events)
+    type: string
+    enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+    example: "PENDING"
+    required: false
+  toStatus:
+    displayName: To Status
+    description: New order status (for status change events)
+    type: string
+    enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+    example: "CONFIRMED"
+    required: false
+  eventDescription:
+    displayName: Event Description
+    description: Human-readable description of the event
+    type: string
+    maxLength: 500
+    example: "Order status changed from PENDING to CONFIRMED after successful payment authorization"
+    required: true
+  eventTimestamp:
+    displayName: Event Timestamp
+    description: When the event occurred
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:08:30Z"
+    required: true
+  performedBy:
+    displayName: Performed By
+    description: User, system, or service that performed the action
+    type: string
+    maxLength: 100
+    example: "payment-service"
+    required: true
+  performedByType:
+    displayName: Performed By Type
+    description: Type of entity that performed the action
+    type: string
+    enum: [USER, SYSTEM, SERVICE, AUTOMATION, EXTERNAL_SYSTEM]
+    example: "SERVICE"
+    required: false
+  sourceSystem:
+    displayName: Source System
+    description: System that generated the event
+    type: string
+    maxLength: 100
+    example: "order-processing-api"
+    required: false
+  eventData:
+    displayName: Event Data
+    description: Additional event-specific data
+    type: object
+    properties:
+      previousValues:
+        displayName: Previous Values
+        description: Previous field values before the change
+        type: object
+        required: false
+      newValues:
+        displayName: New Values
+        description: New field values after the change
+        type: object
+        required: false
+      additionalInfo:
+        displayName: Additional Information
+        description: Extra context or metadata
+        type: object
+        required: false
+    required: false
+  correlationId:
+    displayName: Correlation ID
+    description: Correlation ID for tracking related events
+    type: string
+    maxLength: 100
+    example: "corr-12345-abcdef"
+    required: false
+  transactionId:
+    displayName: Transaction ID
+    description: Transaction ID for atomicity tracking
+    type: string
+    maxLength: 100
+    example: "txn-67890-fedcba"
+    required: false
+  ipAddress:
+    displayName: IP Address
+    description: IP address of the source (for user actions)
+    type: string
+    pattern: ^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$
+    example: "192.168.1.100"
+    required: false
+  userAgent:
+    displayName: User Agent
+    description: User agent string (for web requests)
+    type: string
+    maxLength: 500
+    example: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    required: false
+  severity:
+    displayName: Severity
+    description: Event severity level
+    type: string
+    enum: [INFO, WARNING, ERROR, CRITICAL]
+    example: "INFO"
+    default: "INFO"
+    required: false
+  category:
+    displayName: Category
+    description: Event category for classification
+    type: string
+    maxLength: 50
+    example: "ORDER_LIFECYCLE"
+    required: false
+  tags:
+    displayName: Tags
+    description: Tags for event classification and filtering
+    type: array
+    items:
+      type: string
+      maxLength: 50
+    maxItems: 20
+    example: ["payment", "authorization", "automated"]
+    required: false
+  errorCode:
+    displayName: Error Code
+    description: Error code (for error events)
+    type: string
+    maxLength: 50
+    example: "PAYMENT_DECLINED"
+    required: false
+  errorMessage:
+    displayName: Error Message
+    description: Error message (for error events)
+    type: string
+    maxLength: 1000
+    example: "Payment authorization failed - insufficient funds"
+    required: false
+  retryCount:
+    displayName: Retry Count
+    description: Number of retry attempts (for error events)
+    type: integer
+    minimum: 0
+    maximum: 10
+    example: 2
+    required: false
+  resolutionStatus:
+    displayName: Resolution Status
+    description: Resolution status (for error events)
+    type: string
+    enum: [PENDING, RESOLVED, FAILED, ESCALATED]
+    example: "RESOLVED"
+    required: false
+  notificationsSent:
+    displayName: Notifications Sent
+    description: List of notifications sent for this event
+    type: array
+    items:
+      type: object
+      properties:
+        notificationType:
+          type: string
+          enum: [EMAIL, SMS, PUSH, WEBHOOK]
+          example: "EMAIL"
+        recipient:
+          type: string
+          maxLength: 200
+          example: "customer@email.com"
+        status:
+          type: string
+          enum: [SENT, FAILED, PENDING]
+          example: "SENT"
+        sentTimestamp:
+          type: datetime
+          format: rfc3339
+          example: "2026-03-18T18:09:00Z"
+    maxItems: 10
+    required: false
+  auditTrail:
+    displayName: Audit Trail
+    description: Additional audit information
+    type: object
+    properties:
+      createdBy:
+        type: string
+        maxLength: 100
+        example: "system-user"
+      createdDate:
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:08:30Z"
+      modifiedBy:
+        type: string
+        maxLength: 100
+        example: "admin-user"
+      modifiedDate:
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:08:30Z"
+    required: false

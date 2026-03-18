@@ -1,0 +1,492 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Shipment Item Data Type Fragment
+# Represents individual items within a shipment
+# Used across Experience, Process, and System layer APIs
+
+displayName: Shipment Item
+description: Individual item within a shipment package
+type: object
+properties:
+  shipmentItemId:
+    displayName: Shipment Item ID
+    description: Unique identifier for this shipment item
+    type: string
+    pattern: ^SI[0-9]{6,12}$
+    example: "SI123456789"
+    required: false
+  lineItemId:
+    displayName: Line Item ID
+    description: Reference to the original order line item
+    type: string
+    pattern: ^LI[0-9]{6,12}$
+    example: "LI123456789"
+    required: false
+  productId:
+    displayName: Product ID
+    description: Unique product identifier
+    type: string
+    pattern: ^PROD[0-9A-Z]{4,20}$
+    example: "PROD001LAPTOP"
+    required: true
+  productName:
+    displayName: Product Name
+    description: Product display name
+    type: string
+    maxLength: 200
+    example: "Premium Business Laptop"
+    required: false
+  productSku:
+    displayName: Product SKU
+    description: Product stock keeping unit
+    type: string
+    maxLength: 50
+    example: "LAP-001-BLK-16GB"
+    required: false
+  quantity:
+    displayName: Quantity
+    description: Number of units being shipped
+    type: integer
+    minimum: 1
+    maximum: 999
+    example: 2
+    required: true
+  quantityOrdered:
+    displayName: Quantity Ordered
+    description: Original quantity ordered
+    type: integer
+    minimum: 1
+    maximum: 999
+    example: 2
+    required: false
+  quantityShipped:
+    displayName: Quantity Shipped
+    description: Total quantity shipped across all shipments
+    type: integer
+    minimum: 0
+    maximum: 999
+    example: 2
+    required: false
+  quantityRemaining:
+    displayName: Quantity Remaining
+    description: Quantity still to be shipped
+    type: integer
+    minimum: 0
+    maximum: 999
+    example: 0
+    required: false
+  unitPrice:
+    displayName: Unit Price
+    description: Price per individual unit
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 1299.99
+    required: false
+  totalPrice:
+    displayName: Total Price
+    description: Total price for this shipment item
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 2599.98
+    required: false
+  weight:
+    displayName: Item Weight
+    description: Weight information for this item
+    type: object
+    properties:
+      unitWeight:
+        displayName: Unit Weight
+        description: Weight per individual unit
+        type: number
+        format: float
+        minimum: 0
+        example: 2.5
+        required: false
+      totalWeight:
+        displayName: Total Weight
+        description: Total weight for all units of this item
+        type: number
+        format: float
+        minimum: 0
+        example: 5.0
+        required: false
+      weightUnit:
+        displayName: Weight Unit
+        description: Unit of measurement for weight
+        type: string
+        enum: [LB, KG, OZ, G]
+        example: "LB"
+        default: "LB"
+        required: false
+    required: false
+  dimensions:
+    displayName: Item Dimensions
+    description: Physical dimensions per unit
+    type: object
+    properties:
+      length:
+        displayName: Length
+        description: Item length
+        type: number
+        format: float
+        minimum: 0
+        example: 14.5
+        required: false
+      width:
+        displayName: Width
+        description: Item width
+        type: number
+        format: float
+        minimum: 0
+        example: 10.0
+        required: false
+      height:
+        displayName: Height
+        description: Item height
+        type: number
+        format: float
+        minimum: 0
+        example: 1.0
+        required: false
+      dimensionUnit:
+        displayName: Dimension Unit
+        description: Unit of measurement for dimensions
+        type: string
+        enum: [IN, CM, FT, M]
+        example: "IN"
+        default: "IN"
+        required: false
+    required: false
+  serialNumbers:
+    displayName: Serial Numbers
+    description: Serial numbers for serialized items
+    type: array
+    items:
+      type: string
+      maxLength: 100
+    maxItems: 999
+    example: ["SN123456789", "SN987654321"]
+    required: false
+  lotNumbers:
+    displayName: Lot Numbers
+    description: Lot or batch numbers for tracked items
+    type: array
+    items:
+      type: string
+      maxLength: 100
+    maxItems: 50
+    example: ["LOT2026001", "LOT2026002"]
+    required: false
+  expirationDates:
+    displayName: Expiration Dates
+    description: Expiration dates for perishable items
+    type: array
+    items:
+      type: date-only
+    maxItems: 50
+    example: ["2027-03-18", "2027-04-15"]
+    required: false
+  condition:
+    displayName: Item Condition
+    description: Condition of the item being shipped
+    type: string
+    enum: [NEW, USED, REFURBISHED, DAMAGED, RETURNED]
+    example: "NEW"
+    default: "NEW"
+    required: false
+  packaging:
+    displayName: Item Packaging
+    description: Individual item packaging details
+    type: object
+    properties:
+      packageType:
+        displayName: Package Type
+        description: Type of individual packaging
+        type: string
+        enum: [BOX, BAG, ENVELOPE, TUBE, BLISTER_PACK, SHRINK_WRAP]
+        example: "BOX"
+        required: false
+      packagingMaterial:
+        displayName: Packaging Material
+        description: Material used for packaging
+        type: string
+        maxLength: 100
+        example: "Corrugated cardboard with foam inserts"
+        required: false
+      isFragile:
+        displayName: Is Fragile
+        description: Whether the item is fragile
+        type: boolean
+        example: true
+        default: false
+        required: false
+      requiresSpecialHandling:
+        displayName: Requires Special Handling
+        description: Whether item requires special handling
+        type: boolean
+        example: false
+        default: false
+        required: false
+    required: false
+  hazmatInfo:
+    displayName: Hazmat Information
+    description: Hazardous material classification
+    type: object
+    properties:
+      isHazmat:
+        displayName: Is Hazmat
+        description: Whether item contains hazardous materials
+        type: boolean
+        example: false
+        default: false
+        required: false
+      hazmatClass:
+        displayName: Hazmat Class
+        description: Hazardous material classification
+        type: string
+        maxLength: 20
+        example: "UN3480"
+        required: false
+      hazmatDescription:
+        displayName: Hazmat Description
+        description: Description of hazardous material
+        type: string
+        maxLength: 200
+        example: "Lithium ion batteries contained in equipment"
+        required: false
+      packingGroup:
+        displayName: Packing Group
+        description: Hazmat packing group classification
+        type: string
+        enum: [I, II, III]
+        example: "II"
+        required: false
+    required: false
+  customsInfo:
+    displayName: Customs Information
+    description: Customs declaration for international shipping
+    type: object
+    properties:
+      customsValue:
+        displayName: Customs Value
+        description: Declared customs value per unit
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1299.99
+        required: false
+      customsDescription:
+        displayName: Customs Description
+        description: Customs description of the item
+        type: string
+        maxLength: 200
+        example: "Portable computer laptop"
+        required: false
+      harmonizedCode:
+        displayName: Harmonized Code
+        description: Harmonized tariff schedule code
+        type: string
+        maxLength: 20
+        example: "8471.30.0100"
+        required: false
+      countryOfOrigin:
+        displayName: Country of Origin
+        description: Manufacturing country code
+        type: string
+        pattern: ^[A-Z]{2}$
+        example: "US"
+        required: false
+      manufacturerName:
+        displayName: Manufacturer Name
+        description: Name of the manufacturer
+        type: string
+        maxLength: 100
+        example: "Tech Manufacturing Corp"
+        required: false
+    required: false
+  fulfillmentInfo:
+    displayName: Fulfillment Information
+    description: Fulfillment and inventory details
+    type: object
+    properties:
+      fulfillmentCenter:
+        displayName: Fulfillment Center
+        description: Fulfillment center location
+        type: string
+        maxLength: 100
+        example: "US-WEST-DC01"
+        required: false
+      inventoryLocation:
+        displayName: Inventory Location
+        description: Specific inventory location (bin, shelf, etc.)
+        type: string
+        maxLength: 100
+        example: "A-15-B-03"
+        required: false
+      pickedBy:
+        displayName: Picked By
+        description: User who picked the item
+        type: string
+        maxLength: 100
+        example: "picker-001"
+        required: false
+      pickedDate:
+        displayName: Picked Date
+        description: Date and time item was picked
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T14:30:00Z"
+        required: false
+      packedBy:
+        displayName: Packed By
+        description: User who packed the item
+        type: string
+        maxLength: 100
+        example: "packer-002"
+        required: false
+      packedDate:
+        displayName: Packed Date
+        description: Date and time item was packed
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T15:15:00Z"
+        required: false
+    required: false
+  qualityCheck:
+    displayName: Quality Check
+    description: Quality assurance information
+    type: object
+    properties:
+      isQualityChecked:
+        displayName: Is Quality Checked
+        description: Whether item passed quality check
+        type: boolean
+        example: true
+        default: false
+        required: false
+      qualityGrade:
+        displayName: Quality Grade
+        description: Quality assessment grade
+        type: string
+        enum: [A, B, C, FAIL]
+        example: "A"
+        required: false
+      qualityNotes:
+        displayName: Quality Notes
+        description: Quality assessment notes
+        type: string
+        maxLength: 500
+        example: "Item in perfect condition, all components included"
+        required: false
+      inspectedBy:
+        displayName: Inspected By
+        description: User who performed quality check
+        type: string
+        maxLength: 100
+        example: "qc-inspector-003"
+        required: false
+      inspectedDate:
+        displayName: Inspected Date
+        description: Date and time of quality inspection
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T13:45:00Z"
+        required: false
+    required: false
+  warranty:
+    displayName: Warranty Information
+    description: Warranty details for the item
+    type: object
+    properties:
+      warrantyType:
+        displayName: Warranty Type
+        description: Type of warranty coverage
+        type: string
+        maxLength: 50
+        example: "Standard Manufacturer Warranty"
+        required: false
+      warrantyPeriod:
+        displayName: Warranty Period
+        description: Warranty coverage period
+        type: integer
+        minimum: 0
+        example: 12
+        required: false
+      warrantyUnit:
+        displayName: Warranty Unit
+        description: Unit for warranty period
+        type: string
+        enum: [DAYS, MONTHS, YEARS]
+        example: "MONTHS"
+        required: false
+      warrantyStartDate:
+        displayName: Warranty Start Date
+        description: When warranty coverage begins
+        type: date-only
+        example: "2026-03-18"
+        required: false
+      warrantyEndDate:
+        displayName: Warranty End Date
+        description: When warranty coverage ends
+        type: date-only
+        example: "2027-03-18"
+        required: false
+    required: false
+  returnInfo:
+    displayName: Return Information
+    description: Return policy for this specific item
+    type: object
+    properties:
+      isReturnable:
+        displayName: Is Returnable
+        description: Whether this item can be returned
+        type: boolean
+        example: true
+        default: true
+        required: false
+      returnPeriod:
+        displayName: Return Period
+        description: Return window in days
+        type: integer
+        minimum: 0
+        example: 30
+        required: false
+      returnDeadline:
+        displayName: Return Deadline
+        description: Last date for returns
+        type: date-only
+        example: "2026-04-18"
+        required: false
+      restockingFee:
+        displayName: Restocking Fee
+        description: Restocking fee percentage
+        type: number
+        format: float
+        minimum: 0
+        maximum: 100
+        multipleOf: 0.01
+        example: 15.00
+        required: false
+    required: false
+  tags:
+    displayName: Item Tags
+    description: Classification tags for the shipment item
+    type: array
+    items:
+      type: string
+      maxLength: 50
+    maxItems: 20
+    example: ["electronics", "high-value", "signature-required"]
+    required: false
+  notes:
+    displayName: Item Notes
+    description: Special notes or instructions for this item
+    type: string
+    maxLength: 1000
+    example: "Include original packaging and documentation"
+    required: false

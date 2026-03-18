@@ -1,0 +1,748 @@
+#%RAML 1.0 Library
+
+# Order Management System - Order Process API Data Types
+# Request and response data types for Process Layer APIs
+# Used for orchestrating business processes and integration flows
+
+types:
+  # PROCESS ORDER REQUEST/RESPONSE
+  ProcessOrderRequest:
+    displayName: Process Order Request
+    description: Request to process an order through the complete business workflow
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        description: Unique order identifier to process
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      processSteps:
+        displayName: Process Steps
+        description: Specific processing steps to execute
+        type: array
+        items:
+          type: string
+          enum: [VALIDATE_CUSTOMER, VALIDATE_INVENTORY, PROCESS_PAYMENT, CREATE_SHIPMENT, SEND_CONFIRMATION]
+        example: ["VALIDATE_CUSTOMER", "VALIDATE_INVENTORY", "PROCESS_PAYMENT"]
+        required: false
+      processingOptions:
+        displayName: Processing Options
+        description: Options for order processing behavior
+        type: object
+        properties:
+          skipValidation:
+            displayName: Skip Validation
+            description: Skip certain validation steps
+            type: boolean
+            default: false
+            example: false
+          forceProcessing:
+            displayName: Force Processing
+            description: Force processing even if validation warnings exist
+            type: boolean
+            default: false
+            example: false
+          asyncMode:
+            displayName: Async Mode
+            description: Process order asynchronously
+            type: boolean
+            default: true
+            example: true
+          notificationPreferences:
+            displayName: Notification Preferences
+            type: object
+            properties:
+              sendCustomerEmail:
+                type: boolean
+                default: true
+              sendSMSUpdates:
+                type: boolean
+                default: false
+              webhookUrl:
+                type: string
+                maxLength: 500
+                example: "https://api.client.com/webhooks/order-updates"
+        required: false
+      metadata:
+        displayName: Processing Metadata
+        description: Additional context for processing
+        type: object
+        properties:
+          priority:
+            displayName: Processing Priority
+            type: string
+            enum: [LOW, NORMAL, HIGH, URGENT]
+            default: "NORMAL"
+            example: "HIGH"
+          source:
+            displayName: Processing Source
+            type: string
+            example: "order-management-ui"
+          userId:
+            displayName: User ID
+            type: string
+            example: "user-12345"
+          reason:
+            displayName: Processing Reason
+            type: string
+            maxLength: 500
+            example: "Customer requested expedited processing"
+        required: false
+
+  ProcessOrderResponse:
+    displayName: Process Order Response
+    description: Response from order processing workflow
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      processId:
+        displayName: Process ID
+        description: Unique identifier for this processing instance
+        type: string
+        pattern: ^PROC[0-9]{6,12}$
+        example: "PROC456789012"
+        required: true
+      status:
+        displayName: Processing Status
+        description: Current status of the processing workflow
+        type: string
+        enum: [INITIATED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+        example: "IN_PROGRESS"
+        required: true
+      currentStep:
+        displayName: Current Step
+        description: Currently executing process step
+        type: string
+        enum: [VALIDATE_CUSTOMER, VALIDATE_INVENTORY, PROCESS_PAYMENT, CREATE_SHIPMENT, SEND_CONFIRMATION, COMPLETED]
+        example: "VALIDATE_INVENTORY"
+        required: false
+      completedSteps:
+        displayName: Completed Steps
+        description: List of completed processing steps
+        type: array
+        items:
+          type: string
+          enum: [VALIDATE_CUSTOMER, VALIDATE_INVENTORY, PROCESS_PAYMENT, CREATE_SHIPMENT, SEND_CONFIRMATION]
+        example: ["VALIDATE_CUSTOMER"]
+        required: true
+      pendingSteps:
+        displayName: Pending Steps
+        description: List of remaining processing steps
+        type: array
+        items:
+          type: string
+          enum: [VALIDATE_CUSTOMER, VALIDATE_INVENTORY, PROCESS_PAYMENT, CREATE_SHIPMENT, SEND_CONFIRMATION]
+        example: ["VALIDATE_INVENTORY", "PROCESS_PAYMENT", "CREATE_SHIPMENT", "SEND_CONFIRMATION"]
+        required: true
+      processingResults:
+        displayName: Processing Results
+        description: Results from each completed step
+        type: object
+        properties:
+          customerValidation:
+            displayName: Customer Validation Result
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              message:
+                type: string
+                example: "Customer validation successful"
+              details:
+                type: object
+                properties:
+                  customerId:
+                    type: string
+                    example: "CUST123456789"
+                  customerStatus:
+                    type: string
+                    example: "ACTIVE"
+                  creditScore:
+                    type: integer
+                    example: 750
+            required: false
+          inventoryValidation:
+            displayName: Inventory Validation Result
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              message:
+                type: string
+                example: "All items are available"
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    productId:
+                      type: string
+                      example: "PROD987654321"
+                    requestedQuantity:
+                      type: integer
+                      example: 2
+                    availableQuantity:
+                      type: integer
+                      example: 150
+                    reserved:
+                      type: boolean
+                      example: true
+            required: false
+          paymentProcessing:
+            displayName: Payment Processing Result
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              message:
+                type: string
+                example: "Payment authorized successfully"
+              details:
+                type: object
+                properties:
+                  paymentId:
+                    type: string
+                    example: "PAY123456789"
+                  authorizationCode:
+                    type: string
+                    example: "AUTH123456"
+                  transactionId:
+                    type: string
+                    example: "TXN987654321"
+                  amount:
+                    type: number
+                    format: float
+                    example: 1359.97
+            required: false
+          shipmentCreation:
+            displayName: Shipment Creation Result
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              message:
+                type: string
+                example: "Shipment created successfully"
+              details:
+                type: object
+                properties:
+                  shipmentId:
+                    type: string
+                    example: "SHIP456789012"
+                  trackingNumber:
+                    type: string
+                    example: "1Z999AA1234567890"
+                  estimatedDelivery:
+                    type: datetime
+                    format: rfc3339
+                    example: "2026-03-20T18:00:00Z"
+                  carrier:
+                    type: string
+                    example: "UPS"
+            required: false
+        required: false
+      errors:
+        displayName: Processing Errors
+        description: Any errors encountered during processing
+        type: array
+        items:
+          type: object
+          properties:
+            step:
+              displayName: Error Step
+              type: string
+              example: "VALIDATE_INVENTORY"
+            code:
+              displayName: Error Code
+              type: string
+              example: "INSUFFICIENT_INVENTORY"
+            message:
+              displayName: Error Message
+              type: string
+              example: "Product PROD987654321 has insufficient inventory"
+            timestamp:
+              displayName: Error Timestamp
+              type: datetime
+              format: rfc3339
+              example: "2026-03-18T18:15:30Z"
+        required: false
+      warnings:
+        displayName: Processing Warnings
+        description: Non-blocking warnings from processing
+        type: array
+        items:
+          type: object
+          properties:
+            step:
+              type: string
+              example: "VALIDATE_CUSTOMER"
+            code:
+              type: string
+              example: "LOW_CREDIT_SCORE"
+            message:
+              type: string
+              example: "Customer has lower than preferred credit score"
+            timestamp:
+              type: datetime
+              format: rfc3339
+              example: "2026-03-18T18:10:15Z"
+        required: false
+      estimatedCompletion:
+        displayName: Estimated Completion
+        description: Estimated completion time for processing
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:45:00Z"
+        required: false
+      processStartTime:
+        displayName: Process Start Time
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:07:30Z"
+        required: true
+      lastUpdateTime:
+        displayName: Last Update Time
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:15:45Z"
+        required: true
+
+  # VALIDATE ORDER REQUEST/RESPONSE
+  ValidateOrderRequest:
+    displayName: Validate Order Request
+    description: Request to validate order components without processing
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: false
+      orderData:
+        displayName: Order Data
+        description: Order data to validate (if orderId not provided)
+        type: !include Order.raml
+        required: false
+      validationType:
+        displayName: Validation Type
+        description: Types of validation to perform
+        type: array
+        items:
+          type: string
+          enum: [CUSTOMER, INVENTORY, PAYMENT, SHIPPING, BUSINESS_RULES, ALL]
+        example: ["CUSTOMER", "INVENTORY", "PAYMENT"]
+        required: false
+      validationOptions:
+        displayName: Validation Options
+        type: object
+        properties:
+          strictMode:
+            displayName: Strict Mode
+            description: Fail on any validation warnings
+            type: boolean
+            default: false
+          includeRecommendations:
+            displayName: Include Recommendations
+            description: Include suggested improvements
+            type: boolean
+            default: true
+          checkRealTimeInventory:
+            displayName: Check Real-Time Inventory
+            description: Perform real-time inventory checks
+            type: boolean
+            default: true
+        required: false
+
+  ValidateOrderResponse:
+    displayName: Validate Order Response
+    description: Results of order validation
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      validationStatus:
+        displayName: Validation Status
+        description: Overall validation result
+        type: string
+        enum: [PASSED, FAILED, WARNING]
+        example: "PASSED"
+        required: true
+      validationScore:
+        displayName: Validation Score
+        description: Numeric validation score (0-100)
+        type: integer
+        minimum: 0
+        maximum: 100
+        example: 95
+        required: true
+      validationResults:
+        displayName: Validation Results
+        description: Detailed validation results by category
+        type: object
+        properties:
+          customerValidation:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              score:
+                type: integer
+                minimum: 0
+                maximum: 100
+                example: 100
+              issues:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      example: "CUSTOMER_INACTIVE"
+                    severity:
+                      type: string
+                      enum: [ERROR, WARNING, INFO]
+                      example: "ERROR"
+                    message:
+                      type: string
+                      example: "Customer account is inactive"
+          inventoryValidation:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "WARNING"
+              score:
+                type: integer
+                minimum: 0
+                maximum: 100
+                example: 85
+              issues:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      example: "LOW_STOCK"
+                    severity:
+                      type: string
+                      enum: [ERROR, WARNING, INFO]
+                      example: "WARNING"
+                    message:
+                      type: string
+                      example: "Product PROD987654321 has low stock (5 remaining)"
+                    productId:
+                      type: string
+                      example: "PROD987654321"
+          paymentValidation:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              score:
+                type: integer
+                minimum: 0
+                maximum: 100
+                example: 100
+              issues:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      example: "PAYMENT_METHOD_EXPIRED"
+                    severity:
+                      type: string
+                      enum: [ERROR, WARNING, INFO]
+                      example: "ERROR"
+                    message:
+                      type: string
+                      example: "Payment method has expired"
+          shippingValidation:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [PASSED, FAILED, WARNING]
+                example: "PASSED"
+              score:
+                type: integer
+                minimum: 0
+                maximum: 100
+                example: 100
+              issues:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      example: "INVALID_SHIPPING_ADDRESS"
+                    severity:
+                      type: string
+                      enum: [ERROR, WARNING, INFO]
+                      example: "ERROR"
+                    message:
+                      type: string
+                      example: "Shipping address cannot be validated"
+        required: true
+      recommendations:
+        displayName: Recommendations
+        description: Suggested improvements or actions
+        type: array
+        items:
+          type: object
+          properties:
+            category:
+              type: string
+              enum: [CUSTOMER, INVENTORY, PAYMENT, SHIPPING, PRICING]
+              example: "INVENTORY"
+            priority:
+              type: string
+              enum: [LOW, MEDIUM, HIGH, CRITICAL]
+              example: "MEDIUM"
+            title:
+              type: string
+              example: "Consider alternative products"
+            description:
+              type: string
+              example: "Product PROD987654321 has low stock. Consider suggesting similar products."
+            actionable:
+              type: boolean
+              example: true
+        required: false
+      validatedAt:
+        displayName: Validated At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:20:00Z"
+        required: true
+
+  # UPDATE ORDER PROCESSING STATUS
+  UpdateProcessingStatusRequest:
+    displayName: Update Processing Status Request
+    description: Request to update order processing status
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      processId:
+        displayName: Process ID
+        type: string
+        pattern: ^PROC[0-9]{6,12}$
+        example: "PROC456789012"
+        required: true
+      status:
+        displayName: New Status
+        type: string
+        enum: [IN_PROGRESS, COMPLETED, FAILED, CANCELLED, PAUSED, RESUMED]
+        example: "COMPLETED"
+        required: true
+      currentStep:
+        displayName: Current Step
+        type: string
+        enum: [VALIDATE_CUSTOMER, VALIDATE_INVENTORY, PROCESS_PAYMENT, CREATE_SHIPMENT, SEND_CONFIRMATION, COMPLETED]
+        example: "COMPLETED"
+        required: false
+      stepResults:
+        displayName: Step Results
+        description: Results from the current processing step
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: true
+          message:
+            type: string
+            example: "Step completed successfully"
+          data:
+            type: object
+            example: { "transactionId": "TXN987654321" }
+          errors:
+            type: array
+            items:
+              type: object
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+        required: false
+      notes:
+        displayName: Update Notes
+        type: string
+        maxLength: 1000
+        example: "Processing completed successfully without issues"
+        required: false
+
+  UpdateProcessingStatusResponse:
+    displayName: Update Processing Status Response
+    description: Response after updating processing status
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      processId:
+        displayName: Process ID
+        type: string
+        pattern: ^PROC[0-9]{6,12}$
+        example: "PROC456789012"
+        required: true
+      previousStatus:
+        displayName: Previous Status
+        type: string
+        example: "IN_PROGRESS"
+        required: true
+      currentStatus:
+        displayName: Current Status
+        type: string
+        example: "COMPLETED"
+        required: true
+      statusUpdatedAt:
+        displayName: Status Updated At
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:45:00Z"
+        required: true
+      message:
+        displayName: Update Message
+        type: string
+        example: "Processing status updated successfully"
+        required: true
+
+  # ORDER ORCHESTRATION STATUS
+  GetProcessingStatusRequest:
+    displayName: Get Processing Status Request
+    description: Request to get current processing status
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: false
+      processId:
+        displayName: Process ID
+        type: string
+        pattern: ^PROC[0-9]{6,12}$
+        example: "PROC456789012"
+        required: false
+      includeHistory:
+        displayName: Include History
+        description: Include processing history in response
+        type: boolean
+        default: false
+        example: true
+        required: false
+      includeDetails:
+        displayName: Include Details
+        description: Include detailed step information
+        type: boolean
+        default: true
+        example: true
+        required: false
+
+  GetProcessingStatusResponse:
+    displayName: Get Processing Status Response
+    description: Current processing status and details
+    type: ProcessOrderResponse
+
+  # RETRY PROCESSING
+  RetryProcessingRequest:
+    displayName: Retry Processing Request
+    description: Request to retry failed order processing
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      processId:
+        displayName: Process ID
+        type: string
+        pattern: ^PROC[0-9]{6,12}$
+        example: "PROC456789012"
+        required: false
+      retrySteps:
+        displayName: Retry Steps
+        description: Specific steps to retry (empty = retry all failed steps)
+        type: array
+        items:
+          type: string
+          enum: [VALIDATE_CUSTOMER, VALIDATE_INVENTORY, PROCESS_PAYMENT, CREATE_SHIPMENT, SEND_CONFIRMATION]
+        example: ["PROCESS_PAYMENT"]
+        required: false
+      retryOptions:
+        displayName: Retry Options
+        type: object
+        properties:
+          maxAttempts:
+            displayName: Maximum Attempts
+            type: integer
+            minimum: 1
+            maximum: 5
+            default: 3
+            example: 3
+          retryDelay:
+            displayName: Retry Delay
+            description: Delay between retry attempts in seconds
+            type: integer
+            minimum: 0
+            maximum: 3600
+            default: 30
+            example: 60
+          skipPreviouslySuccessful:
+            displayName: Skip Previously Successful
+            description: Skip steps that previously completed successfully
+            type: boolean
+            default: true
+            example: true
+        required: false
+      reason:
+        displayName: Retry Reason
+        type: string
+        maxLength: 500
+        example: "Payment gateway was temporarily unavailable"
+        required: false
+
+  RetryProcessingResponse:
+    displayName: Retry Processing Response
+    description: Response from retry processing request
+    type: ProcessOrderResponse

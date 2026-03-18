@@ -1,0 +1,496 @@
+#%RAML 1.0 Trait
+
+# Order Management System - Security Traits Fragment
+# Reusable security traits for OAuth 2.0 authentication and authorization
+# Used across Experience, Process, and System layer APIs
+
+oauth2Protected:
+  displayName: OAuth 2.0 Protected
+  description: |
+    This endpoint requires OAuth 2.0 authentication with a valid Bearer token.
+    The token must be obtained from the authorization server and include appropriate scopes.
+  usage: Apply to endpoints that require OAuth 2.0 authentication
+  headers:
+    Authorization:
+      displayName: Authorization Header
+      description: OAuth 2.0 Bearer token for authentication
+      type: string
+      pattern: ^Bearer [A-Za-z0-9\-._~+/]+=*$
+      example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      required: true
+    X-Client-ID:
+      displayName: Client ID
+      description: OAuth 2.0 client identifier for additional security
+      type: string
+      minLength: 10
+      maxLength: 100
+      example: "oms-client-12345"
+      required: true
+  queryParameters:
+    client_id?:
+      displayName: Client ID (Query Parameter)
+      description: Alternative way to provide client ID if not in header
+      type: string
+      minLength: 10
+      maxLength: 100
+      example: "oms-client-12345"
+  responses:
+    401:
+      description: |
+        Unauthorized - Authentication failed or token is invalid/expired
+      headers:
+        WWW-Authenticate:
+          description: Authentication method required
+          type: string
+          example: 'Bearer realm="Order Management API", error="invalid_token"'
+      body:
+        application/json:
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  example: "UNAUTHORIZED"
+                message:
+                  type: string
+                  example: "Authentication required - invalid or missing bearer token"
+                details:
+                  type: string
+                  example: "The provided access token is expired or invalid"
+                timestamp:
+                  type: datetime
+                  format: rfc3339
+                  example: "2026-03-18T18:07:00Z"
+                traceId:
+                  type: string
+                  example: "trace-auth-12345"
+              required: [code, message, timestamp]
+          example: |
+            {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "Authentication required - invalid or missing bearer token",
+                "details": "The provided access token is expired or invalid",
+                "timestamp": "2026-03-18T18:07:00Z",
+                "traceId": "trace-auth-12345"
+              }
+            }
+    403:
+      description: |
+        Forbidden - Token is valid but lacks required permissions/scopes
+      body:
+        application/json:
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  example: "FORBIDDEN"
+                message:
+                  type: string
+                  example: "Insufficient permissions to access this resource"
+                details:
+                  type: string
+                  example: "Required scope: orders:write - Current scopes: orders:read"
+                timestamp:
+                  type: datetime
+                  format: rfc3339
+                  example: "2026-03-18T18:07:00Z"
+                traceId:
+                  type: string
+                  example: "trace-authz-12345"
+              required: [code, message, timestamp]
+          example: |
+            {
+              "error": {
+                "code": "FORBIDDEN",
+                "message": "Insufficient permissions to access this resource",
+                "details": "Required scope: orders:write - Current scopes: orders:read",
+                "timestamp": "2026-03-18T18:07:00Z",
+                "traceId": "trace-authz-12345"
+              }
+            }
+
+clientCredentials:
+  displayName: Client Credentials Authentication
+  description: |
+    This endpoint uses OAuth 2.0 Client Credentials flow for machine-to-machine authentication.
+    Primarily used for system-to-system API calls in the Process and System layers.
+  usage: Apply to endpoints used for system integrations and backend services
+  headers:
+    Authorization:
+      displayName: Authorization Header
+      description: OAuth 2.0 Bearer token obtained via client credentials flow
+      type: string
+      pattern: ^Bearer [A-Za-z0-9\-._~+/]+=*$
+      example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      required: true
+    X-Client-ID:
+      displayName: Client ID
+      description: OAuth 2.0 client identifier
+      type: string
+      minLength: 10
+      maxLength: 100
+      example: "oms-system-client-67890"
+      required: true
+    X-API-Version:
+      displayName: API Version
+      description: API version for backward compatibility
+      type: string
+      pattern: ^v[0-9]+(\.[0-9]+)*$
+      example: "v1.0"
+      default: "v1.0"
+      required: false
+  responses:
+    401:
+      description: Client credentials authentication failed
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "INVALID_CLIENT",
+                "message": "Client authentication failed",
+                "details": "Invalid client credentials or client not found",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }
+
+scopedAccess:
+  displayName: Scoped Access Control
+  description: |
+    This endpoint requires specific OAuth 2.0 scopes for access control.
+    Different operations may require different scope combinations.
+  usage: Apply to endpoints that require specific permission scopes
+  headers:
+    Authorization:
+      displayName: Authorization Header
+      description: OAuth 2.0 Bearer token with required scopes
+      type: string
+      pattern: ^Bearer [A-Za-z0-9\-._~+/]+=*$
+      example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      required: true
+  queryParameters:
+    scope?:
+      displayName: Requested Scope
+      description: Specific scope being accessed (for logging/auditing)
+      type: string
+      example: "orders:write"
+  responses:
+    403:
+      description: Insufficient scope permissions
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "INSUFFICIENT_SCOPE",
+                "message": "Token does not have required scope permissions",
+                "details": "Required: orders:write, customers:read - Available: orders:read",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }
+
+rateLimited:
+  displayName: Rate Limited Access
+  description: |
+    This endpoint is subject to rate limiting to prevent abuse and ensure fair usage.
+    Rate limits are applied per client and may vary based on authentication level.
+  usage: Apply to all public-facing endpoints to prevent abuse
+  headers:
+    X-Rate-Limit-Remaining?:
+      displayName: Rate Limit Remaining
+      description: Number of requests remaining in the current window
+      type: integer
+      minimum: 0
+      example: 95
+    X-Rate-Limit-Reset?:
+      displayName: Rate Limit Reset
+      description: Unix timestamp when the rate limit window resets
+      type: integer
+      example: 1678901280
+  responses:
+    429:
+      description: |
+        Too Many Requests - Rate limit exceeded
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying
+          type: integer
+          example: 60
+        X-Rate-Limit-Limit:
+          description: Total requests allowed per window
+          type: integer
+          example: 1000
+        X-Rate-Limit-Remaining:
+          description: Requests remaining in current window
+          type: integer
+          example: 0
+        X-Rate-Limit-Reset:
+          description: Unix timestamp when limit resets
+          type: integer
+          example: 1678901280
+      body:
+        application/json:
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  example: "RATE_LIMIT_EXCEEDED"
+                message:
+                  type: string
+                  example: "Rate limit exceeded - too many requests"
+                details:
+                  type: string
+                  example: "Maximum 1000 requests per hour exceeded. Current usage: 1001/1000"
+                timestamp:
+                  type: datetime
+                  format: rfc3339
+                  example: "2026-03-18T18:07:00Z"
+                retryAfter:
+                  type: integer
+                  description: Seconds to wait before retry
+                  example: 60
+              required: [code, message, timestamp]
+          example: |
+            {
+              "error": {
+                "code": "RATE_LIMIT_EXCEEDED",
+                "message": "Rate limit exceeded - too many requests",
+                "details": "Maximum 1000 requests per hour exceeded. Current usage: 1001/1000",
+                "timestamp": "2026-03-18T18:07:00Z",
+                "retryAfter": 60
+              }
+            }
+
+correlationTracking:
+  displayName: Request Correlation and Tracing
+  description: |
+    This trait adds correlation and tracing capabilities for request tracking
+    across multiple services and layers in the integration architecture.
+  usage: Apply to all endpoints for distributed tracing and debugging
+  headers:
+    X-Correlation-ID?:
+      displayName: Correlation ID
+      description: |
+        Unique identifier for correlating requests across services.
+        If not provided, the system will generate one automatically.
+      type: string
+      pattern: ^[a-zA-Z0-9\-]{8,50}$
+      example: "corr-12345-abcdef-67890"
+    X-Request-ID?:
+      displayName: Request ID
+      description: |
+        Unique identifier for this specific request.
+        Used for logging and troubleshooting individual API calls.
+      type: string
+      pattern: ^[a-zA-Z0-9\-]{8,50}$
+      example: "req-abc123-def456-ghi789"
+    X-Source-System?:
+      displayName: Source System
+      description: Identifier of the calling system or application
+      type: string
+      maxLength: 100
+      example: "customer-portal"
+    X-User-ID?:
+      displayName: User ID
+      description: Identifier of the user making the request (if applicable)
+      type: string
+      maxLength: 100
+      example: "user-12345"
+  responses:
+    200:
+      headers:
+        X-Correlation-ID:
+          description: Request correlation identifier (echoed or generated)
+          type: string
+          example: "corr-12345-abcdef-67890"
+        X-Request-ID:
+          description: Request identifier (echoed or generated)
+          type: string
+          example: "req-abc123-def456-ghi789"
+        X-Response-Time:
+          description: Response processing time in milliseconds
+          type: integer
+          example: 245
+
+auditLogging:
+  displayName: Audit Logging and Compliance
+  description: |
+    This trait ensures comprehensive audit logging for compliance and security monitoring.
+    All requests and responses are logged with appropriate detail levels.
+  usage: Apply to endpoints that handle sensitive data or critical operations
+  headers:
+    X-Audit-Context?:
+      displayName: Audit Context
+      description: Additional context information for audit logging
+      type: string
+      maxLength: 500
+      example: "order-creation-customer-portal"
+    X-Business-Context?:
+      displayName: Business Context
+      description: Business context for the operation being performed
+      type: string
+      maxLength: 200
+      example: "high-value-order-processing"
+  responses:
+    200:
+      headers:
+        X-Audit-ID:
+          description: Unique audit trail identifier
+          type: string
+          example: "audit-789012-345678"
+    400:
+      headers:
+        X-Audit-ID:
+          description: Audit identifier for failed request
+          type: string
+          example: "audit-error-123456"
+    500:
+      headers:
+        X-Audit-ID:
+          description: Audit identifier for system error
+          type: string
+          example: "audit-system-error-789012"
+
+contentNegotiation:
+  displayName: Content Negotiation and Validation
+  description: |
+    This trait handles content type negotiation and request/response validation
+    to ensure proper data format handling across all API interactions.
+  usage: Apply to endpoints that accept and return structured data
+  headers:
+    Content-Type:
+      displayName: Content Type
+      description: Media type of the request body
+      type: string
+      enum: [application/json, application/xml]
+      example: "application/json"
+      required: true
+    Accept:
+      displayName: Accept Header
+      description: Preferred response media types
+      type: string
+      example: "application/json"
+      default: "application/json"
+      required: false
+    Accept-Encoding?:
+      displayName: Accept Encoding
+      description: Supported compression algorithms
+      type: string
+      example: "gzip, deflate, br"
+    Accept-Language?:
+      displayName: Accept Language
+      description: Preferred response language
+      type: string
+      pattern: ^[a-z]{2}(-[A-Z]{2})?(,[a-z]{2}(-[A-Z]{2})?)*$
+      example: "en-US,en;q=0.9"
+  responses:
+    400:
+      description: Invalid content type or malformed request body
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "INVALID_CONTENT_TYPE",
+                "message": "Unsupported content type",
+                "details": "Expected: application/json, Received: text/plain",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }
+    406:
+      description: Not Acceptable - Requested response format not supported
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "NOT_ACCEPTABLE",
+                "message": "Requested response format not supported",
+                "details": "Supported formats: application/json, application/xml",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }
+    415:
+      description: Unsupported Media Type
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "UNSUPPORTED_MEDIA_TYPE",
+                "message": "Unsupported request content type",
+                "details": "Supported types: application/json, application/xml",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }
+
+timeoutHandling:
+  displayName: Timeout and Circuit Breaker Handling
+  description: |
+    This trait defines timeout behavior and circuit breaker responses
+    for handling downstream service failures and latency issues.
+  usage: Apply to endpoints that depend on external services or databases
+  headers:
+    X-Request-Timeout?:
+      displayName: Request Timeout
+      description: Client-specified timeout in milliseconds
+      type: integer
+      minimum: 1000
+      maximum: 30000
+      example: 5000
+      default: 30000
+  responses:
+    408:
+      description: Request Timeout - Operation took too long to complete
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "REQUEST_TIMEOUT",
+                "message": "Request timed out",
+                "details": "Operation exceeded maximum allowed time of 30 seconds",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }
+    503:
+      description: Service Unavailable - Circuit breaker open or service down
+      headers:
+        Retry-After:
+          description: Recommended retry delay in seconds
+          type: integer
+          example: 30
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "SERVICE_UNAVAILABLE",
+                "message": "Service temporarily unavailable",
+                "details": "Circuit breaker is open due to high error rate. Retry after 30 seconds",
+                "timestamp": "2026-03-18T18:07:00Z",
+                "retryAfter": 30
+              }
+            }
+    504:
+      description: Gateway Timeout - Upstream service timeout
+      body:
+        application/json:
+          example: |
+            {
+              "error": {
+                "code": "GATEWAY_TIMEOUT",
+                "message": "Upstream service timeout",
+                "details": "Backend service did not respond within acceptable time limit",
+                "timestamp": "2026-03-18T18:07:00Z"
+              }
+            }

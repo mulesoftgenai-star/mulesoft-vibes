@@ -1,0 +1,223 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Order Item Data Type Fragment
+# Represents individual line items within an order
+# Used across Experience, Process, and System layer APIs
+
+displayName: Order Item
+description: Individual product line item within an order
+type: object
+properties:
+  lineItemId:
+    displayName: Line Item ID
+    description: Unique identifier for this line item
+    type: string
+    pattern: ^LI[0-9]{6,12}$
+    example: "LI123456789"
+    required: false
+  productId:
+    displayName: Product ID
+    description: Unique product identifier
+    type: string
+    pattern: ^PROD[0-9A-Z]{4,20}$
+    example: "PROD001LAPTOP"
+    required: true
+  productName:
+    displayName: Product Name
+    description: Product display name
+    type: string
+    maxLength: 200
+    example: "Premium Business Laptop"
+    required: false
+  productSku:
+    displayName: Product SKU
+    description: Product stock keeping unit
+    type: string
+    maxLength: 50
+    example: "LAP-001-BLK-16GB"
+    required: false
+  productCategory:
+    displayName: Product Category
+    description: Product category classification
+    type: string
+    maxLength: 100
+    example: "Electronics/Computers/Laptops"
+    required: false
+  quantity:
+    displayName: Quantity
+    description: Number of units ordered
+    type: integer
+    minimum: 1
+    maximum: 999
+    example: 2
+    required: true
+  unitPrice:
+    displayName: Unit Price
+    description: Price per individual unit
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 1299.99
+    required: true
+  totalPrice:
+    displayName: Total Price
+    description: Total price for this line item (quantity × unit price)
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 2599.98
+    required: true
+  discountAmount:
+    displayName: Discount Amount
+    description: Discount applied to this line item
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 100.00
+    required: false
+  discountPercent:
+    displayName: Discount Percent
+    description: Discount percentage applied
+    type: number
+    format: float
+    minimum: 0
+    maximum: 100
+    multipleOf: 0.01
+    example: 5.0
+    required: false
+  taxAmount:
+    displayName: Tax Amount
+    description: Tax applied to this line item
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 129.99
+    required: false
+  taxRate:
+    displayName: Tax Rate
+    description: Tax rate percentage applied
+    type: number
+    format: float
+    minimum: 0
+    maximum: 100
+    multipleOf: 0.001
+    example: 8.25
+    required: false
+  status:
+    displayName: Item Status
+    description: Status of this individual line item
+    type: string
+    enum: [PENDING, CONFIRMED, BACKORDERED, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+    example: "CONFIRMED"
+    required: false
+  inventoryReservationId:
+    displayName: Inventory Reservation ID
+    description: Reference to inventory reservation
+    type: string
+    maxLength: 50
+    example: "INV-RES-789012"
+    required: false
+  fulfillmentCenter:
+    displayName: Fulfillment Center
+    description: Warehouse or fulfillment center location
+    type: string
+    maxLength: 100
+    example: "US-WEST-DC01"
+    required: false
+  estimatedShipDate:
+    displayName: Estimated Ship Date
+    description: Expected shipping date for this item
+    type: date-only
+    example: "2026-03-19"
+    required: false
+  actualShipDate:
+    displayName: Actual Ship Date
+    description: Actual shipping date for this item
+    type: date-only
+    example: "2026-03-19"
+    required: false
+  productVariant:
+    displayName: Product Variant
+    description: Product variant information (size, color, etc.)
+    type: object
+    properties:
+      size:
+        type: string
+        maxLength: 20
+        example: "Medium"
+      color:
+        type: string
+        maxLength: 30
+        example: "Space Gray"
+      model:
+        type: string
+        maxLength: 50
+        example: "Pro 16-inch"
+      configuration:
+        type: string
+        maxLength: 100
+        example: "16GB RAM, 512GB SSD"
+    required: false
+  customizations:
+    displayName: Customizations
+    description: Product customization details
+    type: array
+    items:
+      type: object
+      properties:
+        type:
+          type: string
+          maxLength: 50
+          example: "engraving"
+        value:
+          type: string
+          maxLength: 200
+          example: "John Smith - Executive Team"
+        additionalCost:
+          type: number
+          format: float
+          minimum: 0
+          multipleOf: 0.01
+          example: 25.00
+    maxItems: 10
+    required: false
+  vendor:
+    displayName: Vendor
+    description: Product vendor information
+    type: object
+    properties:
+      vendorId:
+        type: string
+        maxLength: 50
+        example: "VENDOR001"
+      vendorName:
+        type: string
+        maxLength: 100
+        example: "Tech Solutions Inc."
+      vendorPartNumber:
+        type: string
+        maxLength: 50
+        example: "TSI-LAP-001"
+    required: false
+  warranty:
+    displayName: Warranty
+    description: Warranty information for this item
+    type: object
+    properties:
+      warrantyType:
+        type: string
+        maxLength: 50
+        example: "Standard"
+      warrantyPeriod:
+        type: integer
+        minimum: 0
+        example: 12
+      warrantyUnit:
+        type: string
+        enum: [DAYS, MONTHS, YEARS]
+        example: "MONTHS"
+    required: false

@@ -1,0 +1,172 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Order Data Type Fragment
+# Represents the core order entity with all related information
+# Used across Experience, Process, and System layer APIs
+
+displayName: Order
+description: Complete order information including customer, items, pricing, status, and history
+type: object
+properties:
+  orderId:
+    displayName: Order ID
+    description: Unique order identifier
+    type: string
+    pattern: ^ORD[0-9]{6,12}$
+    example: "ORD789012345"
+    required: true
+  customerId:
+    displayName: Customer ID
+    description: Customer identifier
+    type: string
+    pattern: ^CUST[0-9]{6,12}$
+    example: "CUST123456789"
+    required: true
+  orderDate:
+    displayName: Order Date
+    description: Order creation timestamp
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:07:00Z"
+    required: true
+  status:
+    displayName: Order Status
+    description: Current order lifecycle status
+    type: string
+    enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+    example: "CONFIRMED"
+    required: true
+  items:
+    displayName: Order Items
+    description: List of products in the order
+    type: array
+    items: !include OrderItem.raml
+    minItems: 1
+    maxItems: 50
+    required: true
+  totalAmount:
+    displayName: Total Amount
+    description: Total order value including tax and shipping
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 1359.97
+    required: true
+  subtotalAmount:
+    displayName: Subtotal Amount
+    description: Order subtotal before tax and shipping
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 1299.99
+    required: false
+  taxAmount:
+    displayName: Tax Amount
+    description: Total tax applied to the order
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 59.98
+    required: false
+  shippingAmount:
+    displayName: Shipping Amount
+    description: Shipping and handling charges
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 0.00
+    required: false
+  currency:
+    displayName: Currency
+    description: Order currency code
+    type: string
+    pattern: ^[A-Z]{3}$
+    example: "USD"
+    default: "USD"
+    required: false
+  shippingAddress:
+    displayName: Shipping Address
+    description: Delivery address information
+    type: !include Address.raml
+    required: true
+  billingAddress:
+    displayName: Billing Address
+    description: Billing address information
+    type: !include Address.raml
+    required: false
+  paymentStatus:
+    displayName: Payment Status
+    description: Current payment processing status
+    type: string
+    enum: [PENDING, AUTHORIZED, CAPTURED, PAID, FAILED, REFUNDED, CANCELLED]
+    example: "AUTHORIZED"
+    required: true
+  shipmentId:
+    displayName: Shipment ID
+    description: Associated shipment identifier
+    type: string
+    pattern: ^SHIP[0-9]{6,12}$
+    example: "SHIP456789012"
+    required: false
+  trackingNumber:
+    displayName: Tracking Number
+    description: Shipment tracking number
+    type: string
+    maxLength: 50
+    example: "1Z999AA1234567890"
+    required: false
+  estimatedDelivery:
+    displayName: Estimated Delivery
+    description: Expected delivery date and time
+    type: datetime
+    format: rfc3339
+    example: "2026-03-20T18:00:00Z"
+    required: false
+  orderHistory:
+    displayName: Order History
+    description: Audit trail of order status changes
+    type: array
+    items: !include OrderHistory.raml
+    required: false
+  createdBy:
+    displayName: Created By
+    description: User or system that created the order
+    type: string
+    maxLength: 100
+    example: "customer-portal"
+    required: false
+  lastUpdatedBy:
+    displayName: Last Updated By
+    description: User or system that last updated the order
+    type: string
+    maxLength: 100
+    example: "oms-system"
+    required: false
+  lastUpdatedDate:
+    displayName: Last Updated Date
+    description: Timestamp of last order update
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:15:30Z"
+    required: false
+  notes:
+    displayName: Order Notes
+    description: Special instructions or comments
+    type: string
+    maxLength: 1000
+    example: "Customer requested expedited shipping"
+    required: false
+  tags:
+    displayName: Order Tags
+    description: Classification tags for the order
+    type: array
+    items:
+      type: string
+      maxLength: 50
+    maxItems: 10
+    example: ["expedited", "priority-customer"]
+    required: false

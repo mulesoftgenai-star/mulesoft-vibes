@@ -1,0 +1,419 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Payment Data Type Fragment
+# Represents payment method and transaction information
+# Used across Experience, Process, and System layer APIs
+
+displayName: Payment
+description: Payment method and transaction information
+type: object
+properties:
+  paymentId:
+    displayName: Payment ID
+    description: Unique payment identifier
+    type: string
+    pattern: ^PAY[0-9]{6,12}$
+    example: "PAY123456789"
+    required: false
+  paymentMethodId:
+    displayName: Payment Method ID
+    description: Unique payment method identifier
+    type: string
+    pattern: ^PM[0-9]{6,12}$
+    example: "PM987654321"
+    required: false
+  paymentType:
+    displayName: Payment Type
+    description: Type of payment method
+    type: string
+    enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, APPLE_PAY, GOOGLE_PAY, BANK_TRANSFER, ACH, WIRE_TRANSFER, CHECK, CASH, STORE_CREDIT, GIFT_CARD, CRYPTOCURRENCY]
+    example: "CREDIT_CARD"
+    required: true
+  paymentStatus:
+    displayName: Payment Status
+    description: Current payment status
+    type: string
+    enum: [PENDING, AUTHORIZED, CAPTURED, PAID, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED, DISPUTED, CHARGEBACK]
+    example: "AUTHORIZED"
+    required: true
+  amount:
+    displayName: Amount
+    description: Payment amount
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 1299.99
+    required: true
+  currency:
+    displayName: Currency
+    description: Payment currency code
+    type: string
+    pattern: ^[A-Z]{3}$
+    example: "USD"
+    default: "USD"
+    required: false
+  creditCard:
+    displayName: Credit Card
+    description: Credit card information
+    type: object
+    properties:
+      cardToken:
+        displayName: Card Token
+        description: Tokenized card number for security
+        type: string
+        maxLength: 100
+        example: "tok_visa_4242424242424242"
+        required: false
+      cardType:
+        displayName: Card Type
+        description: Type of credit card
+        type: string
+        enum: [VISA, MASTERCARD, AMEX, DISCOVER, DINERS, JCB, UNIONPAY]
+        example: "VISA"
+        required: false
+      lastFourDigits:
+        displayName: Last Four Digits
+        description: Last four digits of card number
+        type: string
+        pattern: ^[0-9]{4}$
+        example: "4242"
+        required: false
+      expirationMonth:
+        displayName: Expiration Month
+        description: Card expiration month
+        type: integer
+        minimum: 1
+        maximum: 12
+        example: 12
+        required: false
+      expirationYear:
+        displayName: Expiration Year
+        description: Card expiration year
+        type: integer
+        minimum: 2024
+        maximum: 2050
+        example: 2028
+        required: false
+      cardholderName:
+        displayName: Cardholder Name
+        description: Name on the card
+        type: string
+        maxLength: 100
+        example: "John Smith"
+        required: false
+      billingAddress:
+        displayName: Billing Address
+        description: Card billing address
+        type: !include Address.raml
+        required: false
+      cvvVerified:
+        displayName: CVV Verified
+        description: Whether CVV was verified
+        type: boolean
+        example: true
+        required: false
+      avsResult:
+        displayName: AVS Result
+        description: Address verification system result
+        type: string
+        maxLength: 10
+        example: "Y"
+        required: false
+    required: false
+  bankAccount:
+    displayName: Bank Account
+    description: Bank account information for ACH/wire transfers
+    type: object
+    properties:
+      accountToken:
+        displayName: Account Token
+        description: Tokenized account number
+        type: string
+        maxLength: 100
+        example: "ba_1234567890abcdef"
+        required: false
+      bankName:
+        displayName: Bank Name
+        description: Name of the bank
+        type: string
+        maxLength: 100
+        example: "Wells Fargo Bank"
+        required: false
+      accountType:
+        displayName: Account Type
+        description: Type of bank account
+        type: string
+        enum: [CHECKING, SAVINGS, BUSINESS_CHECKING, BUSINESS_SAVINGS]
+        example: "CHECKING"
+        required: false
+      routingNumber:
+        displayName: Routing Number
+        description: Bank routing number (masked)
+        type: string
+        pattern: ^[*]{5}[0-9]{4}$
+        example: "*****1234"
+        required: false
+      lastFourDigits:
+        displayName: Last Four Digits
+        description: Last four digits of account number
+        type: string
+        pattern: ^[0-9]{4}$
+        example: "5678"
+        required: false
+      accountHolderName:
+        displayName: Account Holder Name
+        description: Name on the bank account
+        type: string
+        maxLength: 100
+        example: "John Smith"
+        required: false
+    required: false
+  digitalWallet:
+    displayName: Digital Wallet
+    description: Digital wallet information
+    type: object
+    properties:
+      walletType:
+        displayName: Wallet Type
+        description: Type of digital wallet
+        type: string
+        enum: [PAYPAL, APPLE_PAY, GOOGLE_PAY, SAMSUNG_PAY, AMAZON_PAY]
+        example: "PAYPAL"
+        required: false
+      walletId:
+        displayName: Wallet ID
+        description: Wallet account identifier
+        type: string
+        maxLength: 100
+        example: "paypal_user@email.com"
+        required: false
+      deviceId:
+        displayName: Device ID
+        description: Device identifier for mobile wallets
+        type: string
+        maxLength: 100
+        example: "device_abc123def456"
+        required: false
+    required: false
+  giftCard:
+    displayName: Gift Card
+    description: Gift card information
+    type: object
+    properties:
+      cardNumber:
+        displayName: Card Number
+        description: Gift card number (masked)
+        type: string
+        maxLength: 50
+        example: "****-****-****-1234"
+        required: false
+      balance:
+        displayName: Balance
+        description: Remaining balance on gift card
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 150.00
+        required: false
+      originalAmount:
+        displayName: Original Amount
+        description: Original gift card amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 200.00
+        required: false
+    required: false
+  transactionDetails:
+    displayName: Transaction Details
+    description: Payment transaction details
+    type: object
+    properties:
+      transactionId:
+        displayName: Transaction ID
+        description: Payment processor transaction ID
+        type: string
+        maxLength: 100
+        example: "txn_1234567890abcdef"
+        required: false
+      authorizationCode:
+        displayName: Authorization Code
+        description: Payment authorization code
+        type: string
+        maxLength: 50
+        example: "AUTH123456"
+        required: false
+      processorResponse:
+        displayName: Processor Response
+        description: Payment processor response code
+        type: string
+        maxLength: 20
+        example: "00"
+        required: false
+      processorMessage:
+        displayName: Processor Message
+        description: Payment processor response message
+        type: string
+        maxLength: 200
+        example: "Transaction approved"
+        required: false
+      gatewayTransactionId:
+        displayName: Gateway Transaction ID
+        description: Payment gateway transaction ID
+        type: string
+        maxLength: 100
+        example: "gw_txn_987654321"
+        required: false
+      merchantTransactionId:
+        displayName: Merchant Transaction ID
+        description: Merchant reference ID
+        type: string
+        maxLength: 100
+        example: "ORD789012345"
+        required: false
+    required: false
+  riskAssessment:
+    displayName: Risk Assessment
+    description: Payment risk assessment results
+    type: object
+    properties:
+      riskScore:
+        displayName: Risk Score
+        description: Calculated risk score (0-100)
+        type: integer
+        minimum: 0
+        maximum: 100
+        example: 25
+        required: false
+      riskLevel:
+        displayName: Risk Level
+        description: Risk level classification
+        type: string
+        enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        example: "LOW"
+        required: false
+      fraudFlags:
+        displayName: Fraud Flags
+        description: Detected fraud indicators
+        type: array
+        items:
+          type: string
+          maxLength: 50
+        example: []
+        required: false
+      recommendation:
+        displayName: Recommendation
+        description: Risk assessment recommendation
+        type: string
+        enum: [APPROVE, REVIEW, DECLINE]
+        example: "APPROVE"
+        required: false
+    required: false
+  fees:
+    displayName: Fees
+    description: Payment processing fees
+    type: object
+    properties:
+      processingFee:
+        displayName: Processing Fee
+        description: Payment processing fee amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 39.00
+        required: false
+      transactionFee:
+        displayName: Transaction Fee
+        description: Per-transaction fee
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 0.30
+        required: false
+      totalFees:
+        displayName: Total Fees
+        description: Total fee amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 39.30
+        required: false
+    required: false
+  isDefault:
+    displayName: Is Default
+    description: Whether this is the default payment method
+    type: boolean
+    example: true
+    default: false
+    required: false
+  isActive:
+    displayName: Is Active
+    description: Whether the payment method is active
+    type: boolean
+    example: true
+    default: true
+    required: false
+  nickname:
+    displayName: Nickname
+    description: User-friendly name for the payment method
+    type: string
+    maxLength: 50
+    example: "Personal Visa"
+    required: false
+  createdDate:
+    displayName: Created Date
+    description: When the payment method was created
+    type: datetime
+    format: rfc3339
+    example: "2024-01-15T10:30:00Z"
+    required: false
+  lastUsedDate:
+    displayName: Last Used Date
+    description: When the payment method was last used
+    type: datetime
+    format: rfc3339
+    example: "2026-03-15T14:20:00Z"
+    required: false
+  expiryDate:
+    displayName: Expiry Date
+    description: When the payment method expires
+    type: datetime
+    format: rfc3339
+    example: "2028-12-31T23:59:59Z"
+    required: false
+  metadata:
+    displayName: Metadata
+    description: Additional payment metadata
+    type: object
+    properties:
+      source:
+        displayName: Source
+        description: How the payment method was added
+        type: string
+        maxLength: 50
+        example: "customer-portal"
+      deviceFingerprint:
+        displayName: Device Fingerprint
+        description: Device fingerprint for fraud prevention
+        type: string
+        maxLength: 200
+        example: "fp_abc123def456ghi789"
+      ipAddress:
+        displayName: IP Address
+        description: IP address when payment method was added
+        type: string
+        pattern: ^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$
+        example: "192.168.1.100"
+      userAgent:
+        displayName: User Agent
+        description: Browser user agent
+        type: string
+        maxLength: 500
+        example: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    required: false

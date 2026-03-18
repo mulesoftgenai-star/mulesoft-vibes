@@ -1,0 +1,344 @@
+#%RAML 1.0
+title: Order Process API
+description: |
+  Process Layer API for order business process orchestration.
+  Manages order workflow, validation, and status tracking.
+  Part of the Process Layer in the API-Led Connectivity architecture.
+version: v1
+baseUri: https://api.company.com/process/orders/{version}
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  processTypes: !include RAML DataTypes/OrderProcessAPI.raml
+  commonTypes: !include RAML Fragments/DataTypes/Order.raml
+  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+
+securitySchemes:
+  client_credentials:
+    description: OAuth 2.0 Client Credentials for system-to-system communication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          type: string
+          pattern: ^Bearer .+$
+          example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        401:
+          description: Unauthorized - Invalid or expired token
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+        403:
+          description: Forbidden - Insufficient permissions
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [client_credentials]
+
+/orders/{orderId}/process:
+  displayName: Order Processing
+  description: End-to-end order processing operations
+  uriParameters:
+    orderId:
+      displayName: Order ID
+      description: Unique order identifier
+      type: string
+      pattern: ^ORD[0-9]{6,12}$
+      example: ORD789012345
+
+  post:
+    displayName: Process Order
+    description: |
+      Initiate complete order processing workflow including customer validation,
+      inventory checking, payment processing, and shipment creation.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: processTypes.ProcessOrderRequest
+    responses:
+      202:
+        description: Order processing initiated successfully
+        headers:
+          X-Process-ID:
+            description: Process instance identifier
+            type: string
+            example: PROC456789012
+        body:
+          application/json:
+            type: processTypes.ProcessOrderResponse
+      400:
+        description: Bad Request - Invalid processing request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Order not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Order already being processed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Business validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+  get:
+    displayName: Get Processing Status
+    description: |
+      Retrieve current processing status and workflow details for an order.
+    securedBy: [client_credentials]
+    queryParameters:
+      processId:
+        displayName: Process ID
+        description: Specific process instance to check
+        type: string
+        pattern: ^PROC[0-9]{6,12}$
+        example: PROC456789012
+        required: false
+      includeHistory:
+        displayName: Include History
+        description: Include processing history in response
+        type: boolean
+        default: false
+        example: true
+        required: false
+      includeDetails:
+        displayName: Include Details
+        description: Include detailed step information
+        type: boolean
+        default: true
+        example: true
+        required: false
+    responses:
+      200:
+        description: Successfully retrieved processing status
+        body:
+          application/json:
+            type: processTypes.GetProcessingStatusResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Order or process not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/orders/{orderId}/validate:
+  displayName: Order Validation
+  description: Validate order components without processing
+  uriParameters:
+    orderId:
+      displayName: Order ID
+      description: Unique order identifier
+      type: string
+      pattern: ^ORD[0-9]{6,12}$
+      example: ORD789012345
+
+  post:
+    displayName: Validate Order
+    description: |
+      Perform comprehensive order validation including customer verification,
+      inventory availability, payment method validation, and business rules.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: processTypes.ValidateOrderRequest
+    responses:
+      200:
+        description: Order validation completed
+        body:
+          application/json:
+            type: processTypes.ValidateOrderResponse
+      400:
+        description: Bad Request - Invalid validation request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Order not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/processing/{processId}/status:
+  displayName: Processing Status Management
+  description: Update processing workflow status
+  uriParameters:
+    processId:
+      displayName: Process ID
+      description: Process instance identifier
+      type: string
+      pattern: ^PROC[0-9]{6,12}$
+      example: PROC456789012
+
+  patch:
+    displayName: Update Processing Status
+    description: |
+      Update the status of an active order processing workflow.
+      Used by internal systems to report step completion or failures.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: processTypes.UpdateProcessingStatusRequest
+    responses:
+      200:
+        description: Processing status updated successfully
+        body:
+          application/json:
+            type: processTypes.UpdateProcessingStatusResponse
+      400:
+        description: Bad Request - Invalid status update
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Process not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Invalid status transition
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Business validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/processing/{processId}/retry:
+  displayName: Processing Retry
+  description: Retry failed processing steps
+  uriParameters:
+    processId:
+      displayName: Process ID
+      description: Process instance identifier
+      type: string
+      pattern: ^PROC[0-9]{6,12}$
+      example: PROC456789012
+
+  post:
+    displayName: Retry Processing
+    description: |
+      Retry failed order processing steps or the entire workflow.
+      Supports selective retry of specific failed components.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: processTypes.RetryProcessingRequest
+    responses:
+      202:
+        description: Processing retry initiated successfully
+        body:
+          application/json:
+            type: processTypes.RetryProcessingResponse
+      400:
+        description: Bad Request - Invalid retry request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Process not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Process not in retryable state
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Retry validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse

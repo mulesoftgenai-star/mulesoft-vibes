@@ -1,0 +1,279 @@
+#%RAML 1.0
+title: Payment System API
+description: |
+  System Layer API for payment processing operations.
+  Provides payment processing, validation, and authorization services.
+  Part of the System Layer in the API-Led Connectivity architecture.
+version: v1
+baseUri: https://api.company.com/system/payments/{version}
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  systemTypes: !include RAML DataTypes/SystemAPIs.raml
+  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+
+securitySchemes:
+  client_credentials:
+    description: OAuth 2.0 Client Credentials for system-to-system communication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          type: string
+          pattern: ^Bearer .+$
+          example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        401:
+          description: Unauthorized - Invalid or expired token
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+        403:
+          description: Forbidden - Insufficient permissions
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [client_credentials]
+
+/payments/process:
+  displayName: Payment Processing
+  description: Process payment transactions
+
+  post:
+    displayName: Process Payment
+    description: |
+      Process payment for an order including authorization, capture, or sale.
+      Supports multiple payment types and handles fraud detection.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.ProcessPaymentRequest
+    responses:
+      200:
+        description: Payment processed successfully
+        body:
+          application/json:
+            type: systemTypes.ProcessPaymentResponse
+      400:
+        description: Bad Request - Invalid payment request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Payment declined or validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/payments/validate:
+  displayName: Payment Method Validation
+  description: Validate payment methods
+
+  post:
+    displayName: Validate Payment Method
+    description: |
+      Validate a payment method for order processing including
+      active status, expiry, available funds, and fraud checks.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.ValidatePaymentMethodRequest
+    responses:
+      200:
+        description: Payment method validation completed
+        body:
+          application/json:
+            type: systemTypes.ValidatePaymentMethodResponse
+      400:
+        description: Bad Request - Invalid validation request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Payment method not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/payments/{paymentId}:
+  displayName: Payment Information
+  description: Retrieve payment transaction details
+  uriParameters:
+    paymentId:
+      displayName: Payment ID
+      description: Unique payment identifier
+      type: string
+      pattern: ^PAY[0-9]{6,12}$
+      example: PAY123456789
+
+  get:
+    displayName: Get Payment Details
+    description: |
+      Retrieve detailed information about a specific payment transaction
+      including status, amounts, and processing details.
+    securedBy: [client_credentials]
+    responses:
+      200:
+        description: Successfully retrieved payment details
+        body:
+          application/json:
+            type: systemTypes.ProcessPaymentResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/payments/{paymentId}/capture:
+  displayName: Payment Capture
+  description: Capture previously authorized payment
+  uriParameters:
+    paymentId:
+      displayName: Payment ID
+      description: Unique payment identifier
+      type: string
+      pattern: ^PAY[0-9]{6,12}$
+      example: PAY123456789
+
+  post:
+    displayName: Capture Payment
+    description: |
+      Capture a previously authorized payment transaction.
+      Used to complete the payment process after order fulfillment.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: object
+        properties:
+          amount:
+            displayName: Capture Amount
+            description: Amount to capture (optional, defaults to full authorized amount)
+            type: number
+            format: float
+            minimum: 0.01
+            multipleOf: 0.01
+            example: 1359.97
+            required: false
+          reason:
+            displayName: Capture Reason
+            description: Reason for capture
+            type: string
+            maxLength: 500
+            example: "Order shipped and fulfilled"
+            required: false
+    responses:
+      200:
+        description: Payment captured successfully
+        body:
+          application/json:
+            type: systemTypes.ProcessPaymentResponse
+      400:
+        description: Bad Request - Invalid capture request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      409:
+        description: Conflict - Payment cannot be captured (wrong status or expired)
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Capture failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse

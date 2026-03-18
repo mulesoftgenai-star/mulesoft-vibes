@@ -1,0 +1,424 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Error Response Data Type Fragment
+# Standardized error response structure for consistent error handling
+# Used across Experience, Process, and System layer APIs
+
+displayName: Error Response
+description: Standardized error response structure with comprehensive error information
+type: object
+properties:
+  error:
+    displayName: Error Details
+    description: Complete error information including code, message, and context
+    type: object
+    properties:
+      code:
+        displayName: Error Code
+        description: Machine-readable error code for programmatic handling
+        type: string
+        enum: [
+          # Authentication and Authorization Errors
+          UNAUTHORIZED,
+          FORBIDDEN,
+          INVALID_CLIENT,
+          INSUFFICIENT_SCOPE,
+          TOKEN_EXPIRED,
+          # Validation Errors
+          INVALID_REQUEST,
+          MISSING_REQUIRED_FIELD,
+          INVALID_FIELD_VALUE,
+          INVALID_FIELD_FORMAT,
+          DUPLICATE_RECORD,
+          # Business Logic Errors
+          ORDER_NOT_FOUND,
+          CUSTOMER_INVALID,
+          CUSTOMER_INACTIVE,
+          INVENTORY_UNAVAILABLE,
+          PAYMENT_FAILED,
+          PAYMENT_DECLINED,
+          SHIPMENT_NOT_FOUND,
+          # System Errors
+          INTERNAL_ERROR,
+          SERVICE_UNAVAILABLE,
+          DATABASE_ERROR,
+          EXTERNAL_SERVICE_ERROR,
+          # Network and Communication Errors
+          REQUEST_TIMEOUT,
+          GATEWAY_TIMEOUT,
+          CIRCUIT_BREAKER_OPEN,
+          RATE_LIMIT_EXCEEDED,
+          # Content and Format Errors
+          UNSUPPORTED_MEDIA_TYPE,
+          INVALID_CONTENT_TYPE,
+          NOT_ACCEPTABLE,
+          MALFORMED_REQUEST,
+          # Resource Errors
+          RESOURCE_NOT_FOUND,
+          RESOURCE_CONFLICT,
+          RESOURCE_LOCKED,
+          # Configuration Errors
+          CONFIGURATION_ERROR,
+          FEATURE_DISABLED,
+          MAINTENANCE_MODE
+        ]
+        example: "CUSTOMER_INVALID"
+        required: true
+      message:
+        displayName: Error Message
+        description: Human-readable error message for display purposes
+        type: string
+        maxLength: 500
+        example: "Customer validation failed"
+        required: true
+      details:
+        displayName: Error Details
+        description: Detailed error description with additional context
+        type: string
+        maxLength: 1000
+        example: "Customer CUST123456 does not exist or account is inactive"
+        required: false
+      timestamp:
+        displayName: Error Timestamp
+        description: When the error occurred (ISO 8601 format)
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:07:00Z"
+        required: true
+      traceId:
+        displayName: Trace ID
+        description: Unique identifier for tracing this error across systems
+        type: string
+        pattern: ^trace-[a-zA-Z0-9\-]{10,50}$
+        example: "trace-abc123-def456"
+        required: false
+      path:
+        displayName: Request Path
+        description: API endpoint where the error occurred
+        type: string
+        maxLength: 500
+        example: "/orders/ORD123456789"
+        required: false
+      method:
+        displayName: HTTP Method
+        description: HTTP method used when error occurred
+        type: string
+        enum: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        example: "POST"
+        required: false
+      statusCode:
+        displayName: HTTP Status Code
+        description: HTTP response status code
+        type: integer
+        minimum: 100
+        maximum: 599
+        example: 422
+        required: false
+      fieldErrors:
+        displayName: Field Validation Errors
+        description: Specific field-level validation errors
+        type: array
+        items:
+          type: object
+          properties:
+            field:
+              displayName: Field Name
+              description: Name of the field that failed validation
+              type: string
+              maxLength: 100
+              example: "customerId"
+              required: true
+            code:
+              displayName: Field Error Code
+              description: Specific error code for this field
+              type: string
+              maxLength: 50
+              example: "REQUIRED_FIELD_MISSING"
+              required: true
+            message:
+              displayName: Field Error Message
+              description: Human-readable error message for this field
+              type: string
+              maxLength: 200
+              example: "Customer ID is required"
+              required: true
+            rejectedValue:
+              displayName: Rejected Value
+              description: The value that was rejected (if safe to include)
+              type: string
+              maxLength: 100
+              example: "null"
+              required: false
+        maxItems: 50
+        required: false
+        example:
+          - field: "customerId"
+            code: "REQUIRED_FIELD_MISSING"
+            message: "Customer ID is required"
+          - field: "items[0].quantity"
+            code: "INVALID_VALUE_RANGE"
+            message: "Quantity must be between 1 and 999"
+            rejectedValue: "0"
+      additionalInfo:
+        displayName: Additional Information
+        description: Extra context-specific information about the error
+        type: object
+        properties:
+          retryAfter:
+            displayName: Retry After
+            description: Suggested retry delay in seconds
+            type: integer
+            minimum: 0
+            example: 60
+          maxRetries:
+            displayName: Maximum Retries
+            description: Maximum number of retry attempts allowed
+            type: integer
+            minimum: 0
+            example: 3
+          currentRetryCount:
+            displayName: Current Retry Count
+            description: Current retry attempt number
+            type: integer
+            minimum: 0
+            example: 1
+          supportReference:
+            displayName: Support Reference
+            description: Reference number for customer support
+            type: string
+            maxLength: 50
+            example: "SUP-2026-001234"
+          documentationUrl:
+            displayName: Documentation URL
+            description: Link to relevant documentation or help
+            type: string
+            maxLength: 500
+            example: "https://docs.api.company.com/errors/CUSTOMER_INVALID"
+          suggestedAction:
+            displayName: Suggested Action
+            description: Recommended action to resolve the error
+            type: string
+            maxLength: 500
+            example: "Verify customer ID exists and account is active"
+          affectedResources:
+            displayName: Affected Resources
+            description: List of resources affected by this error
+            type: array
+            items:
+              type: string
+              maxLength: 100
+            maxItems: 10
+            example: ["orders", "inventory"]
+          relatedErrors:
+            displayName: Related Errors
+            description: Other error codes that might be related
+            type: array
+            items:
+              type: string
+              maxLength: 50
+            maxItems: 5
+            example: ["CUSTOMER_INACTIVE", "CUSTOMER_SUSPENDED"]
+          errorCategory:
+            displayName: Error Category
+            description: High-level category of the error
+            type: string
+            enum: [AUTHENTICATION, AUTHORIZATION, VALIDATION, BUSINESS_RULE, SYSTEM, NETWORK, CONFIGURATION]
+            example: "BUSINESS_RULE"
+          severity:
+            displayName: Error Severity
+            description: Severity level of the error
+            type: string
+            enum: [LOW, MEDIUM, HIGH, CRITICAL]
+            example: "MEDIUM"
+          isRetryable:
+            displayName: Is Retryable
+            description: Whether this error condition is retryable
+            type: boolean
+            example: false
+          requiresManualIntervention:
+            displayName: Requires Manual Intervention
+            description: Whether this error requires manual resolution
+            type: boolean
+            example: true
+        required: false
+      correlationId:
+        displayName: Correlation ID
+        description: Request correlation identifier for tracking across services
+        type: string
+        pattern: ^corr-[a-zA-Z0-9\-]{10,50}$
+        example: "corr-12345-abcdef-67890"
+        required: false
+      requestId:
+        displayName: Request ID
+        description: Unique identifier for this specific request
+        type: string
+        pattern: ^req-[a-zA-Z0-9\-]{10,50}$
+        example: "req-abc123-def456-ghi789"
+        required: false
+      sessionId:
+        displayName: Session ID
+        description: User session identifier (if applicable)
+        type: string
+        maxLength: 100
+        example: "sess-xyz789-uvw012"
+        required: false
+      userId:
+        displayName: User ID
+        description: Identifier of the user who made the request (if applicable)
+        type: string
+        maxLength: 100
+        example: "user-12345"
+        required: false
+      clientId:
+        displayName: Client ID
+        description: OAuth client identifier
+        type: string
+        maxLength: 100
+        example: "oms-client-67890"
+        required: false
+      apiVersion:
+        displayName: API Version
+        description: Version of the API that generated this error
+        type: string
+        pattern: ^v[0-9]+(\.[0-9]+)*$
+        example: "v1.0"
+        required: false
+      environment:
+        displayName: Environment
+        description: Environment where the error occurred
+        type: string
+        enum: [DEVELOPMENT, TESTING, STAGING, PRODUCTION]
+        example: "PRODUCTION"
+        required: false
+      serviceVersion:
+        displayName: Service Version
+        description: Version of the service that generated the error
+        type: string
+        maxLength: 50
+        example: "2.1.3"
+        required: false
+      errorSource:
+        displayName: Error Source
+        description: Source system or component that generated the error
+        type: string
+        maxLength: 100
+        example: "order-processing-service"
+        required: false
+    required: [code, message, timestamp]
+required: [error]
+examples:
+  customer_validation_error:
+    displayName: Customer Validation Error
+    value:
+      error:
+        code: "CUSTOMER_INVALID"
+        message: "Customer validation failed"
+        details: "Customer CUST123456 does not exist or account is inactive"
+        timestamp: "2026-03-18T18:07:00Z"
+        traceId: "trace-abc123-def456"
+        path: "/orders"
+        method: "POST"
+        statusCode: 422
+        additionalInfo:
+          suggestedAction: "Verify customer ID exists and account is active"
+          documentationUrl: "https://docs.api.company.com/errors/CUSTOMER_INVALID"
+          errorCategory: "BUSINESS_RULE"
+          severity: "MEDIUM"
+          isRetryable: false
+        correlationId: "corr-12345-abcdef-67890"
+        requestId: "req-create-order-123"
+        clientId: "oms-client-portal"
+        apiVersion: "v1.0"
+
+  field_validation_error:
+    displayName: Field Validation Error
+    value:
+      error:
+        code: "INVALID_REQUEST"
+        message: "Request contains invalid field values"
+        details: "Multiple field validation errors found"
+        timestamp: "2026-03-18T18:07:00Z"
+        traceId: "trace-validation-789"
+        path: "/orders"
+        method: "POST"
+        statusCode: 400
+        fieldErrors:
+          - field: "customerId"
+            code: "REQUIRED_FIELD_MISSING"
+            message: "Customer ID is required"
+          - field: "items[0].quantity"
+            code: "INVALID_VALUE_RANGE"
+            message: "Quantity must be between 1 and 999"
+            rejectedValue: "0"
+        additionalInfo:
+          errorCategory: "VALIDATION"
+          severity: "LOW"
+          isRetryable: true
+        correlationId: "corr-validation-456"
+        apiVersion: "v1.0"
+
+  system_error:
+    displayName: System Error
+    value:
+      error:
+        code: "SERVICE_UNAVAILABLE"
+        message: "Service temporarily unavailable"
+        details: "Circuit breaker is open due to high error rate in inventory service"
+        timestamp: "2026-03-18T18:07:00Z"
+        traceId: "trace-system-error-101"
+        path: "/orders"
+        method: "POST"
+        statusCode: 503
+        additionalInfo:
+          retryAfter: 30
+          maxRetries: 3
+          supportReference: "SUP-2026-001234"
+          errorCategory: "SYSTEM"
+          severity: "HIGH"
+          isRetryable: true
+          affectedResources: ["inventory", "orders"]
+        correlationId: "corr-system-error-789"
+        errorSource: "inventory-service"
+        apiVersion: "v1.0"
+
+  rate_limit_error:
+    displayName: Rate Limit Error
+    value:
+      error:
+        code: "RATE_LIMIT_EXCEEDED"
+        message: "Rate limit exceeded"
+        details: "Maximum 1000 requests per hour exceeded. Current usage: 1001/1000"
+        timestamp: "2026-03-18T18:07:00Z"
+        traceId: "trace-rate-limit-456"
+        path: "/orders"
+        method: "GET"
+        statusCode: 429
+        additionalInfo:
+          retryAfter: 60
+          errorCategory: "NETWORK"
+          severity: "MEDIUM"
+          isRetryable: true
+        correlationId: "corr-rate-limit-123"
+        clientId: "oms-client-mobile"
+        apiVersion: "v1.0"
+
+  authentication_error:
+    displayName: Authentication Error
+    value:
+      error:
+        code: "UNAUTHORIZED"
+        message: "Authentication required"
+        details: "The provided access token is expired or invalid"
+        timestamp: "2026-03-18T18:07:00Z"
+        traceId: "trace-auth-789"
+        path: "/orders/ORD123456789"
+        method: "GET"
+        statusCode: 401
+        additionalInfo:
+          suggestedAction: "Obtain a new access token from the authorization server"
+          documentationUrl: "https://docs.api.company.com/authentication"
+          errorCategory: "AUTHENTICATION"
+          severity: "HIGH"
+          isRetryable: false
+        correlationId: "corr-auth-failed-456"
+        apiVersion: "v1.0"

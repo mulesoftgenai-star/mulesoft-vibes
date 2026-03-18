@@ -1,0 +1,635 @@
+#%RAML 1.0 Library
+
+# Order Management System - Order Experience API Data Types
+# Request and response data types for Experience Layer APIs
+# Used by customer-facing applications and external integrations
+
+types:
+  # CREATE ORDER REQUEST/RESPONSE
+  CreateOrderRequest:
+    displayName: Create Order Request
+    description: Request payload for creating a new order
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        description: Customer identifier
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      items:
+        displayName: Order Items
+        description: List of products to order
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              displayName: Product ID
+              type: string
+              pattern: ^PROD[0-9]{6,12}$
+              example: "PROD987654321"
+              required: true
+            quantity:
+              displayName: Quantity
+              type: integer
+              minimum: 1
+              maximum: 999
+              example: 2
+              required: true
+            unitPrice:
+              displayName: Unit Price
+              type: number
+              format: float
+              minimum: 0
+              multipleOf: 0.01
+              example: 649.99
+              required: false
+            productOptions:
+              displayName: Product Options
+              description: Selected product variations or options
+              type: object
+              properties:
+                size:
+                  type: string
+                  example: "Large"
+                color:
+                  type: string
+                  example: "Blue"
+                warranty:
+                  type: string
+                  example: "Extended"
+              required: false
+        minItems: 1
+        maxItems: 50
+        required: true
+      shippingAddress:
+        displayName: Shipping Address
+        description: Delivery address
+        type: !include Address.raml
+        required: true
+      billingAddress:
+        displayName: Billing Address
+        description: Billing address (if different from shipping)
+        type: !include Address.raml
+        required: false
+      paymentMethodId:
+        displayName: Payment Method ID
+        description: ID of selected payment method
+        type: string
+        pattern: ^PM[0-9]{6,12}$
+        example: "PM987654321"
+        required: true
+      shippingPreference:
+        displayName: Shipping Preference
+        description: Preferred shipping method
+        type: object
+        properties:
+          carrier:
+            displayName: Preferred Carrier
+            type: string
+            enum: [UPS, FEDEX, DHL, USPS, LOCAL_DELIVERY]
+            example: "UPS"
+          speed:
+            displayName: Delivery Speed
+            type: string
+            enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY]
+            example: "STANDARD"
+          instructions:
+            displayName: Delivery Instructions
+            type: string
+            maxLength: 500
+            example: "Leave at front door if no one is home"
+        required: false
+      promoCode:
+        displayName: Promotion Code
+        description: Applied promotion or discount code
+        type: string
+        maxLength: 50
+        example: "SAVE20"
+        required: false
+      orderNotes:
+        displayName: Order Notes
+        description: Customer notes or special instructions
+        type: string
+        maxLength: 1000
+        example: "Please wrap as gift"
+        required: false
+      metadata:
+        displayName: Order Metadata
+        description: Additional order context information
+        type: object
+        properties:
+          source:
+            displayName: Order Source
+            type: string
+            enum: [WEB, MOBILE, CALL_CENTER, STORE, API]
+            example: "WEB"
+          channel:
+            displayName: Sales Channel
+            type: string
+            maxLength: 50
+            example: "online-store"
+          sessionId:
+            displayName: Session ID
+            type: string
+            maxLength: 100
+            example: "sess-abc123def456"
+          deviceType:
+            displayName: Device Type
+            type: string
+            enum: [DESKTOP, MOBILE, TABLET, POS]
+            example: "DESKTOP"
+        required: false
+
+  CreateOrderResponse:
+    displayName: Create Order Response
+    description: Response payload for successful order creation
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        description: Unique order identifier
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      status:
+        displayName: Order Status
+        description: Current order status
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING]
+        example: "CONFIRMED"
+        required: true
+      orderDate:
+        displayName: Order Date
+        description: Order creation timestamp
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:07:00Z"
+        required: true
+      totalAmount:
+        displayName: Total Amount
+        description: Final order total including taxes and shipping
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1359.97
+        required: true
+      estimatedDelivery:
+        displayName: Estimated Delivery
+        description: Expected delivery date
+        type: datetime
+        format: rfc3339
+        example: "2026-03-20T18:00:00Z"
+        required: false
+      confirmationNumber:
+        displayName: Confirmation Number
+        description: Customer-friendly confirmation number
+        type: string
+        maxLength: 20
+        example: "CONF-ABC123"
+        required: true
+      trackingNumber:
+        displayName: Tracking Number
+        description: Shipment tracking number (if available)
+        type: string
+        maxLength: 50
+        example: "1Z999AA1234567890"
+        required: false
+      paymentStatus:
+        displayName: Payment Status
+        description: Payment processing status
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, PAID]
+        example: "AUTHORIZED"
+        required: true
+      links:
+        displayName: HATEOAS Links
+        description: Related resource links
+        type: object
+        properties:
+          self:
+            type: string
+            example: "/orders/ORD789012345"
+          payment:
+            type: string
+            example: "/orders/ORD789012345/payment"
+          tracking:
+            type: string
+            example: "/orders/ORD789012345/tracking"
+          cancel:
+            type: string
+            example: "/orders/ORD789012345/cancel"
+        required: false
+
+  # GET ORDER RESPONSE
+  GetOrderResponse:
+    displayName: Get Order Response
+    description: Complete order information response
+    type: !include Order.raml
+
+  # LIST ORDERS REQUEST/RESPONSE  
+  ListOrdersRequest:
+    displayName: List Orders Request
+    description: Query parameters for listing orders
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID Filter
+        description: Filter orders by customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: false
+      status:
+        displayName: Status Filter
+        description: Filter orders by status
+        type: array
+        items:
+          type: string
+          enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+        example: ["CONFIRMED", "PROCESSING"]
+        required: false
+      dateFrom:
+        displayName: Date From
+        description: Filter orders from date (inclusive)
+        type: date-only
+        example: "2026-03-01"
+        required: false
+      dateTo:
+        displayName: Date To
+        description: Filter orders to date (inclusive)
+        type: date-only
+        example: "2026-03-31"
+        required: false
+      minAmount:
+        displayName: Minimum Amount
+        description: Filter orders by minimum total amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 100.00
+        required: false
+      maxAmount:
+        displayName: Maximum Amount
+        description: Filter orders by maximum total amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1000.00
+        required: false
+      page:
+        displayName: Page Number
+        description: Page number for pagination
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+        required: false
+      limit:
+        displayName: Page Size
+        description: Number of orders per page
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+        required: false
+      sortBy:
+        displayName: Sort Field
+        description: Field to sort by
+        type: string
+        enum: [orderDate, totalAmount, status, customerId]
+        default: "orderDate"
+        example: "orderDate"
+        required: false
+      sortOrder:
+        displayName: Sort Order
+        description: Sort order direction
+        type: string
+        enum: [ASC, DESC]
+        default: "DESC"
+        example: "DESC"
+        required: false
+      includeItems:
+        displayName: Include Order Items
+        description: Whether to include order items in response
+        type: boolean
+        default: false
+        example: true
+        required: false
+
+  ListOrdersResponse:
+    displayName: List Orders Response
+    description: Paginated list of orders
+    type: object
+    properties:
+      orders:
+        displayName: Orders
+        description: Array of orders matching the criteria
+        type: array
+        items: !include Order.raml
+        required: true
+      pagination:
+        displayName: Pagination Info
+        description: Pagination metadata
+        type: object
+        properties:
+          page:
+            displayName: Current Page
+            type: integer
+            minimum: 1
+            example: 1
+            required: true
+          limit:
+            displayName: Page Size
+            type: integer
+            minimum: 1
+            example: 20
+            required: true
+          totalPages:
+            displayName: Total Pages
+            type: integer
+            minimum: 0
+            example: 15
+            required: true
+          totalOrders:
+            displayName: Total Orders
+            type: integer
+            minimum: 0
+            example: 287
+            required: true
+          hasNext:
+            displayName: Has Next Page
+            type: boolean
+            example: true
+            required: true
+          hasPrevious:
+            displayName: Has Previous Page
+            type: boolean
+            example: false
+            required: true
+      links:
+        displayName: Navigation Links
+        description: HATEOAS navigation links
+        type: object
+        properties:
+          self:
+            type: string
+            example: "/orders?page=1&limit=20"
+          first:
+            type: string
+            example: "/orders?page=1&limit=20"
+          last:
+            type: string
+            example: "/orders?page=15&limit=20"
+          next:
+            type: string
+            example: "/orders?page=2&limit=20"
+          previous:
+            type: string
+            example: "/orders?page=0&limit=20"
+        required: false
+
+  # UPDATE ORDER STATUS REQUEST/RESPONSE
+  UpdateOrderStatusRequest:
+    displayName: Update Order Status Request
+    description: Request to update order status
+    type: object
+    properties:
+      status:
+        displayName: New Status
+        description: New order status
+        type: string
+        enum: [CANCELLED]
+        example: "CANCELLED"
+        required: true
+      reason:
+        displayName: Update Reason
+        description: Reason for status change
+        type: string
+        maxLength: 500
+        example: "Customer requested cancellation"
+        required: false
+      notes:
+        displayName: Additional Notes
+        description: Additional notes about the status change
+        type: string
+        maxLength: 1000
+        example: "Refund will be processed within 3-5 business days"
+        required: false
+
+  UpdateOrderStatusResponse:
+    displayName: Update Order Status Response
+    description: Response after updating order status
+    type: object
+    properties:
+      orderId:
+        displayName: Order ID
+        type: string
+        pattern: ^ORD[0-9]{6,12}$
+        example: "ORD789012345"
+        required: true
+      previousStatus:
+        displayName: Previous Status
+        type: string
+        example: "CONFIRMED"
+        required: true
+      currentStatus:
+        displayName: Current Status
+        type: string
+        example: "CANCELLED"
+        required: true
+      statusUpdatedDate:
+        displayName: Status Updated Date
+        type: datetime
+        format: rfc3339
+        example: "2026-03-18T18:30:00Z"
+        required: true
+      message:
+        displayName: Success Message
+        type: string
+        example: "Order status updated successfully"
+        required: true
+
+  # CALCULATE ORDER TOTAL REQUEST/RESPONSE
+  CalculateOrderTotalRequest:
+    displayName: Calculate Order Total Request
+    description: Request to calculate order totals before placing order
+    type: object
+    properties:
+      customerId:
+        displayName: Customer ID
+        type: string
+        pattern: ^CUST[0-9]{6,12}$
+        example: "CUST123456789"
+        required: true
+      items:
+        displayName: Order Items
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              pattern: ^PROD[0-9]{6,12}$
+              example: "PROD987654321"
+              required: true
+            quantity:
+              type: integer
+              minimum: 1
+              example: 2
+              required: true
+        minItems: 1
+        required: true
+      shippingAddress:
+        displayName: Shipping Address
+        type: !include Address.raml
+        required: true
+      promoCode:
+        displayName: Promotion Code
+        type: string
+        maxLength: 50
+        example: "SAVE20"
+        required: false
+      shippingMethod:
+        displayName: Shipping Method
+        type: string
+        enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY]
+        example: "STANDARD"
+        required: false
+
+  CalculateOrderTotalResponse:
+    displayName: Calculate Order Total Response
+    description: Calculated order totals and pricing breakdown
+    type: object
+    properties:
+      subtotalAmount:
+        displayName: Subtotal
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1299.98
+        required: true
+      taxAmount:
+        displayName: Tax Amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 104.00
+        required: true
+      shippingAmount:
+        displayName: Shipping Amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 15.99
+        required: true
+      discountAmount:
+        displayName: Discount Amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 260.00
+        required: false
+      totalAmount:
+        displayName: Total Amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1159.97
+        required: true
+      currency:
+        displayName: Currency
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        required: true
+      itemBreakdown:
+        displayName: Item Price Breakdown
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              example: "PROD987654321"
+              required: true
+            unitPrice:
+              type: number
+              format: float
+              minimum: 0
+              multipleOf: 0.01
+              example: 649.99
+              required: true
+            quantity:
+              type: integer
+              minimum: 1
+              example: 2
+              required: true
+            lineTotal:
+              type: number
+              format: float
+              minimum: 0
+              multipleOf: 0.01
+              example: 1299.98
+              required: true
+        required: true
+      taxBreakdown:
+        displayName: Tax Breakdown
+        type: array
+        items:
+          type: object
+          properties:
+            taxType:
+              type: string
+              example: "Sales Tax"
+              required: true
+            taxRate:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 1
+              multipleOf: 0.0001
+              example: 0.08
+              required: true
+            taxAmount:
+              type: number
+              format: float
+              minimum: 0
+              multipleOf: 0.01
+              example: 104.00
+              required: true
+        required: false
+      appliedPromotions:
+        displayName: Applied Promotions
+        type: array
+        items:
+          type: object
+          properties:
+            promoCode:
+              type: string
+              example: "SAVE20"
+              required: true
+            description:
+              type: string
+              example: "20% off orders over $1000"
+              required: true
+            discountAmount:
+              type: number
+              format: float
+              minimum: 0
+              multipleOf: 0.01
+              example: 260.00
+              required: true
+        required: false

@@ -1,0 +1,515 @@
+#%RAML 1.0 DataType
+
+# Order Management System - Shipment Data Type Fragment
+# Represents shipment and logistics information
+# Used across Experience, Process, and System layer APIs
+
+displayName: Shipment
+description: Complete shipment information including tracking, carrier details, and delivery status
+type: object
+properties:
+  shipmentId:
+    displayName: Shipment ID
+    description: Unique shipment identifier
+    type: string
+    pattern: ^SHIP[0-9]{6,12}$
+    example: "SHIP456789012"
+    required: true
+  orderId:
+    displayName: Order ID
+    description: Associated order identifier
+    type: string
+    pattern: ^ORD[0-9]{6,12}$
+    example: "ORD789012345"
+    required: true
+  shipmentNumber:
+    displayName: Shipment Number
+    description: Human-readable shipment number
+    type: string
+    maxLength: 50
+    example: "SH-2026-001234"
+    required: false
+  trackingNumber:
+    displayName: Tracking Number
+    description: Carrier tracking number
+    type: string
+    maxLength: 50
+    example: "1Z999AA1234567890"
+    required: false
+  status:
+    displayName: Shipment Status
+    description: Current shipment status
+    type: string
+    enum: [PENDING, PROCESSING, READY_TO_SHIP, SHIPPED, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, FAILED_DELIVERY, RETURNED, CANCELLED]
+    example: "SHIPPED"
+    required: true
+  carrier:
+    displayName: Carrier
+    description: Shipping carrier information
+    type: object
+    properties:
+      carrierId:
+        displayName: Carrier ID
+        description: Unique carrier identifier
+        type: string
+        maxLength: 50
+        example: "UPS"
+        required: false
+      carrierName:
+        displayName: Carrier Name
+        description: Carrier display name
+        type: string
+        maxLength: 100
+        example: "United Parcel Service"
+        required: false
+      carrierCode:
+        displayName: Carrier Code
+        description: Standard carrier code
+        type: string
+        maxLength: 20
+        example: "UPS"
+        required: false
+      serviceType:
+        displayName: Service Type
+        description: Carrier service level
+        type: string
+        maxLength: 100
+        example: "UPS Ground"
+        required: false
+      serviceCode:
+        displayName: Service Code
+        description: Carrier service code
+        type: string
+        maxLength: 20
+        example: "03"
+        required: false
+    required: false
+  shippingMethod:
+    displayName: Shipping Method
+    description: Selected shipping method
+    type: string
+    enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY, SAME_DAY, PICKUP]
+    example: "STANDARD"
+    required: false
+  packageType:
+    displayName: Package Type
+    description: Type of packaging used
+    type: string
+    enum: [ENVELOPE, PAK, TUBE, BOX, PALLET, LETTER]
+    example: "BOX"
+    required: false
+  items:
+    displayName: Shipment Items
+    description: Items included in this shipment
+    type: array
+    items: !include ShipmentItem.raml
+    minItems: 1
+    maxItems: 100
+    required: true
+  originAddress:
+    displayName: Origin Address
+    description: Shipping origin address (warehouse/fulfillment center)
+    type: !include Address.raml
+    required: false
+  destinationAddress:
+    displayName: Destination Address
+    description: Shipping destination address
+    type: !include Address.raml
+    required: true
+  dimensions:
+    displayName: Package Dimensions
+    description: Physical dimensions of the package
+    type: object
+    properties:
+      length:
+        displayName: Length
+        description: Package length
+        type: number
+        format: float
+        minimum: 0
+        example: 12.5
+        required: false
+      width:
+        displayName: Width
+        description: Package width
+        type: number
+        format: float
+        minimum: 0
+        example: 8.0
+        required: false
+      height:
+        displayName: Height
+        description: Package height
+        type: number
+        format: float
+        minimum: 0
+        example: 6.0
+        required: false
+      dimensionUnit:
+        displayName: Dimension Unit
+        description: Unit of measurement for dimensions
+        type: string
+        enum: [IN, CM, FT, M]
+        example: "IN"
+        default: "IN"
+        required: false
+    required: false
+  weight:
+    displayName: Package Weight
+    description: Total weight of the package
+    type: object
+    properties:
+      value:
+        displayName: Weight Value
+        description: Weight amount
+        type: number
+        format: float
+        minimum: 0
+        example: 2.5
+        required: false
+      unit:
+        displayName: Weight Unit
+        description: Unit of measurement for weight
+        type: string
+        enum: [LB, KG, OZ, G]
+        example: "LB"
+        default: "LB"
+        required: false
+    required: false
+  shippingCost:
+    displayName: Shipping Cost
+    description: Cost of shipping
+    type: object
+    properties:
+      baseCost:
+        displayName: Base Cost
+        description: Base shipping cost
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 15.99
+        required: false
+      fuelSurcharge:
+        displayName: Fuel Surcharge
+        description: Fuel surcharge amount
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 2.50
+        required: false
+      additionalFees:
+        displayName: Additional Fees
+        description: Other shipping fees
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1.00
+        required: false
+      totalCost:
+        displayName: Total Cost
+        description: Total shipping cost
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 19.49
+        required: false
+      currency:
+        displayName: Currency
+        description: Cost currency code
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        default: "USD"
+        required: false
+    required: false
+  estimatedDelivery:
+    displayName: Estimated Delivery
+    description: Estimated delivery date and time
+    type: datetime
+    format: rfc3339
+    example: "2026-03-20T18:00:00Z"
+    required: false
+  actualDelivery:
+    displayName: Actual Delivery
+    description: Actual delivery date and time
+    type: datetime
+    format: rfc3339
+    example: "2026-03-20T16:30:00Z"
+    required: false
+  shipDate:
+    displayName: Ship Date
+    description: Date the shipment was dispatched
+    type: date-only
+    example: "2026-03-18"
+    required: false
+  shipTime:
+    displayName: Ship Time
+    description: Time the shipment was dispatched
+    type: time-only
+    example: "14:30:00"
+    required: false
+  deliveryInstructions:
+    displayName: Delivery Instructions
+    description: Special delivery instructions
+    type: string
+    maxLength: 500
+    example: "Leave at front door if no one is home"
+    required: false
+  requiresSignature:
+    displayName: Requires Signature
+    description: Whether delivery requires signature
+    type: boolean
+    example: false
+    default: false
+    required: false
+  deliveryConfirmation:
+    displayName: Delivery Confirmation
+    description: Type of delivery confirmation required
+    type: string
+    enum: [NONE, DELIVERY_CONFIRMATION, SIGNATURE_CONFIRMATION, ADULT_SIGNATURE]
+    example: "DELIVERY_CONFIRMATION"
+    required: false
+  insuranceValue:
+    displayName: Insurance Value
+    description: Declared value for insurance
+    type: number
+    format: float
+    minimum: 0
+    multipleOf: 0.01
+    example: 1299.99
+    required: false
+  trackingHistory:
+    displayName: Tracking History
+    description: Shipment tracking events
+    type: array
+    items:
+      type: object
+      properties:
+        eventDate:
+          displayName: Event Date
+          description: Date and time of tracking event
+          type: datetime
+          format: rfc3339
+          example: "2026-03-19T10:30:00Z"
+          required: true
+        eventType:
+          displayName: Event Type
+          description: Type of tracking event
+          type: string
+          enum: [PICKUP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, EXCEPTION, RETURNED]
+          example: "IN_TRANSIT"
+          required: true
+        location:
+          displayName: Location
+          description: Location where event occurred
+          type: string
+          maxLength: 200
+          example: "Oakland, CA, US"
+          required: false
+        description:
+          displayName: Description
+          description: Event description
+          type: string
+          maxLength: 500
+          example: "Package arrived at facility"
+          required: true
+        facility:
+          displayName: Facility
+          description: Carrier facility information
+          type: string
+          maxLength: 100
+          example: "UPS Oakland Distribution Center"
+          required: false
+    maxItems: 50
+    required: false
+  deliveryAttempts:
+    displayName: Delivery Attempts
+    description: Delivery attempt history
+    type: array
+    items:
+      type: object
+      properties:
+        attemptNumber:
+          displayName: Attempt Number
+          description: Delivery attempt sequence number
+          type: integer
+          minimum: 1
+          example: 1
+          required: true
+        attemptDate:
+          displayName: Attempt Date
+          description: Date and time of delivery attempt
+          type: datetime
+          format: rfc3339
+          example: "2026-03-20T16:15:00Z"
+          required: true
+        status:
+          displayName: Attempt Status
+          description: Result of delivery attempt
+          type: string
+          enum: [DELIVERED, FAILED, RESCHEDULED]
+          example: "FAILED"
+          required: true
+        reason:
+          displayName: Failure Reason
+          description: Reason for failed delivery attempt
+          type: string
+          maxLength: 200
+          example: "Customer not available"
+          required: false
+        nextAttemptDate:
+          displayName: Next Attempt Date
+          description: Date of next delivery attempt
+          type: date-only
+          example: "2026-03-21"
+          required: false
+    maxItems: 5
+    required: false
+  returnInfo:
+    displayName: Return Information
+    description: Return shipment information
+    type: object
+    properties:
+      isReturnable:
+        displayName: Is Returnable
+        description: Whether the shipment can be returned
+        type: boolean
+        example: true
+        required: false
+      returnDeadline:
+        displayName: Return Deadline
+        description: Last date for returns
+        type: date-only
+        example: "2026-04-20"
+        required: false
+      returnTrackingNumber:
+        displayName: Return Tracking Number
+        description: Tracking number for return shipment
+        type: string
+        maxLength: 50
+        example: "1Z999BB9876543210"
+        required: false
+      returnReason:
+        displayName: Return Reason
+        description: Reason for return
+        type: string
+        maxLength: 500
+        example: "Customer changed mind"
+        required: false
+    required: false
+  customsInfo:
+    displayName: Customs Information
+    description: International shipping customs details
+    type: object
+    properties:
+      customsValue:
+        displayName: Customs Value
+        description: Declared customs value
+        type: number
+        format: float
+        minimum: 0
+        multipleOf: 0.01
+        example: 1299.99
+        required: false
+      contentType:
+        displayName: Content Type
+        description: Type of contents
+        type: string
+        enum: [MERCHANDISE, DOCUMENTS, GIFT, SAMPLE, RETURN]
+        example: "MERCHANDISE"
+        required: false
+      contentDescription:
+        displayName: Content Description
+        description: Description of package contents
+        type: string
+        maxLength: 200
+        example: "Electronic equipment - laptop computer"
+        required: false
+      harmonizedCode:
+        displayName: Harmonized Code
+        description: Harmonized tariff schedule code
+        type: string
+        maxLength: 20
+        example: "8471.30.0100"
+        required: false
+      countryOfOrigin:
+        displayName: Country of Origin
+        description: Manufacturing country code
+        type: string
+        pattern: ^[A-Z]{2}$
+        example: "US"
+        required: false
+    required: false
+  fulfillmentCenter:
+    displayName: Fulfillment Center
+    description: Originating fulfillment center
+    type: object
+    properties:
+      centerId:
+        displayName: Center ID
+        description: Fulfillment center identifier
+        type: string
+        maxLength: 50
+        example: "FC-US-WEST-01"
+        required: false
+      centerName:
+        displayName: Center Name
+        description: Fulfillment center name
+        type: string
+        maxLength: 100
+        example: "West Coast Distribution Center"
+        required: false
+      centerLocation:
+        displayName: Center Location
+        description: Fulfillment center location
+        type: !include Address.raml
+        required: false
+    required: false
+  specialServices:
+    displayName: Special Services
+    description: Additional shipping services
+    type: array
+    items:
+      type: string
+      enum: [FRAGILE, HAZMAT, REFRIGERATED, EXPEDITED_HANDLING, WHITE_GLOVE, INSIDE_DELIVERY]
+    example: ["FRAGILE"]
+    required: false
+  notes:
+    displayName: Shipment Notes
+    description: Internal notes about the shipment
+    type: string
+    maxLength: 1000
+    example: "Handle with care - electronics"
+    required: false
+  createdBy:
+    displayName: Created By
+    description: User or system that created the shipment
+    type: string
+    maxLength: 100
+    example: "fulfillment-system"
+    required: false
+  createdDate:
+    displayName: Created Date
+    description: When the shipment was created
+    type: datetime
+    format: rfc3339
+    example: "2026-03-18T18:07:00Z"
+    required: false
+  lastUpdatedBy:
+    displayName: Last Updated By
+    description: User or system that last updated the shipment
+    type: string
+    maxLength: 100
+    example: "tracking-service"
+    required: false
+  lastUpdatedDate:
+    displayName: Last Updated Date
+    description: When the shipment was last updated
+    type: datetime
+    format: rfc3339
+    example: "2026-03-19T14:30:00Z"
+    required: false
