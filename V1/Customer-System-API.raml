@@ -1,0 +1,175 @@
+#%RAML 1.0
+title: Customer System API
+description: |
+  System Layer API for customer data operations.
+  Provides customer information retrieval and validation services.
+  Part of the System Layer in the API-Led Connectivity architecture.
+version: v1
+baseUri: https://api.company.com/system/customers/{version}
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  systemTypes: !include RAML DataTypes/SystemAPIs.raml
+  customerTypes: !include RAML Fragments/DataTypes/Customer.raml
+  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+
+securitySchemes:
+  client_credentials:
+    description: OAuth 2.0 Client Credentials for system-to-system communication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          type: string
+          pattern: ^Bearer .+$
+          example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        401:
+          description: Unauthorized - Invalid or expired token
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+        403:
+          description: Forbidden - Insufficient permissions
+          body:
+            application/json:
+              type: errorTypes.ErrorResponse
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [client_credentials]
+
+/customers/{customerId}:
+  displayName: Customer Information
+  description: Customer data retrieval operations
+  uriParameters:
+    customerId:
+      displayName: Customer ID
+      description: Unique customer identifier
+      type: string
+      pattern: ^CUST[0-9]{6,12}$
+      example: CUST123456789
+
+  get:
+    displayName: Get Customer
+    description: |
+      Retrieve comprehensive customer information including profile,
+      addresses, payment methods, and account details.
+    securedBy: [client_credentials]
+    queryParameters:
+      includeAddresses:
+        displayName: Include Addresses
+        description: Include customer addresses in response
+        type: boolean
+        default: true
+        example: true
+        required: false
+      includePaymentMethods:
+        displayName: Include Payment Methods
+        description: Include customer payment methods in response
+        type: boolean
+        default: false
+        example: false
+        required: false
+      includeOrderHistory:
+        displayName: Include Order History
+        description: Include customer order history summary
+        type: boolean
+        default: false
+        example: false
+        required: false
+    responses:
+      200:
+        description: Successfully retrieved customer information
+        body:
+          application/json:
+            type: systemTypes.GetCustomerResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+
+/customers/{customerId}/validate:
+  displayName: Customer Validation
+  description: Customer validation operations for order processing
+  uriParameters:
+    customerId:
+      displayName: Customer ID
+      description: Unique customer identifier
+      type: string
+      pattern: ^CUST[0-9]{6,12}$
+      example: CUST123456789
+
+  post:
+    displayName: Validate Customer
+    description: |
+      Validate customer for order processing including account status,
+      credit verification, address validation, and identity checks.
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: systemTypes.ValidateCustomerRequest
+    responses:
+      200:
+        description: Customer validation completed
+        body:
+          application/json:
+            type: systemTypes.ValidateCustomerResponse
+      400:
+        description: Bad Request - Invalid validation request
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      401:
+        description: Unauthorized - Authentication required
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      422:
+        description: Unprocessable Entity - Validation failed
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      429:
+        description: Too Many Requests - Rate limit exceeded
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: errorTypes.ErrorResponse
