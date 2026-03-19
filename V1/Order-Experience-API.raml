@@ -10,9 +10,7 @@ protocols: [HTTPS]
 mediaType: application/json
 
 uses:
-  orderTypes: !include RAML DataTypes/OrderExperienceAPI.raml
-  commonTypes: !include RAML Fragments/DataTypes/Order.raml
-  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+  orderTypes: RAML DataTypes/OrderExperienceAPI.raml
 
 securitySchemes:
   oauth_2_0:
@@ -30,12 +28,12 @@ securitySchemes:
           description: Unauthorized - Invalid or expired token
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
         403:
           description: Forbidden - Insufficient permissions
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
     settings:
       authorizationUri: https://auth.company.com/oauth/authorize
       accessTokenUri: https://auth.company.com/oauth/token
@@ -157,27 +155,27 @@ securitySchemes:
         description: Bad Request - Invalid query parameters
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
   post:
     displayName: Create Order
@@ -203,32 +201,32 @@ securitySchemes:
         description: Bad Request - Invalid order data
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Business validation failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /orders/{orderId}:
   displayName: Individual Order
@@ -257,27 +255,27 @@ securitySchemes:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Order not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /orders/{orderId}/status:
   displayName: Order Status
@@ -309,42 +307,42 @@ securitySchemes:
         description: Bad Request - Invalid status update
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Order not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       409:
         description: Conflict - Invalid status transition
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Business validation failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /orders/calculate-total:
   displayName: Calculate Order Total
@@ -369,29 +367,29 @@ securitySchemes:
         description: Bad Request - Invalid calculation data
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Validation failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml

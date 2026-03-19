@@ -10,8 +10,7 @@ protocols: [HTTPS]
 mediaType: application/json
 
 uses:
-  systemTypes: !include RAML DataTypes/SystemAPIs.raml
-  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+  systemTypes: RAML DataTypes/SystemAPIs.raml
 
 securitySchemes:
   client_credentials:
@@ -29,12 +28,12 @@ securitySchemes:
           description: Unauthorized - Invalid or expired token
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
         403:
           description: Forbidden - Insufficient permissions
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
     settings:
       authorizationUri: https://auth.company.com/oauth/authorize
       accessTokenUri: https://auth.company.com/oauth/token
@@ -63,32 +62,32 @@ securitySchemes:
         description: Bad Request - Invalid inventory check request
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Invalid product IDs or quantities
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /inventory/reserve:
   displayName: Inventory Reservation
@@ -113,37 +112,37 @@ securitySchemes:
         description: Bad Request - Invalid reservation request
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       409:
         description: Conflict - Insufficient inventory available
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Invalid order or product data
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /inventory/reservations/{reservationId}:
   displayName: Inventory Reservation Management
@@ -172,22 +171,22 @@ securitySchemes:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Reservation not found or expired
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
   delete:
     displayName: Cancel Reservation
@@ -202,24 +201,24 @@ securitySchemes:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Reservation not found or already expired
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       409:
         description: Conflict - Reservation cannot be cancelled (already consumed)
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml

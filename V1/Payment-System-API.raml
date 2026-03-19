@@ -10,8 +10,7 @@ protocols: [HTTPS]
 mediaType: application/json
 
 uses:
-  systemTypes: !include RAML DataTypes/SystemAPIs.raml
-  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+  systemTypes: RAML DataTypes/SystemAPIs.raml
 
 securitySchemes:
   client_credentials:
@@ -29,12 +28,12 @@ securitySchemes:
           description: Unauthorized - Invalid or expired token
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
         403:
           description: Forbidden - Insufficient permissions
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
     settings:
       authorizationUri: https://auth.company.com/oauth/authorize
       accessTokenUri: https://auth.company.com/oauth/token
@@ -63,32 +62,32 @@ securitySchemes:
         description: Bad Request - Invalid payment request
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Payment declined or validation failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /payments/validate:
   displayName: Payment Method Validation
@@ -113,37 +112,37 @@ securitySchemes:
         description: Bad Request - Invalid validation request
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Payment method not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Validation failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /payments/{paymentId}:
   displayName: Payment Information
@@ -172,27 +171,27 @@ securitySchemes:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Payment not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /payments/{paymentId}/capture:
   displayName: Payment Capture
@@ -241,39 +240,39 @@ securitySchemes:
         description: Bad Request - Invalid capture request
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Payment not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       409:
         description: Conflict - Payment cannot be captured (wrong status or expired)
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Capture failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml

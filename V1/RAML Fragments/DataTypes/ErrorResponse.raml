@@ -410,15 +410,22 @@ examples:
         message: "Authentication required"
         details: "The provided access token is expired or invalid"
         timestamp: "2026-03-18T18:07:00Z"
-        traceId: "trace-auth-789"
+        traceId: "trace-auth-789123"
         path: "/orders/ORD123456789"
         method: "GET"
         statusCode: 401
         additionalInfo:
+          retryAfter: 0
+          maxRetries: 0
+          currentRetryCount: 0
+          supportReference: "SUP-2026-001235"
           suggestedAction: "Obtain a new access token from the authorization server"
           documentationUrl: "https://docs.api.company.com/authentication"
+          affectedResources: ["authentication"]
+          relatedErrors: ["TOKEN_EXPIRED", "INVALID_CLIENT"]
           errorCategory: "AUTHENTICATION"
           severity: "HIGH"
           isRetryable: false
+          requiresManualIntervention: true
         correlationId: "corr-auth-failed-456"
         apiVersion: "v1.0"

@@ -10,9 +10,7 @@ protocols: [HTTPS]
 mediaType: application/json
 
 uses:
-  systemTypes: !include RAML DataTypes/SystemAPIs.raml
-  customerTypes: !include RAML Fragments/DataTypes/Customer.raml
-  errorTypes: !include RAML Fragments/DataTypes/ErrorResponse.raml
+  systemTypes: RAML DataTypes/SystemAPIs.raml
 
 securitySchemes:
   client_credentials:
@@ -30,12 +28,12 @@ securitySchemes:
           description: Unauthorized - Invalid or expired token
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
         403:
           description: Forbidden - Insufficient permissions
           body:
             application/json:
-              type: errorTypes.ErrorResponse
+              type: !include RAML Fragments/DataTypes/ErrorResponse.raml
     settings:
       authorizationUri: https://auth.company.com/oauth/authorize
       accessTokenUri: https://auth.company.com/oauth/token
@@ -90,27 +88,27 @@ securitySchemes:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Customer not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
 
 /customers/{customerId}/validate:
   displayName: Customer Validation
@@ -142,34 +140,34 @@ securitySchemes:
         description: Bad Request - Invalid validation request
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       401:
         description: Unauthorized - Authentication required
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       403:
         description: Forbidden - Insufficient permissions
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       404:
         description: Customer not found
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       422:
         description: Unprocessable Entity - Validation failed
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       429:
         description: Too Many Requests - Rate limit exceeded
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
       500:
         description: Internal Server Error
         body:
           application/json:
-            type: errorTypes.ErrorResponse
+            type: !include RAML Fragments/DataTypes/ErrorResponse.raml
