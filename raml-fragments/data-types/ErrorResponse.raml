@@ -1,0 +1,358 @@
+#%RAML 1.0 DataType
+
+# Error Response Data Type Fragment
+# Reusable across Experience, Process, and System layer APIs
+
+displayName: Error Response
+description: Standardized error response structure for Order Management System APIs
+
+type: object
+additionalProperties: false
+
+properties:
+  error:
+    type: object
+    additionalProperties: false
+    description: Error information container
+    properties:
+      code:
+        type: string
+        minLength: 1
+        maxLength: 50
+        description: Machine-readable error code for programmatic handling
+        example: "ORDER_NOT_FOUND"
+        required: true
+        
+      message:
+        type: string
+        minLength: 1
+        maxLength: 500
+        description: Human-readable error message
+        example: "The specified order could not be found"
+        required: true
+        
+      details?:
+        type: string
+        maxLength: 1000
+        description: Additional detailed error information
+        example: "Order with ID 'ORD-20260320120001' does not exist in the system"
+        
+      field?:
+        type: string
+        maxLength: 100
+        description: Specific field that caused the validation error
+        example: "customerId"
+        
+      fieldValue?:
+        type: string
+        maxLength: 500
+        description: Invalid value that was provided for the field
+        example: "invalid-customer-123"
+        
+      validationErrors?:
+        type: array
+        maxItems: 50
+        description: Array of field-level validation errors
+        items:
+          type: object
+          additionalProperties: false
+          properties:
+            field:
+              type: string
+              maxLength: 100
+              description: Name of the field with validation error
+              example: "email"
+              required: true
+            code:
+              type: string
+              maxLength: 50
+              description: Validation error code
+              example: "INVALID_EMAIL_FORMAT"
+              required: true
+            message:
+              type: string
+              maxLength: 300
+              description: Field-specific error message
+              example: "Email address format is invalid"
+              required: true
+            value?:
+              type: string
+              maxLength: 500
+              description: Invalid value provided
+              example: "invalid-email"
+            constraints?:
+              type: object
+              description: Validation constraints that failed
+              properties:
+                required?: boolean
+                minLength?: integer
+                maxLength?: integer
+                pattern?: string
+                minimum?: number
+                maximum?: number
+                enum?: 
+                  type: array
+                  items: string
+                  
+      timestamp:
+        type: datetime
+        format: rfc3339
+        description: Error occurrence timestamp in ISO 8601 format
+        example: "2026-03-20T12:00:00Z"
+        required: true
+        
+      traceId:
+        type: string
+        pattern: ^[a-zA-Z0-9\-]{8,50}$
+        description: Unique identifier for request tracing and debugging
+        example: "abc123-def456-ghi789"
+        required: true
+        
+      correlationId?:
+        type: string
+        pattern: ^[a-zA-Z0-9\-]{8,50}$
+        description: Correlation identifier for tracking across service calls
+        example: "corr-xyz789-abc123"
+        
+      path:
+        type: string
+        maxLength: 500
+        description: API endpoint path where the error occurred
+        example: "/api/v1/orders/ORD-20260320120001"
+        required: true
+        
+      method:
+        type: string
+        enum: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+        description: HTTP method used in the request
+        example: "GET"
+        required: true
+        
+      requestId?:
+        type: string
+        pattern: ^[a-zA-Z0-9\-]{8,50}$
+        description: Unique request identifier
+        example: "req-987654321"
+        
+      userId?:
+        type: string
+        maxLength: 100
+        description: User identifier if available
+        example: "user-12345"
+        
+      sessionId?:
+        type: string
+        pattern: ^[a-zA-Z0-9\-]{8,100}$
+        description: Session identifier if available
+        example: "sess-abcdef123456"
+        
+      retryAfter?:
+        type: integer
+        minimum: 1
+        maximum: 3600
+        description: Suggested retry delay in seconds (for rate limiting errors)
+        example: 60
+        
+      documentation?:
+        type: string
+        maxLength: 500
+        description: Link to relevant documentation or troubleshooting guide
+        example: "https://docs.oms.company.com/errors/ORDER_NOT_FOUND"
+        
+      supportReference?:
+        type: string
+        maxLength: 100
+        description: Reference ID for customer support inquiries
+        example: "SUP-20260320-001"
+        
+      innerError?:
+        type: object
+        additionalProperties: false
+        description: Internal error details for debugging (should be excluded in production)
+        properties:
+          source?:
+            type: string
+            description: Source system or component that generated the error
+            example: "order-service"
+          exception?:
+            type: string
+            description: Exception class name
+            example: "OrderNotFoundException"
+          stackTrace?:
+            type: string
+            description: Stack trace information (only in development)
+            example: "at OrderService.getOrder(OrderService.java:123)"
+          causedBy?:
+            type: string
+            description: Root cause of the error
+            example: "Database connection timeout"
+    required: true
+
+examples:
+  validation_error:
+    error:
+      code: "VALIDATION_FAILED"
+      message: "Request validation failed"
+      details: "One or more fields contain invalid values"
+      validationErrors:
+        - field: "customerId"
+          code: "REQUIRED_FIELD_MISSING"
+          message: "Customer ID is required"
+        - field: "email"
+          code: "INVALID_EMAIL_FORMAT"
+          message: "Email address format is invalid"
+          value: "invalid-email"
+          constraints:
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        - field: "items"
+          code: "ARRAY_TOO_SMALL"
+          message: "At least one item is required"
+          constraints:
+            minLength: 1
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "abc123-def456-ghi789"
+      correlationId: "corr-xyz789-abc123"
+      path: "/api/v1/orders"
+      method: "POST"
+      requestId: "req-987654321"
+      documentation: "https://docs.oms.company.com/api/validation-errors"
+      
+  resource_not_found:
+    error:
+      code: "ORDER_NOT_FOUND"
+      message: "The specified order could not be found"
+      details: "Order with ID 'ORD-20260320120001' does not exist in the system"
+      field: "orderId"
+      fieldValue: "ORD-20260320120001"
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "def456-ghi789-abc123"
+      path: "/api/v1/orders/ORD-20260320120001"
+      method: "GET"
+      requestId: "req-123456789"
+      userId: "user-12345"
+      documentation: "https://docs.oms.company.com/errors/ORDER_NOT_FOUND"
+      supportReference: "SUP-20260320-001"
+      
+  authorization_error:
+    error:
+      code: "INSUFFICIENT_SCOPE"
+      message: "Insufficient scope for this operation"
+      details: "Required scope: orders:write, Current scope: orders:read"
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "ghi789-abc123-def456"
+      path: "/api/v1/orders"
+      method: "POST"
+      requestId: "req-456789123"
+      userId: "user-67890"
+      documentation: "https://docs.oms.company.com/auth/scopes"
+      
+  rate_limit_error:
+    error:
+      code: "RATE_LIMIT_EXCEEDED"
+      message: "Too many requests"
+      details: "Rate limit of 100 requests per minute exceeded"
+      retryAfter: 60
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "jkl012-mno345-pqr678"
+      path: "/api/v1/orders"
+      method: "GET"
+      requestId: "req-789123456"
+      userId: "user-11111"
+      documentation: "https://docs.oms.company.com/rate-limits"
+      
+  system_error:
+    error:
+      code: "INTERNAL_SERVER_ERROR"
+      message: "An unexpected error occurred"
+      details: "The system encountered an internal error while processing your request"
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "stu901-vwx234-yza567"
+      path: "/api/v1/orders"
+      method: "POST"
+      requestId: "req-234567890"
+      userId: "user-22222"
+      supportReference: "SUP-20260320-002"
+      innerError:
+        source: "order-service"
+        exception: "DatabaseConnectionException"
+        causedBy: "Connection timeout after 30 seconds"
+      documentation: "https://docs.oms.company.com/errors/internal-server-error"
+      
+  payment_error:
+    error:
+      code: "PAYMENT_FAILED"
+      message: "Payment processing failed"
+      details: "Credit card was declined by the issuing bank"
+      field: "paymentMethod"
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "bcd890-efg123-hij456"
+      path: "/api/v1/orders"
+      method: "POST"
+      requestId: "req-345678901"
+      userId: "user-33333"
+      documentation: "https://docs.oms.company.com/payments/declined-cards"
+      
+  business_logic_error:
+    error:
+      code: "INSUFFICIENT_INVENTORY"
+      message: "Insufficient inventory available"
+      details: "Only 2 units available for product LAPTOP-001, but 5 units requested"
+      field: "items[0].quantity"
+      fieldValue: "5"
+      timestamp: "2026-03-20T12:00:00Z"
+      traceId: "klm789-nop012-qrs345"
+      path: "/api/v1/orders"
+      method: "POST"
+      requestId: "req-456789012"
+      userId: "user-44444"
+      documentation: "https://docs.oms.company.com/inventory/availability"
+
+# Standard Error Codes by Category:
+
+# Authentication/Authorization Errors (4xx):
+# - UNAUTHORIZED: Missing or invalid authentication
+# - INVALID_TOKEN: Invalid access token
+# - EXPIRED_TOKEN: Expired access token
+# - INSUFFICIENT_SCOPE: Missing required OAuth scope
+# - FORBIDDEN: Access denied
+
+# Validation Errors (4xx):
+# - VALIDATION_FAILED: General validation failure
+# - REQUIRED_FIELD_MISSING: Required field not provided
+# - INVALID_FORMAT: Field format is invalid
+# - INVALID_EMAIL_FORMAT: Email format is invalid
+# - INVALID_PHONE_FORMAT: Phone format is invalid
+# - INVALID_DATE_FORMAT: Date format is invalid
+# - FIELD_TOO_SHORT: Field value is too short
+# - FIELD_TOO_LONG: Field value is too long
+# - INVALID_ENUM_VALUE: Invalid enumeration value
+# - ARRAY_TOO_SMALL: Array has too few items
+# - ARRAY_TOO_LARGE: Array has too many items
+
+# Resource Errors (4xx):
+# - RESOURCE_NOT_FOUND: Generic resource not found
+# - ORDER_NOT_FOUND: Order not found
+# - CUSTOMER_NOT_FOUND: Customer not found
+# - PRODUCT_NOT_FOUND: Product not found
+# - PAYMENT_NOT_FOUND: Payment not found
+# - SHIPMENT_NOT_FOUND: Shipment not found
+
+# Business Logic Errors (4xx):
+# - INSUFFICIENT_INVENTORY: Not enough inventory
+# - INVALID_ORDER_STATUS: Invalid order status transition
+# - PAYMENT_FAILED: Payment processing failed
+# - DUPLICATE_ORDER: Duplicate order detected
+# - ORDER_ALREADY_CANCELLED: Order already cancelled
+# - CUSTOMER_NOT_ACTIVE: Customer account not active
+
+# Rate Limiting Errors (4xx):
+# - RATE_LIMIT_EXCEEDED: Rate limit exceeded
+# - QUOTA_EXCEEDED: API quota exceeded
+
+# System Errors (5xx):
+# - INTERNAL_SERVER_ERROR: Generic server error
+# - SERVICE_UNAVAILABLE: Service temporarily unavailable
+# - DATABASE_ERROR: Database operation failed
+# - EXTERNAL_SERVICE_ERROR: External service error
+# - TIMEOUT_ERROR: Operation timed out
+# - CONFIGURATION_ERROR: System configuration error

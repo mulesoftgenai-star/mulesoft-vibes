@@ -1,0 +1,559 @@
+#%RAML 1.0
+title: Order Experience API
+version: v1
+baseUri: https://api.company.com/orders/v1
+protocols: [HTTPS]
+mediaType: application/json
+
+description: |
+  Order Experience API provides customer-facing interfaces for order management operations.
+  This API follows the API-Led Connectivity pattern as part of the Experience Layer.
+
+documentation:
+  - title: Getting Started
+    content: |
+      This API allows customers and client applications to create, retrieve, and manage orders.
+      All endpoints require OAuth 2.0 authentication with appropriate scopes.
+      
+      Base URL: https://api.company.com/orders/v1
+      Authentication: OAuth 2.0 Bearer Token
+      Content-Type: application/json
+
+# Import reusable fragments
+uses:
+  # Data types
+  Order: ../data-types/Order.raml
+  Customer: ../data-types/Customer.raml
+  Payment: ../data-types/Payment.raml
+  Shipment: ../data-types/Shipment.raml
+  ErrorResponse: ../data-types/ErrorResponse.raml
+  
+  # Security schemes
+  OAuth2: ../security-schemes/oauth2-security.raml
+  
+  # Common traits
+  CommonTraits: ../traits/common-traits.raml
+
+# Security configuration
+securitySchemes:
+  oauth2: !include ../security-schemes/oauth2-security.raml
+
+# API-wide security
+securedBy: [oauth2]
+
+# Common traits applied to all endpoints
+traits:
+  - CommonTraits.rateLimited
+  - CommonTraits.versioned
+  - CommonTraits.monitored
+  - CommonTraits.auditable
+
+# Request/Response types
+types:
+  # Request types for order creation
+  CreateOrderRequest:
+    displayName: Create Order Request
+    description: Request payload for creating a new order
+    type: object
+    additionalProperties: false
+    properties:
+      customerId:
+        type: string
+        pattern: ^cust-[0-9a-zA-Z]{5,20}$
+        description: Customer identifier
+        example: "cust-12345"
+        required: true
+      customerEmail?:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+        description: Customer email address
+        example: "john.doe@email.com"
+      items:
+        type: array
+        minItems: 1
+        maxItems: 100
+        description: Items to be ordered
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              pattern: ^[A-Z0-9]{3,20}-[0-9]{3}$
+              example: "LAPTOP-001"
+              required: true
+            quantity:
+              type: integer
+              minimum: 1
+              maximum: 999
+              example: 2
+              required: true
+            unitPrice:
+              type: number
+              format: decimal
+              minimum: 0.01
+              example: 999.99
+              required: true
+        required: true
+      shippingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+            maxLength: 255
+            example: "123 Main St"
+            required: true
+          city:
+            type: string
+            maxLength: 100
+            example: "San Francisco"
+            required: true
+          state:
+            type: string
+            maxLength: 50
+            example: "CA"
+            required: true
+          zipCode:
+            type: string
+            pattern: ^[0-9]{5}(-[0-9]{4})?$
+            example: "94105"
+            required: true
+          country:
+            type: string
+            pattern: ^[A-Z]{2}$
+            example: "US"
+            default: "US"
+            required: true
+        required: true
+      paymentMethod?:
+        type: object
+        properties:
+          method:
+            type: string
+            enum: [credit_card, debit_card, paypal, apple_pay]
+            example: "credit_card"
+            required: true
+          token:
+            type: string
+            description: Payment method token
+            example: "tok_1234567890"
+            required: true
+
+  # Response types
+  OrderListResponse:
+    displayName: Order List Response
+    description: Response containing a list of orders with pagination
+    type: object
+    properties:
+      orders:
+        type: array
+        items: Order.Order
+        description: Array of order objects
+        required: true
+      pagination:
+        type: object
+        properties:
+          page:
+            type: integer
+            minimum: 1
+            example: 1
+            required: true
+          limit:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 20
+            required: true
+          totalItems:
+            type: integer
+            minimum: 0
+            example: 150
+            required: true
+          totalPages:
+            type: integer
+            minimum: 0
+            example: 8
+            required: true
+          hasNext:
+            type: boolean
+            example: true
+            required: true
+          hasPrevious:
+            type: boolean
+            example: false
+            required: true
+        required: true
+
+  # Update request types
+  UpdateOrderStatusRequest:
+    displayName: Update Order Status Request
+    description: Request to update order status
+    type: object
+    additionalProperties: false
+    properties:
+      status:
+        type: string
+        enum: [cancelled]
+        description: New order status (limited to customer-allowed statuses)
+        example: "cancelled"
+        required: true
+      reason?:
+        type: string
+        maxLength: 500
+        description: Reason for status change
+        example: "Customer requested cancellation"
+      notes?:
+        type: string
+        maxLength: 1000
+        description: Additional notes
+        example: "Refund will be processed within 3-5 business days"
+
+# API endpoints
+/orders:
+  displayName: Orders Collection
+  description: Operations on the orders collection
+  
+  get:
+    displayName: List Orders
+    description: |
+      Retrieve a paginated list of orders for the authenticated user.
+      Results can be filtered, sorted, and paginated.
+    securedBy: [oauth2: { scopes: ["orders:read"] }]
+    is: 
+      - CommonTraits.paginated
+      - CommonTraits.sortable
+      - CommonTraits.filterable
+      - CommonTraits.cached
+    queryParameters:
+      customerId?:
+        displayName: Customer ID Filter
+        description: Filter orders by customer ID
+        type: string
+        pattern: ^cust-[0-9a-zA-Z]{5,20}$
+        example: "cust-12345"
+      status?:
+        displayName: Order Status Filter
+        description: Filter orders by status
+        type: string
+        enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+        example: "confirmed"
+      startDate?:
+        displayName: Start Date Filter
+        description: Filter orders created on or after this date
+        type: date-only
+        example: "2026-03-01"
+      endDate?:
+        displayName: End Date Filter
+        description: Filter orders created on or before this date
+        type: date-only
+        example: "2026-03-31"
+      minAmount?:
+        displayName: Minimum Amount Filter
+        description: Filter orders with total amount greater than or equal to this value
+        type: number
+        format: decimal
+        minimum: 0.00
+        example: 100.00
+      maxAmount?:
+        displayName: Maximum Amount Filter
+        description: Filter orders with total amount less than or equal to this value
+        type: number
+        format: decimal
+        minimum: 0.00
+        example: 1000.00
+    responses:
+      200:
+        description: Successfully retrieved orders list
+        body:
+          application/json:
+            type: OrderListResponse
+            examples:
+              successful_response:
+                orders:
+                  - orderId: "ORD-20260320120001"
+                    customerId: "cust-12345"
+                    status: "confirmed"
+                    totalAmount: 1059.97
+                    currency: "USD"
+                    createdAt: "2026-03-20T12:00:01Z"
+                    updatedAt: "2026-03-20T12:05:30Z"
+                  - orderId: "ORD-20260319110001"
+                    customerId: "cust-12345"
+                    status: "shipped"
+                    totalAmount: 299.99
+                    currency: "USD"
+                    createdAt: "2026-03-19T11:00:01Z"
+                    updatedAt: "2026-03-19T16:30:00Z"
+                pagination:
+                  page: 1
+                  limit: 20
+                  totalItems: 150
+                  totalPages: 8
+                  hasNext: true
+                  hasPrevious: false
+      400:
+        description: Bad Request - Invalid query parameters
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+            example: !include ../examples/error-responses/validation-error.json
+      401:
+        description: Unauthorized - Invalid or missing authentication
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  post:
+    displayName: Create Order
+    description: |
+      Create a new order for the authenticated customer.
+      This endpoint validates customer information, checks inventory,
+      and initiates the order processing workflow.
+    securedBy: [oauth2: { scopes: ["orders:write"] }]
+    is:
+      - CommonTraits.idempotent
+    headers:
+      Idempotency-Key:
+        displayName: Idempotency Key
+        description: Unique key to prevent duplicate order creation
+        type: string
+        pattern: ^[a-zA-Z0-9\-]{8,100}$
+        example: "order-create-abc123def456"
+        required: true
+    body:
+      application/json:
+        type: CreateOrderRequest
+        examples:
+          laptop_order:
+            customerId: "cust-12345"
+            customerEmail: "john.doe@email.com"
+            items:
+              - productId: "LAPTOP-001"
+                quantity: 1
+                unitPrice: 999.99
+              - productId: "MOUSE-001"
+                quantity: 2
+                unitPrice: 29.99
+            shippingAddress:
+              street: "123 Technology Drive"
+              city: "San Francisco"
+              state: "CA"
+              zipCode: "94105"
+              country: "US"
+            paymentMethod:
+              method: "credit_card"
+              token: "tok_1234567890abcdef"
+    responses:
+      201:
+        description: Order created successfully
+        headers:
+          Location:
+            displayName: Created Resource Location
+            description: URI of the newly created order
+            type: string
+            example: "/api/v1/orders/ORD-20260320120001"
+        body:
+          application/json:
+            type: Order.Order
+            example: !include ../examples/responses/order-created.json
+      400:
+        description: Bad Request - Validation failed
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+            examples:
+              validation_error: !include ../examples/error-responses/validation-error.json
+              insufficient_inventory: !include ../examples/error-responses/insufficient-inventory.json
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      409:
+        description: Conflict - Idempotency key conflict or duplicate order
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      422:
+        description: Unprocessable Entity - Business logic validation failed
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+            examples:
+              payment_failed: !include ../examples/error-responses/payment-failed.json
+              customer_not_active: !include ../examples/error-responses/customer-not-active.json
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  /{orderId}:
+    displayName: Individual Order
+    description: Operations on a specific order
+    uriParameters:
+      orderId:
+        displayName: Order ID
+        description: Unique identifier for the order
+        type: string
+        pattern: ^ORD-[0-9]{14}$
+        example: "ORD-20260320120001"
+
+    get:
+      displayName: Get Order
+      description: |
+        Retrieve detailed information about a specific order.
+        Returns complete order details including items, payment, and shipment information.
+      securedBy: [oauth2: { scopes: ["orders:read"] }]
+      is:
+        - CommonTraits.cached
+      responses:
+        200:
+          description: Order details retrieved successfully
+          body:
+            application/json:
+              type: Order.Order
+              example: !include ../examples/responses/order-details.json
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+              example: !include ../examples/error-responses/order-not-found.json
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        403:
+          description: Forbidden - Order belongs to different customer
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    /status:
+      displayName: Order Status
+      description: Order status management operations
+      
+      patch:
+        displayName: Update Order Status
+        description: |
+          Update the status of an existing order.
+          Customers can only cancel orders that are in 'pending' or 'confirmed' status.
+        securedBy: [oauth2: { scopes: ["orders:write"] }]
+        is:
+          - CommonTraits.idempotent
+        headers:
+          Idempotency-Key:
+            displayName: Idempotency Key
+            description: Unique key to prevent duplicate status updates
+            type: string
+            pattern: ^[a-zA-Z0-9\-]{8,100}$
+            example: "order-status-update-abc123"
+            required: true
+        body:
+          application/json:
+            type: UpdateOrderStatusRequest
+            example:
+              status: "cancelled"
+              reason: "Customer requested cancellation"
+              notes: "Customer changed mind about purchase"
+        responses:
+          200:
+            description: Order status updated successfully
+            body:
+              application/json:
+                type: Order.Order
+                example: !include ../examples/responses/order-cancelled.json
+          400:
+            description: Bad Request - Invalid status transition
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+                example: !include ../examples/error-responses/invalid-status-transition.json
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          409:
+            description: Conflict - Order cannot be cancelled
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+                example: !include ../examples/error-responses/order-already-shipped.json
+
+    /tracking:
+      displayName: Order Tracking
+      description: Order tracking and shipment information
+      
+      get:
+        displayName: Get Order Tracking
+        description: |
+          Retrieve tracking information for order shipments.
+          Returns detailed tracking events and current shipment status.
+        securedBy: [oauth2: { scopes: ["orders:read", "shipments:read"] }]
+        is:
+          - CommonTraits.cached
+        responses:
+          200:
+            description: Tracking information retrieved successfully
+            body:
+              application/json:
+                type: object
+                properties:
+                  orderId:
+                    type: string
+                    example: "ORD-20260320120001"
+                  shipments:
+                    type: array
+                    items: Shipment.Shipment
+                example: !include ../examples/responses/order-tracking.json
+          404:
+            description: Order or tracking information not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          401:
+            description: Unauthorized
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+# Health check endpoint
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health and status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "healthy"
+              timestamp:
+                type: datetime
+                format: rfc3339
+                example: "2026-03-20T12:00:00Z"
+              version:
+                type: string
+                example: "v1.0.0"
+              uptime:
+                type: integer
+                description: Uptime in seconds
+                example: 86400

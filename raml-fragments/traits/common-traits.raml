@@ -1,0 +1,366 @@
+#%RAML 1.0 Trait
+
+# Common Traits Fragment
+# Reusable behavior patterns across Experience, Process, and System layer APIs
+
+displayName: Common API Traits
+description: Collection of reusable traits for Order Management System APIs
+
+traits:
+  
+  # Pagination trait for list endpoints
+  paginated:
+    displayName: Paginated Response
+    description: Provides pagination support for list endpoints
+    queryParameters:
+      limit?:
+        displayName: Page Size Limit
+        description: Maximum number of items to return per page
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+      offset?:
+        displayName: Page Offset
+        description: Number of items to skip (for pagination)
+        type: integer
+        minimum: 0
+        default: 0
+        example: 0
+      page?:
+        displayName: Page Number
+        description: Page number (1-based, alternative to offset)
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+    responses:
+      200:
+        headers:
+          X-Total-Count?:
+            displayName: Total Item Count
+            description: Total number of items available
+            type: integer
+            example: 150
+          X-Page-Count?:
+            displayName: Total Page Count
+            description: Total number of pages available
+            type: integer
+            example: 8
+          X-Current-Page?:
+            displayName: Current Page Number
+            description: Current page number (1-based)
+            type: integer
+            example: 1
+          X-Page-Size?:
+            displayName: Current Page Size
+            description: Number of items in current page
+            type: integer
+            example: 20
+          Link?:
+            displayName: Pagination Links
+            description: Navigation links for pagination (RFC 5988)
+            type: string
+            example: '</api/v1/orders?page=1>; rel="first", </api/v1/orders?page=2>; rel="next", </api/v1/orders?page=8>; rel="last"'
+
+  # Sortable trait for list endpoints  
+  sortable:
+    displayName: Sortable Response
+    description: Provides sorting support for list endpoints
+    queryParameters:
+      sort?:
+        displayName: Sort Fields
+        description: |
+          Comma-separated list of fields to sort by.
+          Prefix with '-' for descending order.
+          Example: 'createdAt,-totalAmount'
+        type: string
+        pattern: ^[a-zA-Z0-9_,-]+$
+        example: "createdAt,-totalAmount"
+      sortBy?:
+        displayName: Sort By Field (Alternative)
+        description: Single field to sort by (alternative to sort parameter)
+        type: string
+        pattern: ^[a-zA-Z0-9_]+$
+        example: "createdAt"
+      sortOrder?:
+        displayName: Sort Order
+        description: Sort order when using sortBy parameter
+        type: string
+        enum: [asc, desc]
+        default: asc
+        example: "desc"
+
+  # Filterable trait for list endpoints
+  filterable:
+    displayName: Filterable Response  
+    description: Provides filtering support for list endpoints
+    queryParameters:
+      filter?:
+        displayName: Filter Expression
+        description: |
+          Filter expression using query syntax.
+          Format: field[operator]value
+          Operators: eq, ne, gt, gte, lt, lte, in, contains
+          Example: 'status eq confirmed and totalAmount gt 100'
+        type: string
+        maxLength: 500
+        example: "status eq confirmed and totalAmount gt 100"
+      q?:
+        displayName: Search Query
+        description: Free-text search across searchable fields
+        type: string
+        maxLength: 200
+        example: "laptop computer"
+      fields?:
+        displayName: Field Selection
+        description: |
+          Comma-separated list of fields to include in response.
+          Supports nested field notation with dots.
+          Example: 'orderId,customerId,items.productId,totalAmount'
+        type: string
+        pattern: ^[a-zA-Z0-9_,.-]+$
+        example: "orderId,customerId,totalAmount"
+
+  # Rate limited trait
+  rateLimited:
+    displayName: Rate Limited
+    description: Applies rate limiting headers and responses
+    responses:
+      200:
+        headers:
+          X-RateLimit-Limit:
+            displayName: Rate Limit
+            description: Request limit per time window
+            type: integer
+            example: 1000
+          X-RateLimit-Remaining:
+            displayName: Remaining Requests
+            description: Number of requests remaining in current window
+            type: integer
+            example: 999
+          X-RateLimit-Reset:
+            displayName: Rate Limit Reset
+            description: Unix timestamp when rate limit resets
+            type: integer
+            example: 1640995200
+          X-RateLimit-Window:
+            displayName: Rate Limit Window
+            description: Rate limit time window in seconds
+            type: integer
+            example: 3600
+      429:
+        description: |
+          Too Many Requests - Rate limit exceeded.
+          Client should wait before making additional requests.
+        headers:
+          Retry-After:
+            displayName: Retry After
+            description: Seconds to wait before retrying
+            type: integer
+            example: 60
+          X-RateLimit-Limit:
+            displayName: Rate Limit
+            description: Request limit per time window
+            type: integer
+            example: 1000
+          X-RateLimit-Reset:
+            displayName: Rate Limit Reset
+            description: Unix timestamp when rate limit resets
+            type: integer
+            example: 1640995200
+        body:
+          application/json:
+            type: !include ../data-types/ErrorResponse.raml
+            example:
+              error:
+                code: "RATE_LIMIT_EXCEEDED"
+                message: "Too many requests"
+                details: "Rate limit of 1000 requests per hour exceeded"
+                timestamp: "2026-03-20T12:00:00Z"
+                traceId: "abc123-def456-ghi789"
+                path: "/api/v1/orders"
+                method: "GET"
+                retryAfter: 60
+
+  # Cached trait for cacheable responses
+  cached:
+    displayName: Cached Response
+    description: Provides caching headers for cacheable responses
+    responses:
+      200:
+        headers:
+          ETag?:
+            displayName: Entity Tag
+            description: Entity tag for cache validation
+            type: string
+            example: '"686897696a7c876b7e"'
+          Last-Modified?:
+            displayName: Last Modified
+            description: Date when resource was last modified
+            type: datetime
+            format: rfc2616
+            example: "Wed, 20 Mar 2026 12:00:00 GMT"
+          Cache-Control?:
+            displayName: Cache Control
+            description: Cache control directives
+            type: string
+            example: "public, max-age=300"
+          Expires?:
+            displayName: Expires
+            description: Expiration date for cached response
+            type: datetime
+            format: rfc2616
+            example: "Wed, 20 Mar 2026 12:05:00 GMT"
+          Vary?:
+            displayName: Vary
+            description: Response varies based on these headers
+            type: string
+            example: "Accept, Authorization"
+      304:
+        description: |
+          Not Modified - Resource has not been modified since last request.
+          Client should use cached version.
+
+  # Versioned trait for API versioning
+  versioned:
+    displayName: Versioned API
+    description: Provides API versioning support
+    headers:
+      API-Version?:
+        displayName: API Version
+        description: |
+          API version requested by client.
+          If not specified, latest stable version is used.
+        type: string
+        pattern: ^v[0-9]+(\.[0-9]+)?$
+        example: "v1.0"
+    responses:
+      200:
+        headers:
+          API-Version:
+            displayName: API Version
+            description: Actual API version used for this response
+            type: string
+            example: "v1.0"
+      400:
+        body:
+          application/json:
+            type: !include ../data-types/ErrorResponse.raml
+            example:
+              error:
+                code: "UNSUPPORTED_API_VERSION"
+                message: "Unsupported API version requested"
+                details: "API version 'v2.0' is not supported. Supported versions: v1.0"
+                timestamp: "2026-03-20T12:00:00Z"
+                traceId: "abc123-def456-ghi789"
+                path: "/api/v1/orders"
+                method: "GET"
+
+  # Auditable trait for operations that require audit logging
+  auditable:
+    displayName: Auditable Operation
+    description: Adds audit logging headers for compliance and traceability
+    headers:
+      X-User-Id?:
+        displayName: User ID
+        description: ID of the user performing the operation
+        type: string
+        example: "user-12345"
+      X-Session-Id?:
+        displayName: Session ID
+        description: Session identifier for the user
+        type: string
+        example: "sess-abc123def456"
+      X-Client-Id?:
+        displayName: Client ID
+        description: Client application identifier
+        type: string
+        example: "mobile-app-v1.2"
+      X-Source-IP?:
+        displayName: Source IP Address
+        description: IP address of the client making the request
+        type: string
+        example: "192.168.1.100"
+    responses:
+      200:
+        headers:
+          X-Audit-Log-Id?:
+            displayName: Audit Log ID
+            description: Unique identifier for the audit log entry
+            type: string
+            example: "audit-log-123456789"
+
+  # Idempotent trait for operations that can be safely retried
+  idempotent:
+    displayName: Idempotent Operation
+    description: Supports idempotency keys to prevent duplicate operations
+    headers:
+      Idempotency-Key?:
+        displayName: Idempotency Key
+        description: |
+          Unique key to ensure idempotent behavior.
+          Subsequent requests with same key return cached result.
+        type: string
+        pattern: ^[a-zA-Z0-9\-]{8,100}$
+        example: "idem-key-abc123def456ghi789"
+    responses:
+      200:
+        headers:
+          Idempotency-Key-Used?:
+            displayName: Idempotency Key Used
+            description: Indicates if the idempotency key was used
+            type: boolean
+            example: false
+      201:
+        headers:
+          Idempotency-Key-Used?:
+            displayName: Idempotency Key Used
+            description: Indicates if the idempotency key was used
+            type: boolean
+            example: false
+      409:
+        description: |
+          Conflict - Request with different data but same idempotency key.
+          Client should use a different idempotency key.
+        body:
+          application/json:
+            type: !include ../data-types/ErrorResponse.raml
+            example:
+              error:
+                code: "IDEMPOTENCY_CONFLICT"
+                message: "Idempotency key conflict"
+                details: "Request with same idempotency key but different data already exists"
+                timestamp: "2026-03-20T12:00:00Z"
+                traceId: "abc123-def456-ghi789"
+                path: "/api/v1/orders"
+                method: "POST"
+
+  # Monitored trait for enhanced observability
+  monitored:
+    displayName: Monitored Operation
+    description: Adds monitoring and observability headers
+    responses:
+      200:
+        headers:
+          X-Response-Time?:
+            displayName: Response Time
+            description: Server processing time in milliseconds
+            type: integer
+            example: 150
+          X-Service-Version?:
+            displayName: Service Version
+            description: Version of the service that processed the request
+            type: string
+            example: "v1.2.3"
+          X-Request-Id:
+            displayName: Request ID
+            description: Unique identifier for this request
+            type: string
+            example: "req-abc123def456"
+          X-Correlation-Id?:
+            displayName: Correlation ID  
+            description: Correlation ID for tracking across services
+            type: string
+            example: "corr-xyz789abc123"

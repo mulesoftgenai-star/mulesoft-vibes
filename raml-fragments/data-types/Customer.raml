@@ -1,0 +1,352 @@
+#%RAML 1.0 DataType
+
+# Customer Data Type Fragment
+# Reusable across Experience, Process, and System layer APIs
+
+displayName: Customer
+description: Customer information for order processing and validation
+
+type: object
+additionalProperties: false
+
+properties:
+  customerId:
+    type: string
+    pattern: ^cust-[0-9a-zA-Z]{5,20}$
+    description: Unique customer identifier
+    example: "cust-12345"
+    required: true
+    
+  email:
+    type: string
+    pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+    description: Customer email address
+    example: "john.doe@email.com"
+    required: true
+    
+  firstName?:
+    type: string
+    minLength: 1
+    maxLength: 50
+    description: Customer first name
+    example: "John"
+    
+  lastName?:
+    type: string
+    minLength: 1
+    maxLength: 50
+    description: Customer last name
+    example: "Doe"
+    
+  fullName?:
+    type: string
+    minLength: 1
+    maxLength: 100
+    description: Customer full name
+    example: "John Doe"
+    
+  phone?:
+    type: string
+    pattern: ^\+?[1-9]\d{1,14}$
+    description: Customer phone number (E.164 format)
+    example: "+14155552345"
+    
+  dateOfBirth?:
+    type: date-only
+    description: Customer date of birth
+    example: "1985-06-15"
+    
+  gender?:
+    type: string
+    enum: [M, F, O, U]
+    description: Gender (M=Male, F=Female, O=Other, U=Unknown)
+    example: "M"
+    
+  customerType?:
+    type: string
+    enum: [individual, business, premium, vip]
+    description: Type of customer
+    example: "individual"
+    default: "individual"
+    
+  status:
+    type: string
+    enum: [active, inactive, suspended, blocked]
+    description: Customer account status
+    example: "active"
+    default: "active"
+    required: true
+    
+  addresses?:
+    type: array
+    maxItems: 10
+    description: Customer addresses
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        addressId?:
+          type: string
+          description: Unique address identifier
+          example: "addr-001"
+        type:
+          type: string
+          enum: [home, work, billing, shipping, other]
+          description: Address type
+          example: "home"
+          required: true
+        street:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Street address
+          example: "123 Main Street"
+          required: true
+        street2?:
+          type: string
+          maxLength: 255
+          description: Additional address line
+          example: "Apt 4B"
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: City name
+          example: "San Francisco"
+          required: true
+        state:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: State or province
+          example: "CA"
+          required: true
+        zipCode:
+          type: string
+          pattern: ^[0-9]{5}(-[0-9]{4})?$
+          description: Postal code
+          example: "94105"
+          required: true
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country code (ISO 3166-1 alpha-2)
+          example: "US"
+          default: "US"
+          required: true
+        isDefault?:
+          type: boolean
+          description: Whether this is the default address
+          example: true
+          default: false
+          
+  preferences?:
+    type: object
+    additionalProperties: false
+    description: Customer preferences
+    properties:
+      language?:
+        type: string
+        pattern: ^[a-z]{2}(-[A-Z]{2})?$
+        description: Preferred language (ISO 639-1)
+        example: "en-US"
+        default: "en-US"
+      currency?:
+        type: string
+        pattern: ^[A-Z]{3}$
+        description: Preferred currency (ISO 4217)
+        example: "USD"
+        default: "USD"
+      timezone?:
+        type: string
+        description: Customer timezone
+        example: "America/Los_Angeles"
+      emailNotifications?:
+        type: boolean
+        description: Email notification preference
+        example: true
+        default: true
+      smsNotifications?:
+        type: boolean
+        description: SMS notification preference
+        example: false
+        default: false
+        
+  loyaltyInfo?:
+    type: object
+    additionalProperties: false
+    description: Customer loyalty program information
+    properties:
+      memberId?:
+        type: string
+        description: Loyalty program member ID
+        example: "LTY-12345"
+      tier?:
+        type: string
+        enum: [bronze, silver, gold, platinum]
+        description: Loyalty tier
+        example: "gold"
+      points?:
+        type: integer
+        minimum: 0
+        description: Available loyalty points
+        example: 2500
+      memberSince?:
+        type: date-only
+        description: Loyalty membership start date
+        example: "2024-01-15"
+        
+  creditInfo?:
+    type: object
+    additionalProperties: false
+    description: Customer credit information
+    properties:
+      creditLimit?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Credit limit
+        example: 5000.00
+      availableCredit?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Available credit
+        example: 4250.00
+      paymentTerms?:
+        type: string
+        enum: [net_30, net_60, net_90, cod, prepaid]
+        description: Payment terms
+        example: "net_30"
+        
+  tags?:
+    type: array
+    maxItems: 20
+    uniqueItems: true
+    description: Customer tags for segmentation
+    items:
+      type: string
+      minLength: 1
+      maxLength: 50
+    example: ["high-value", "tech-enthusiast", "repeat-customer"]
+    
+  externalIds?:
+    type: object
+    description: External system identifiers
+    properties:
+      crmId?: string
+      erpId?: string
+      loyaltyId?: string
+      
+  createdAt:
+    type: datetime
+    format: rfc3339
+    description: Customer record creation timestamp
+    example: "2024-01-15T10:30:00Z"
+    required: true
+    
+  updatedAt:
+    type: datetime
+    format: rfc3339
+    description: Customer record last update timestamp
+    example: "2026-03-20T12:00:00Z"
+    required: true
+    
+  lastOrderDate?:
+    type: datetime
+    format: rfc3339
+    description: Date of customer's last order
+    example: "2026-03-15T14:30:00Z"
+    
+  totalOrders?:
+    type: integer
+    minimum: 0
+    description: Total number of orders placed
+    example: 15
+    
+  totalSpent?:
+    type: number
+    format: decimal
+    minimum: 0.00
+    description: Total amount spent by customer
+    example: 2475.50
+    
+  isValidated:
+    type: boolean
+    description: Whether customer information has been validated
+    example: true
+    default: false
+    required: true
+
+examples:
+  individual_customer:
+    customerId: "cust-12345"
+    email: "john.doe@email.com"
+    firstName: "John"
+    lastName: "Doe"
+    fullName: "John Doe"
+    phone: "+14155552345"
+    dateOfBirth: "1985-06-15"
+    gender: "M"
+    customerType: "individual"
+    status: "active"
+    addresses:
+      - addressId: "addr-001"
+        type: "home"
+        street: "123 Main Street"
+        street2: "Apt 4B"
+        city: "San Francisco"
+        state: "CA"
+        zipCode: "94105"
+        country: "US"
+        isDefault: true
+    preferences:
+      language: "en-US"
+      currency: "USD"
+      timezone: "America/Los_Angeles"
+      emailNotifications: true
+      smsNotifications: false
+    loyaltyInfo:
+      memberId: "LTY-12345"
+      tier: "gold"
+      points: 2500
+      memberSince: "2024-01-15"
+    tags: ["high-value", "tech-enthusiast", "repeat-customer"]
+    externalIds:
+      crmId: "CRM-67890"
+      erpId: "ERP-54321"
+    createdAt: "2024-01-15T10:30:00Z"
+    updatedAt: "2026-03-20T12:00:00Z"
+    lastOrderDate: "2026-03-15T14:30:00Z"
+    totalOrders: 15
+    totalSpent: 2475.50
+    isValidated: true
+    
+  business_customer:
+    customerId: "cust-biz789"
+    email: "procurement@techcorp.com"
+    fullName: "TechCorp Inc."
+    phone: "+14155559876"
+    customerType: "business"
+    status: "active"
+    addresses:
+      - addressId: "addr-biz001"
+        type: "billing"
+        street: "456 Business Ave"
+        city: "San Francisco"
+        state: "CA"
+        zipCode: "94105"
+        country: "US"
+        isDefault: true
+    creditInfo:
+      creditLimit: 25000.00
+      availableCredit: 22500.00
+      paymentTerms: "net_30"
+    externalIds:
+      crmId: "CRM-BIZ123"
+      erpId: "ERP-BIZ456"
+    createdAt: "2023-08-20T09:00:00Z"
+    updatedAt: "2026-03-20T11:45:00Z"
+    totalOrders: 45
+    totalSpent: 125000.00
+    isValidated: true

@@ -1,0 +1,498 @@
+#%RAML 1.0 DataType
+
+# Payment Data Type Fragment
+# Reusable across Experience, Process, and System layer APIs
+
+displayName: Payment
+description: Payment information for order processing and transaction management
+
+type: object
+additionalProperties: false
+
+properties:
+  paymentId?:
+    type: string
+    pattern: ^PAY-[0-9]{14}$
+    description: Unique payment identifier
+    example: "PAY-20260320120001"
+    
+  transactionId?:
+    type: string
+    minLength: 1
+    maxLength: 100
+    description: External payment gateway transaction ID
+    example: "txn_1234567890abcdef"
+    
+  orderId:
+    type: string
+    pattern: ^ORD-[0-9]{14}$
+    description: Associated order identifier
+    example: "ORD-20260320120001"
+    required: true
+    
+  customerId:
+    type: string
+    pattern: ^cust-[0-9a-zA-Z]{5,20}$
+    description: Customer identifier
+    example: "cust-12345"
+    required: true
+    
+  amount:
+    type: number
+    format: decimal
+    minimum: 0.01
+    maximum: 9999999.99
+    multipleOf: 0.01
+    description: Payment amount
+    example: 1059.97
+    required: true
+    
+  currency:
+    type: string
+    pattern: ^[A-Z]{3}$
+    description: Currency code (ISO 4217)
+    example: "USD"
+    default: "USD"
+    required: true
+    
+  method:
+    type: string
+    enum: [credit_card, debit_card, paypal, apple_pay, google_pay, bank_transfer, wire_transfer, check, cash, store_credit, gift_card, buy_now_pay_later]
+    description: Payment method used
+    example: "credit_card"
+    required: true
+    
+  status:
+    type: string
+    enum: [pending, authorized, captured, settled, failed, cancelled, refunded, partially_refunded, chargeback, dispute]
+    description: Current payment status
+    example: "authorized"
+    required: true
+    
+  subStatus?:
+    type: string
+    enum: [insufficient_funds, expired_card, invalid_card, declined_by_issuer, fraud_suspected, 3ds_required, processing_error, network_error]
+    description: Detailed payment sub-status for failures
+    example: "insufficient_funds"
+    
+  gatewayProvider?:
+    type: string
+    enum: [stripe, square, paypal, authorize_net, braintree, adyen, worldpay, cybersource, first_data, chase]
+    description: Payment gateway provider
+    example: "stripe"
+    
+  gatewayResponse?:
+    type: object
+    additionalProperties: false
+    description: Payment gateway response details
+    properties:
+      code?:
+        type: string
+        description: Gateway response code
+        example: "00"
+      message?:
+        type: string
+        description: Gateway response message
+        example: "Approved"
+      authCode?:
+        type: string
+        description: Authorization code
+        example: "123456"
+      avsResult?:
+        type: string
+        enum: [Y, N, U, R, E, S, D, M, B, P, C, I, W, X, Z, A]
+        description: Address Verification System result
+        example: "Y"
+      cvvResult?:
+        type: string
+        enum: [M, N, P, S, U, X]
+        description: Card Verification Value result
+        example: "M"
+      networkTransactionId?:
+        type: string
+        description: Network transaction identifier
+        example: "ntid_987654321"
+        
+  cardDetails?:
+    type: object
+    additionalProperties: false
+    description: Credit/debit card information (masked/tokenized)
+    properties:
+      last4:
+        type: string
+        pattern: ^[0-9]{4}$
+        description: Last 4 digits of card number
+        example: "4242"
+        required: true
+      brand:
+        type: string
+        enum: [visa, mastercard, amex, discover, diners, jcb, unionpay, maestro]
+        description: Card brand/network
+        example: "visa"
+        required: true
+      expiryMonth?:
+        type: string
+        pattern: ^(0[1-9]|1[0-2])$
+        description: Card expiry month (MM)
+        example: "12"
+      expiryYear?:
+        type: string
+        pattern: ^[0-9]{4}$
+        description: Card expiry year (YYYY)
+        example: "2028"
+      holderName?:
+        type: string
+        maxLength: 100
+        description: Cardholder name (masked)
+        example: "John D***"
+      token?:
+        type: string
+        description: Tokenized card reference
+        example: "tok_1234567890abcdef"
+        
+  digitalWalletDetails?:
+    type: object
+    additionalProperties: false
+    description: Digital wallet payment information
+    properties:
+      walletType:
+        type: string
+        enum: [apple_pay, google_pay, samsung_pay, paypal, amazon_pay]
+        description: Digital wallet provider
+        example: "apple_pay"
+        required: true
+      deviceId?:
+        type: string
+        description: Device identifier for wallet payment
+        example: "device_abc123"
+      fingerprint?:
+        type: string
+        description: Payment fingerprint for fraud detection
+        example: "fp_xyz789"
+        
+  bankDetails?:
+    type: object
+    additionalProperties: false
+    description: Bank transfer payment information
+    properties:
+      accountType:
+        type: string
+        enum: [checking, savings, business]
+        description: Bank account type
+        example: "checking"
+        required: true
+      bankName?:
+        type: string
+        maxLength: 100
+        description: Bank name
+        example: "Chase Bank"
+      accountLast4:
+        type: string
+        pattern: ^[0-9]{4}$
+        description: Last 4 digits of account number
+        example: "1234"
+        required: true
+      routingNumber?:
+        type: string
+        pattern: ^[0-9]{9}$
+        description: Bank routing number (masked)
+        example: "021000021"
+        
+  refunds?:
+    type: array
+    maxItems: 50
+    description: Refund history for this payment
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        refundId:
+          type: string
+          description: Unique refund identifier
+          example: "REF-20260320120001"
+          required: true
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Refunded amount
+          example: 29.99
+          required: true
+        reason:
+          type: string
+          enum: [customer_request, fraud, duplicate, order_cancelled, return, chargeback, error]
+          description: Refund reason
+          example: "customer_request"
+          required: true
+        status:
+          type: string
+          enum: [pending, processed, failed, cancelled]
+          description: Refund status
+          example: "processed"
+          required: true
+        processedAt?:
+          type: datetime
+          format: rfc3339
+          description: Refund processing timestamp
+          example: "2026-03-21T10:30:00Z"
+        notes?:
+          type: string
+          maxLength: 500
+          description: Refund notes
+          example: "Customer requested refund for defective item"
+          
+  fees?:
+    type: array
+    maxItems: 10
+    description: Payment processing fees
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [processing, gateway, interchange, assessment, chargeback, international]
+          description: Fee type
+          example: "processing"
+          required: true
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.00
+          description: Fee amount
+          example: 3.25
+          required: true
+        percentage?:
+          type: number
+          format: decimal
+          minimum: 0.00
+          maximum: 100.00
+          multipleOf: 0.01
+          description: Fee percentage
+          example: 2.9
+          
+  riskAssessment?:
+    type: object
+    additionalProperties: false
+    description: Payment risk assessment
+    properties:
+      score?:
+        type: integer
+        minimum: 0
+        maximum: 100
+        description: Risk score (0-100, higher is riskier)
+        example: 25
+      level?:
+        type: string
+        enum: [low, medium, high, very_high]
+        description: Risk level assessment
+        example: "low"
+      factors?:
+        type: array
+        maxItems: 20
+        description: Risk factors identified
+        items:
+          type: string
+        example: ["new_customer", "high_amount", "international_card"]
+      recommendations?:
+        type: array
+        maxItems: 10
+        description: Risk mitigation recommendations
+        items:
+          type: string
+        example: ["verify_address", "require_3ds"]
+        
+  threeDSecure?:
+    type: object
+    additionalProperties: false
+    description: 3D Secure authentication details
+    properties:
+      version?:
+        type: string
+        enum: ["1.0", "2.0", "2.1", "2.2"]
+        description: 3DS protocol version
+        example: "2.1"
+      status?:
+        type: string
+        enum: [authenticated, not_authenticated, attempted, unavailable, rejected, error]
+        description: 3DS authentication status
+        example: "authenticated"
+      eci?:
+        type: string
+        pattern: ^[0-9]{2}$
+        description: Electronic Commerce Indicator
+        example: "05"
+      cavv?:
+        type: string
+        description: Cardholder Authentication Verification Value
+        example: "AAABCZIhcQAAAABZlyFxAAAAAAA="
+      xid?:
+        type: string
+        description: Transaction identifier for 3DS
+        example: "MDAwMDAwMDAwMDAwMDAwMzIyNzY="
+        
+  processingDate?:
+    type: date-only
+    description: Payment processing date
+    example: "2026-03-20"
+    
+  settlementDate?:
+    type: date-only
+    description: Payment settlement date
+    example: "2026-03-22"
+    
+  merchantId?:
+    type: string
+    maxLength: 50
+    description: Merchant identifier
+    example: "MERCH-12345"
+    
+  terminalId?:
+    type: string
+    maxLength: 50
+    description: Terminal identifier for card-present transactions
+    example: "TERM-001"
+    
+  batchId?:
+    type: string
+    maxLength: 50
+    description: Processing batch identifier
+    example: "BATCH-20260320-001"
+    
+  reconciliationId?:
+    type: string
+    maxLength: 100
+    description: Reconciliation reference
+    example: "RECON-20260320120001"
+    
+  externalReferences?:
+    type: object
+    description: External system references
+    properties:
+      gatewayTransactionId?: string
+      processorTransactionId?: string
+      acquirerReferenceNumber?: string
+      merchantOrderId?: string
+      
+  notes?:
+    type: string
+    maxLength: 1000
+    description: Payment processing notes
+    example: "Payment processed successfully with enhanced verification"
+    
+  createdAt:
+    type: datetime
+    format: rfc3339
+    description: Payment record creation timestamp
+    example: "2026-03-20T12:00:01Z"
+    required: true
+    
+  updatedAt:
+    type: datetime
+    format: rfc3339
+    description: Payment record last update timestamp
+    example: "2026-03-20T12:05:30Z"
+    required: true
+    
+  authorizedAt?:
+    type: datetime
+    format: rfc3339
+    description: Payment authorization timestamp
+    example: "2026-03-20T12:00:15Z"
+    
+  capturedAt?:
+    type: datetime
+    format: rfc3339
+    description: Payment capture timestamp
+    example: "2026-03-20T12:30:00Z"
+    
+  settledAt?:
+    type: datetime
+    format: rfc3339
+    description: Payment settlement timestamp
+    example: "2026-03-22T08:00:00Z"
+
+examples:
+  credit_card_payment:
+    paymentId: "PAY-20260320120001"
+    transactionId: "txn_1234567890abcdef"
+    orderId: "ORD-20260320120001"
+    customerId: "cust-12345"
+    amount: 1059.97
+    currency: "USD"
+    method: "credit_card"
+    status: "captured"
+    gatewayProvider: "stripe"
+    gatewayResponse:
+      code: "00"
+      message: "Approved"
+      authCode: "123456"
+      avsResult: "Y"
+      cvvResult: "M"
+      networkTransactionId: "ntid_987654321"
+    cardDetails:
+      last4: "4242"
+      brand: "visa"
+      expiryMonth: "12"
+      expiryYear: "2028"
+      holderName: "John D***"
+      token: "tok_1234567890abcdef"
+    riskAssessment:
+      score: 25
+      level: "low"
+      factors: ["verified_customer"]
+    threeDSecure:
+      version: "2.1"
+      status: "authenticated"
+      eci: "05"
+    fees:
+      - type: "processing"
+        amount: 30.74
+        percentage: 2.9
+    merchantId: "MERCH-12345"
+    createdAt: "2026-03-20T12:00:01Z"
+    updatedAt: "2026-03-20T12:05:30Z"
+    authorizedAt: "2026-03-20T12:00:15Z"
+    capturedAt: "2026-03-20T12:30:00Z"
+    
+  digital_wallet_payment:
+    paymentId: "PAY-20260320120002"
+    orderId: "ORD-20260320120002"
+    customerId: "cust-67890"
+    amount: 599.99
+    currency: "USD"
+    method: "apple_pay"
+    status: "captured"
+    gatewayProvider: "stripe"
+    digitalWalletDetails:
+      walletType: "apple_pay"
+      deviceId: "device_abc123"
+      fingerprint: "fp_xyz789"
+    riskAssessment:
+      score: 15
+      level: "low"
+    createdAt: "2026-03-20T14:15:00Z"
+    updatedAt: "2026-03-20T14:15:30Z"
+    authorizedAt: "2026-03-20T14:15:10Z"
+    capturedAt: "2026-03-20T14:15:30Z"
+    
+  refunded_payment:
+    paymentId: "PAY-20260320120003"
+    orderId: "ORD-20260320120003"
+    customerId: "cust-11111"
+    amount: 299.99
+    currency: "USD"
+    method: "credit_card"
+    status: "partially_refunded"
+    cardDetails:
+      last4: "1234"
+      brand: "mastercard"
+    refunds:
+      - refundId: "REF-20260321120001"
+        amount: 99.99
+        reason: "customer_request"
+        status: "processed"
+        processedAt: "2026-03-21T10:30:00Z"
+        notes: "Customer requested refund for one item"
+    createdAt: "2026-03-20T12:00:01Z"
+    updatedAt: "2026-03-21T10:30:00Z"

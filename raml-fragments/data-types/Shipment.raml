@@ -1,0 +1,997 @@
+#%RAML 1.0 DataType
+
+# Shipment Data Type Fragment
+# Reusable across Experience, Process, and System layer APIs
+
+displayName: Shipment
+description: Shipment information for order fulfillment and tracking
+
+type: object
+additionalProperties: false
+
+properties:
+  shipmentId:
+    type: string
+    pattern: ^SHIP-[0-9]{14}$
+    description: Unique shipment identifier
+    example: "SHIP-20260320120001"
+    required: true
+    
+  orderId:
+    type: string
+    pattern: ^ORD-[0-9]{14}$
+    description: Associated order identifier
+    example: "ORD-20260320120001"
+    required: true
+    
+  customerId:
+    type: string
+    pattern: ^cust-[0-9a-zA-Z]{5,20}$
+    description: Customer identifier
+    example: "cust-12345"
+    required: true
+    
+  shipmentNumber?:
+    type: string
+    maxLength: 50
+    description: Human-readable shipment number
+    example: "SHIP-2026-001234"
+    
+  status:
+    type: string
+    enum: [pending, processing, ready_to_ship, shipped, in_transit, out_for_delivery, delivered, attempted_delivery, exception, returned, cancelled]
+    description: Current shipment status
+    example: "shipped"
+    required: true
+    
+  priority:
+    type: string
+    enum: [low, normal, high, urgent, expedited]
+    description: Shipment priority level
+    example: "normal"
+    default: "normal"
+    required: true
+    
+  type:
+    type: string
+    enum: [standard, express, overnight, two_day, same_day, pickup, white_glove, freight]
+    description: Shipment type/service level
+    example: "express"
+    required: true
+    
+  items:
+    type: array
+    minItems: 1
+    maxItems: 100
+    uniqueItems: false
+    description: Items included in this shipment
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        shipmentItemId?:
+          type: string
+          description: Unique identifier for this shipment item
+          example: "SI-001"
+        productId:
+          type: string
+          pattern: ^[A-Z0-9]{3,20}-[0-9]{3}$
+          description: Product identifier
+          example: "LAPTOP-001"
+          required: true
+        productName?:
+          type: string
+          maxLength: 255
+          description: Product display name
+          example: "Business Laptop Pro"
+        sku?:
+          type: string
+          maxLength: 100
+          description: Stock Keeping Unit
+          example: "LP-BUS-PRO-001"
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 999
+          description: Quantity being shipped
+          example: 1
+          required: true
+        weight?:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Item weight in pounds
+          example: 4.5
+        dimensions?:
+          type: object
+          additionalProperties: false
+          description: Item dimensions in inches
+          properties:
+            length:
+              type: number
+              format: decimal
+              minimum: 0.1
+              example: 12.5
+              required: true
+            width:
+              type: number
+              format: decimal
+              minimum: 0.1
+              example: 8.75
+              required: true
+            height:
+              type: number
+              format: decimal
+              minimum: 0.1
+              example: 1.0
+              required: true
+        serialNumbers?:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: Serial numbers for trackable items
+          items:
+            type: string
+          example: ["SN123456789", "SN987654321"]
+        lotNumbers?:
+          type: array
+          maxItems: 10
+          description: Lot/batch numbers
+          items:
+            type: string
+          example: ["LOT20260320001"]
+        condition?:
+          type: string
+          enum: [new, used, refurbished, damaged, returned]
+          description: Item condition
+          example: "new"
+          default: "new"
+    required: true
+    
+  packages:
+    type: array
+    minItems: 1
+    maxItems: 50
+    description: Physical packages in this shipment
+    items:
+      type: object
+      additionalProperties: false
+      properties:
+        packageId:
+          type: string
+          description: Unique package identifier
+          example: "PKG-001"
+          required: true
+        trackingNumber?:
+          type: string
+          maxLength: 100
+          description: Carrier tracking number
+          example: "1Z999AA1234567890"
+        packageType:
+          type: string
+          enum: [box, envelope, tube, pallet, bag, crate, roll, bundle, other]
+          description: Package type
+          example: "box"
+          required: true
+        weight:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Package weight in pounds
+          example: 5.2
+          required: true
+        dimensions:
+          type: object
+          additionalProperties: false
+          description: Package dimensions in inches
+          properties:
+            length:
+              type: number
+              format: decimal
+              minimum: 0.1
+              example: 14.0
+              required: true
+            width:
+              type: number
+              format: decimal
+              minimum: 0.1
+              example: 10.0
+              required: true
+            height:
+              type: number
+              format: decimal
+              minimum: 0.1
+              example: 6.0
+              required: true
+          required: true
+        value?:
+          type: number
+          format: decimal
+          minimum: 0.00
+          description: Declared package value for insurance
+          example: 1200.00
+        contents:
+          type: array
+          minItems: 1
+          description: Items contained in this package
+          items:
+            type: string
+            description: Reference to shipmentItemId
+          example: ["SI-001", "SI-002"]
+          required: true
+        specialHandling?:
+          type: array
+          uniqueItems: true
+          description: Special handling requirements
+          items:
+            type: string
+            enum: [fragile, hazardous, perishable, signature_required, adult_signature, no_safe_drop, refrigerated, frozen]
+          example: ["fragile", "signature_required"]
+    required: true
+    
+  carrier:
+    type: object
+    additionalProperties: false
+    description: Shipping carrier information
+    properties:
+      carrierId:
+        type: string
+        description: Carrier identifier
+        example: "UPS"
+        required: true
+      carrierName:
+        type: string
+        maxLength: 100
+        description: Carrier display name
+        example: "United Parcel Service"
+        required: true
+      service:
+        type: string
+        maxLength: 100
+        description: Carrier service name
+        example: "UPS Ground"
+        required: true
+      serviceCode?:
+        type: string
+        maxLength: 20
+        description: Carrier service code
+        example: "03"
+      accountNumber?:
+        type: string
+        maxLength: 50
+        description: Shipper account number (masked)
+        example: "****5678"
+    required: true
+    
+  shippingAddress:
+    type: object
+    additionalProperties: false
+    description: Delivery address
+    properties:
+      recipientName:
+        type: string
+        maxLength: 100
+        description: Recipient full name
+        example: "John Doe"
+        required: true
+      company?:
+        type: string
+        maxLength: 100
+        description: Company name
+        example: "TechCorp Inc."
+      street:
+        type: string
+        maxLength: 255
+        description: Street address
+        example: "123 Technology Drive"
+        required: true
+      street2?:
+        type: string
+        maxLength: 255
+        description: Additional address line
+        example: "Suite 100"
+      city:
+        type: string
+        maxLength: 100
+        description: City name
+        example: "San Francisco"
+        required: true
+      state:
+        type: string
+        maxLength: 50
+        description: State or province
+        example: "CA"
+        required: true
+      zipCode:
+        type: string
+        pattern: ^[0-9]{5}(-[0-9]{4})?$
+        description: Postal code
+        example: "94105"
+        required: true
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        description: Country code (ISO 3166-1 alpha-2)
+        example: "US"
+        default: "US"
+        required: true
+      phone?:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        description: Recipient phone number
+        example: "+14155552345"
+      email?:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+        description: Recipient email address
+        example: "john.doe@email.com"
+      deliveryInstructions?:
+        type: string
+        maxLength: 500
+        description: Special delivery instructions
+        example: "Leave at front door if no answer"
+      residentialAddress?:
+        type: boolean
+        description: Whether this is a residential address
+        example: true
+        default: true
+    required: true
+    
+  originAddress:
+    type: object
+    additionalProperties: false
+    description: Shipping origin address (warehouse/fulfillment center)
+    properties:
+      facilityId?:
+        type: string
+        maxLength: 50
+        description: Origin facility identifier
+        example: "WH-SF-001"
+      facilityName?:
+        type: string
+        maxLength: 100
+        description: Origin facility name
+        example: "San Francisco Fulfillment Center"
+      street:
+        type: string
+        maxLength: 255
+        description: Street address
+        example: "456 Warehouse Blvd"
+        required: true
+      city:
+        type: string
+        maxLength: 100
+        description: City name
+        example: "South San Francisco"
+        required: true
+      state:
+        type: string
+        maxLength: 50
+        description: State or province
+        example: "CA"
+        required: true
+      zipCode:
+        type: string
+        pattern: ^[0-9]{5}(-[0-9]{4})?$
+        description: Postal code
+        example: "94080"
+        required: true
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        description: Country code (ISO 3166-1 alpha-2)
+        example: "US"
+        default: "US"
+        required: true
+    required: true
+    
+  costs:
+    type: object
+    additionalProperties: false
+    description: Shipping costs breakdown
+    properties:
+      shippingCost:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Base shipping cost
+        example: 15.99
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        description: Currency code (ISO 4217)
+        example: "USD"
+        default: "USD"
+        required: true
+      insuranceCost?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Insurance cost
+        example: 2.50
+      fuelSurcharge?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Fuel surcharge
+        example: 1.25
+      handlingFee?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Special handling fee
+        example: 5.00
+      taxes?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Shipping taxes
+        example: 1.28
+      totalCost:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Total shipping cost
+        example: 26.02
+        required: true
+        
+  timeline:
+    type: object
+    additionalProperties: false
+    description: Shipment timeline and dates
+    properties:
+      estimatedShipDate?:
+        type: datetime
+        format: rfc3339
+        description: Estimated ship date
+        example: "2026-03-20T17:00:00Z"
+      actualShipDate?:
+        type: datetime
+        format: rfc3339
+        description: Actual ship date
+        example: "2026-03-20T16:45:00Z"
+      estimatedDeliveryDate?:
+        type: datetime
+        format: rfc3339
+        description: Estimated delivery date
+        example: "2026-03-22T18:00:00Z"
+      guaranteedDeliveryDate?:
+        type: datetime
+        format: rfc3339
+        description: Guaranteed delivery date (if applicable)
+        example: "2026-03-22T12:00:00Z"
+      actualDeliveryDate?:
+        type: datetime
+        format: rfc3339
+        description: Actual delivery date
+        example: "2026-03-22T15:30:00Z"
+      lastUpdatedDate?:
+        type: datetime
+        format: rfc3339
+        description: Last tracking update timestamp
+        example: "2026-03-22T15:25:00Z"
+        
+  tracking:
+    type: object
+    additionalProperties: false
+    description: Shipment tracking information
+    properties:
+      trackingEvents?:
+        type: array
+        maxItems: 100
+        description: Tracking event history
+        items:
+          type: object
+          additionalProperties: false
+          properties:
+            eventId?:
+              type: string
+              description: Unique event identifier
+              example: "EVT-001"
+            timestamp:
+              type: datetime
+              format: rfc3339
+              description: Event timestamp
+              example: "2026-03-20T16:45:00Z"
+              required: true
+            status:
+              type: string
+              enum: [picked_up, in_transit, out_for_delivery, delivered, exception, returned]
+              description: Event status
+              example: "picked_up"
+              required: true
+            location?:
+              type: object
+              additionalProperties: false
+              description: Event location
+              properties:
+                city:
+                  type: string
+                  maxLength: 100
+                  example: "San Francisco"
+                  required: true
+                state:
+                  type: string
+                  maxLength: 50
+                  example: "CA"
+                  required: true
+                country:
+                  type: string
+                  pattern: ^[A-Z]{2}$
+                  example: "US"
+                  required: true
+                facility?:
+                  type: string
+                  maxLength: 100
+                  description: Facility name
+                  example: "San Francisco Distribution Center"
+            description:
+              type: string
+              maxLength: 500
+              description: Event description
+              example: "Package picked up from origin facility"
+              required: true
+            carrierDetails?:
+              type: object
+              additionalProperties: false
+              description: Carrier-specific event details
+              properties:
+                carrierEventCode?:
+                  type: string
+                  description: Carrier's internal event code
+                  example: "OR"
+                signedBy?:
+                  type: string
+                  maxLength: 100
+                  description: Name of person who signed for delivery
+                  example: "J. DOE"
+                driverNote?:
+                  type: string
+                  maxLength: 500
+                  description: Driver's delivery note
+                  example: "Left at front door per customer instructions"
+      currentLocation?:
+        type: object
+        additionalProperties: false
+        description: Current shipment location
+        properties:
+          city:
+            type: string
+            maxLength: 100
+            example: "Oakland"
+            required: true
+          state:
+            type: string
+            maxLength: 50
+            example: "CA"
+            required: true
+          country:
+            type: string
+            pattern: ^[A-Z]{2}$
+            example: "US"
+            required: true
+          facility?:
+            type: string
+            maxLength: 100
+            description: Current facility
+            example: "Oakland Transit Hub"
+          lastUpdate:
+            type: datetime
+            format: rfc3339
+            description: Last location update
+            example: "2026-03-21T08:15:00Z"
+            required: true
+            
+  insurance?:
+    type: object
+    additionalProperties: false
+    description: Shipment insurance information
+    properties:
+      insured:
+        type: boolean
+        description: Whether shipment is insured
+        example: true
+        required: true
+      provider?:
+        type: string
+        maxLength: 100
+        description: Insurance provider
+        example: "UPS Capital Insurance"
+      policyNumber?:
+        type: string
+        maxLength: 50
+        description: Insurance policy number
+        example: "INS-123456789"
+      coverage:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Insurance coverage amount
+        example: 1200.00
+        required: true
+      premium?:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Insurance premium cost
+        example: 2.50
+        
+  specialServices?:
+    type: array
+    uniqueItems: true
+    maxItems: 20
+    description: Special services applied to shipment
+    items:
+      type: string
+      enum: [signature_confirmation, adult_signature, delivery_confirmation, saturday_delivery, hold_for_pickup, declared_value, cod, return_service, notification_service, appointment_delivery]
+    example: ["signature_confirmation", "saturday_delivery"]
+    
+  customsInfo?:
+    type: object
+    additionalProperties: false
+    description: Customs information for international shipments
+    properties:
+      declarationType:
+        type: string
+        enum: [gift, merchandise, documents, returned_goods, other]
+        description: Customs declaration type
+        example: "merchandise"
+        required: true
+      totalValue:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Total declared value
+        example: 1200.00
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        description: Currency of declared value
+        example: "USD"
+        required: true
+      dutyPaid?:
+        type: boolean
+        description: Whether duty is prepaid
+        example: false
+        default: false
+      customsItems?:
+        type: array
+        maxItems: 100
+        description: Individual customs items
+        items:
+          type: object
+          additionalProperties: false
+          properties:
+            description:
+              type: string
+              maxLength: 200
+              description: Item description
+              example: "Business Laptop Computer"
+              required: true
+            quantity:
+              type: integer
+              minimum: 1
+              description: Item quantity
+              example: 1
+              required: true
+            unitValue:
+              type: number
+              format: decimal
+              minimum: 0.00
+              description: Unit value
+              example: 999.99
+              required: true
+            weight:
+              type: number
+              format: decimal
+              minimum: 0.01
+              description: Item weight in pounds
+              example: 4.5
+              required: true
+            countryOfOrigin:
+              type: string
+              pattern: ^[A-Z]{2}$
+              description: Country of manufacture
+              example: "CN"
+              required: true
+            hsCode?:
+              type: string
+              description: Harmonized System code
+              example: "8471.30.0100"
+              
+  returnInfo?:
+    type: object
+    additionalProperties: false
+    description: Return shipment information
+    properties:
+      isReturn:
+        type: boolean
+        description: Whether this is a return shipment
+        example: false
+        default: false
+        required: true
+      originalShipmentId?:
+        type: string
+        pattern: ^SHIP-[0-9]{14}$
+        description: Original shipment ID for returns
+        example: "SHIP-20260315120001"
+      returnReason?:
+        type: string
+        enum: [defective, wrong_item, not_as_described, no_longer_needed, damaged, other]
+        description: Return reason
+        example: "defective"
+      returnLabel?:
+        type: object
+        additionalProperties: false
+        description: Return label information
+        properties:
+          labelId:
+            type: string
+            description: Return label identifier
+            example: "RET-LABEL-001"
+            required: true
+          trackingNumber:
+            type: string
+            description: Return tracking number
+            example: "1Z999AA9876543210"
+            required: true
+          cost:
+            type: number
+            format: decimal
+            minimum: 0.00
+            description: Return shipping cost
+            example: 12.99
+            required: true
+          paidBy:
+            type: string
+            enum: [customer, merchant, carrier]
+            description: Who pays for return shipping
+            example: "merchant"
+            required: true
+            
+  notifications?:
+    type: object
+    additionalProperties: false
+    description: Shipment notification preferences
+    properties:
+      emailNotifications:
+        type: array
+        uniqueItems: true
+        maxItems: 10
+        description: Email notification events
+        items:
+          type: string
+          enum: [shipped, in_transit, out_for_delivery, delivered, exception, delayed]
+        example: ["shipped", "delivered"]
+      smsNotifications:
+        type: array
+        uniqueItems: true
+        maxItems: 10
+        description: SMS notification events
+        items:
+          type: string
+          enum: [shipped, in_transit, out_for_delivery, delivered, exception, delayed]
+        example: ["out_for_delivery", "delivered"]
+      recipients:
+        type: array
+        maxItems: 5
+        description: Notification recipients
+        items:
+          type: object
+          additionalProperties: false
+          properties:
+            email?:
+              type: string
+              pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+              description: Email address
+              example: "john.doe@email.com"
+            phone?:
+              type: string
+              pattern: ^\+?[1-9]\d{1,14}$
+              description: Phone number for SMS
+              example: "+14155552345"
+            name:
+              type: string
+              maxLength: 100
+              description: Recipient name
+              example: "John Doe"
+              required: true
+              
+  metadata?:
+    type: object
+    description: Additional shipment metadata
+    properties:
+      source?: string
+      warehouse?: string
+      pickingList?: string
+      packingList?: string
+      
+  notes?:
+    type: string
+    maxLength: 1000
+    description: Shipment notes and special instructions
+    example: "Fragile items - handle with care. Customer requested Saturday delivery."
+    
+  createdAt:
+    type: datetime
+    format: rfc3339
+    description: Shipment record creation timestamp
+    example: "2026-03-20T12:00:01Z"
+    required: true
+    
+  updatedAt:
+    type: datetime
+    format: rfc3339
+    description: Shipment record last update timestamp
+    example: "2026-03-20T16:45:00Z"
+    required: true
+    
+  version?:
+    type: integer
+    minimum: 1
+    description: Shipment version for optimistic locking
+    example: 1
+    default: 1
+
+examples:
+  standard_shipment:
+    shipmentId: "SHIP-20260320120001"
+    orderId: "ORD-20260320120001"
+    customerId: "cust-12345"
+    shipmentNumber: "SHIP-2026-001234"
+    status: "in_transit"
+    priority: "normal"
+    type: "express"
+    items:
+      - shipmentItemId: "SI-001"
+        productId: "LAPTOP-001"
+        productName: "Business Laptop Pro"
+        sku: "LP-BUS-PRO-001"
+        quantity: 1
+        weight: 4.5
+        dimensions:
+          length: 12.5
+          width: 8.75
+          height: 1.0
+        serialNumbers: ["SN123456789"]
+        condition: "new"
+    packages:
+      - packageId: "PKG-001"
+        trackingNumber: "1Z999AA1234567890"
+        packageType: "box"
+        weight: 5.2
+        dimensions:
+          length: 14.0
+          width: 10.0
+          height: 6.0
+        value: 1200.00
+        contents: ["SI-001"]
+        specialHandling: ["fragile", "signature_required"]
+    carrier:
+      carrierId: "UPS"
+      carrierName: "United Parcel Service"
+      service: "UPS 2nd Day Air"
+      serviceCode: "02"
+      accountNumber: "****5678"
+    shippingAddress:
+      recipientName: "John Doe"
+      street: "123 Technology Drive"
+      street2: "Suite 100"
+      city: "San Francisco"
+      state: "CA"
+      zipCode: "94105"
+      country: "US"
+      phone: "+14155552345"
+      email: "john.doe@email.com"
+      deliveryInstructions: "Leave at front door if no answer"
+      residentialAddress: true
+    originAddress:
+      facilityId: "WH-SF-001"
+      facilityName: "San Francisco Fulfillment Center"
+      street: "456 Warehouse Blvd"
+      city: "South San Francisco"
+      state: "CA"
+      zipCode: "94080"
+      country: "US"
+    costs:
+      shippingCost: 15.99
+      currency: "USD"
+      insuranceCost: 2.50
+      fuelSurcharge: 1.25
+      totalCost: 19.74
+    timeline:
+      estimatedShipDate: "2026-03-20T17:00:00Z"
+      actualShipDate: "2026-03-20T16:45:00Z"
+      estimatedDeliveryDate: "2026-03-22T18:00:00Z"
+      guaranteedDeliveryDate: "2026-03-22T12:00:00Z"
+    tracking:
+      trackingEvents:
+        - eventId: "EVT-001"
+          timestamp: "2026-03-20T16:45:00Z"
+          status: "picked_up"
+          location:
+            city: "South San Francisco"
+            state: "CA"
+            country: "US"
+            facility: "San Francisco Fulfillment Center"
+          description: "Package picked up from origin facility"
+        - eventId: "EVT-002"
+          timestamp: "2026-03-21T08:15:00Z"
+          status: "in_transit"
+          location:
+            city: "Oakland"
+            state: "CA"
+            country: "US"
+            facility: "Oakland Transit Hub"
+          description: "Package in transit to destination"
+      currentLocation:
+        city: "Oakland"
+        state: "CA"
+        country: "US"
+        facility: "Oakland Transit Hub"
+        lastUpdate: "2026-03-21T08:15:00Z"
+    insurance:
+      insured: true
+      provider: "UPS Capital Insurance"
+      coverage: 1200.00
+      premium: 2.50
+    specialServices: ["signature_confirmation"]
+    notifications:
+      emailNotifications: ["shipped", "delivered"]
+      smsNotifications: ["out_for_delivery", "delivered"]
+      recipients:
+        - email: "john.doe@email.com"
+          phone: "+14155552345"
+          name: "John Doe"
+    returnInfo:
+      isReturn: false
+    notes: "Fragile items - handle with care"
+    createdAt: "2026-03-20T12:00:01Z"
+    updatedAt: "2026-03-21T08:15:00Z"
+    version: 2
+    
+  international_shipment:
+    shipmentId: "SHIP-20260320120002"
+    orderId: "ORD-20260320120002"
+    customerId: "cust-67890"
+    status: "shipped"
+    priority: "high"
+    type: "express"
+    items:
+      - productId: "LAPTOP-002"
+        productName: "Gaming Laptop Elite"
+        quantity: 1
+        weight: 6.2
+        condition: "new"
+    packages:
+      - packageId: "PKG-002"
+        trackingNumber: "1Z999AA9876543210"
+        packageType: "box"
+        weight: 7.0
+        dimensions:
+          length: 16.0
+          width: 12.0
+          height: 8.0
+        value: 2500.00
+        contents: ["SI-001"]
+    carrier:
+      carrierId: "UPS"
+      carrierName: "United Parcel Service"
+      service: "UPS Worldwide Express"
+      serviceCode: "07"
+    customsInfo:
+      declarationType: "merchandise"
+      totalValue: 2500.00
+      currency: "USD"
+      dutyPaid: false
+      customsItems:
+        - description: "Gaming Laptop Computer"
+          quantity: 1
+          unitValue: 2500.00
+          weight: 6.2
+          countryOfOrigin: "CN"
+          hsCode: "8471.30.0100"
+    createdAt: "2026-03-20T14:00:00Z"
+    updatedAt: "2026-03-20T17:30:00Z"

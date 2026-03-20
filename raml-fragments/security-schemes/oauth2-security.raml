@@ -1,0 +1,165 @@
+#%RAML 1.0 SecurityScheme
+
+# OAuth 2.0 Security Scheme Fragment
+# Reusable across Experience, Process, and System layer APIs
+
+displayName: OAuth 2.0 Authorization
+description: |
+  OAuth 2.0 security scheme for Order Management System APIs.
+  Supports Client Credentials flow for system-to-system communication
+  and Authorization Code flow for user-based access.
+
+type: OAuth 2.0
+settings:
+  authorizationUri: https://auth.oms.company.com/oauth/authorize
+  accessTokenUri: https://auth.oms.company.com/oauth/token
+  authorizationGrants:
+    - client_credentials
+    - authorization_code
+  scopes:
+    - "orders:read": "Read access to order information"
+    - "orders:write": "Write access to order operations (create, update)"
+    - "orders:delete": "Delete access to order operations"
+    - "orders:admin": "Administrative access to all order operations"
+    - "customers:read": "Read access to customer information"
+    - "customers:write": "Write access to customer operations"
+    - "payments:read": "Read access to payment information"
+    - "payments:write": "Write access to payment operations"
+    - "shipments:read": "Read access to shipment information"
+    - "shipments:write": "Write access to shipment operations"
+    - "inventory:read": "Read access to inventory information"
+    - "inventory:write": "Write access to inventory operations"
+    - "system:admin": "Administrative access to system operations"
+    - "reports:read": "Read access to reporting data"
+    - "analytics:read": "Read access to analytics data"
+
+describedBy:
+  headers:
+    Authorization:
+      displayName: Authorization Header
+      description: |
+        Used to send a valid OAuth 2.0 access token. 
+        Format: Bearer {access_token}
+      type: string
+      pattern: ^Bearer [a-zA-Z0-9\-._~+/]+=*$
+      example: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+      required: true
+  queryParameters:
+    access_token?:
+      displayName: Access Token Query Parameter
+      description: |
+        Alternative method to send access token via query parameter.
+        Header method is preferred for security.
+      type: string
+      pattern: ^[a-zA-Z0-9\-._~+/]+=*$
+      example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+  responses:
+    401:
+      description: |
+        Unauthorized. The access token is missing, invalid, or expired.
+        Client must obtain a new access token.
+      headers:
+        WWW-Authenticate:
+          displayName: WWW-Authenticate Header
+          description: Authentication challenge with error details
+          type: string
+          example: |
+            Bearer error="invalid_token", 
+            error_description="The access token expired"
+      body:
+        application/json:
+          displayName: Unauthorized Error Response
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  enum: [UNAUTHORIZED, INVALID_TOKEN, EXPIRED_TOKEN, INSUFFICIENT_SCOPE]
+                  example: "INVALID_TOKEN"
+                message:
+                  type: string
+                  example: "The provided access token is invalid"
+                details?:
+                  type: string
+                  example: "Token signature verification failed"
+                timestamp:
+                  type: datetime
+                  format: rfc3339
+                  example: "2026-03-20T12:00:00Z"
+                traceId:
+                  type: string
+                  example: "abc123-def456-ghi789"
+          example:
+            error:
+              code: "INVALID_TOKEN"
+              message: "The provided access token is invalid"
+              details: "Token signature verification failed"
+              timestamp: "2026-03-20T12:00:00Z"
+              traceId: "abc123-def456-ghi789"
+    403:
+      description: |
+        Forbidden. The access token is valid but doesn't have sufficient 
+        permissions for the requested operation.
+      body:
+        application/json:
+          displayName: Forbidden Error Response
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  enum: [FORBIDDEN, INSUFFICIENT_SCOPE]
+                  example: "INSUFFICIENT_SCOPE"
+                message:
+                  type: string
+                  example: "Insufficient scope for this operation"
+                details?:
+                  type: string
+                  example: "Required scope: orders:write, Current scope: orders:read"
+                requiredScopes?:
+                  type: array
+                  items: string
+                  example: ["orders:write"]
+                currentScopes?:
+                  type: array
+                  items: string
+                  example: ["orders:read"]
+                timestamp:
+                  type: datetime
+                  format: rfc3339
+                  example: "2026-03-20T12:00:00Z"
+                traceId:
+                  type: string
+                  example: "abc123-def456-ghi789"
+          example:
+            error:
+              code: "INSUFFICIENT_SCOPE"
+              message: "Insufficient scope for this operation"
+              details: "Required scope: orders:write, Current scope: orders:read"
+              requiredScopes: ["orders:write"]
+              currentScopes: ["orders:read"]
+              timestamp: "2026-03-20T12:00:00Z"
+              traceId: "abc123-def456-ghi789"
+
+# Token Validation Requirements
+# - JWT tokens must be signed with RS256 algorithm
+# - Token must not be expired (exp claim)
+# - Token must be issued by trusted authorization server (iss claim)
+# - Token must have valid audience claim (aud claim)
+# - Token must include required scopes for the operation
+# - Token signature must be verified using public key
+
+# Scope Requirements by Operation:
+# - GET operations: require corresponding :read scope
+# - POST/PUT/PATCH operations: require corresponding :write scope  
+# - DELETE operations: require corresponding :delete scope
+# - Admin operations: require :admin scope
+# - Cross-entity operations may require multiple scopes
+
+# Example JWT Token Claims:
+# {
+#   "iss": "https://auth.
