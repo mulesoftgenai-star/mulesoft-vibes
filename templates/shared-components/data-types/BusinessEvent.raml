@@ -1,0 +1,218 @@
+#%RAML 1.0 DataType
+
+displayName: Business Event
+description: Standard structure for business events in the integration platform
+
+type: object
+additionalProperties: false
+
+properties:
+  eventId:
+    type: string
+    required: true
+    description: Unique identifier for the event
+    pattern: ^evt-[a-f0-9-]+$
+    example: "evt-12345-67890-abcdef"
+    
+  eventType:
+    type: string
+    required: true
+    description: Type of business event
+    pattern: ^[A-Z_][A-Z0-9_]*$
+    example: "ORDER_CREATED"
+    
+  eventVersion:
+    type: string
+    required: true
+    description: Version of the event schema
+    pattern: ^v[0-9]+\.[0-9]+(\.[0-9]+)?$
+    example: "v1.0"
+    
+  source:
+    type: string
+    required: true
+    description: Source system or service that generated the event
+    example: "order-processing-service"
+    
+  timestamp:
+    type: datetime
+    required: true
+    description: When the event occurred (ISO 8601)
+    example: "2024-01-15T10:30:00Z"
+    
+  correlationId:
+    type: string
+    required: false
+    description: Correlation ID for tracking related events
+    example: "corr-12345-67890"
+    
+  causationId:
+    type: string
+    required: false
+    description: ID of the event that caused this event
+    example: "evt-98765-43210-fedcba"
+    
+  aggregateId:
+    type: string
+    required: true
+    description: ID of the business aggregate that this event relates to
+    example: "order-12345"
+    
+  aggregateType:
+    type: string
+    required: true
+    description: Type of business aggregate
+    example: "Order"
+    
+  aggregateVersion:
+    type: integer
+    required: false
+    description: Version of the aggregate after this event
+    minimum: 1
+    example: 1
+    
+  payload:
+    type: object
+    required: true
+    description: Event-specific data payload
+    properties:
+      data:
+        type: object
+        required: true
+        description: The actual business data for the event
+      metadata:
+        type: object
+        required: false
+        description: Additional metadata about the event
+        properties:
+          userId:
+            type: string
+            description: User who triggered the event
+          sessionId:
+            type: string
+            description: Session ID when event occurred
+          clientId:
+            type: string
+            description: Client application that triggered the event
+          ipAddress:
+            type: string
+            description: IP address of the client
+          userAgent:
+            type: string
+            description: User agent of the client
+            
+  priority:
+    type: string
+    required: false
+    enum: [LOW, NORMAL, HIGH, CRITICAL]
+    default: NORMAL
+    description: Event processing priority
+    example: "HIGH"
+    
+  tags:
+    type: array
+    required: false
+    description: Tags for event categorization and filtering
+    items:
+      type: string
+      pattern: ^[a-z0-9-]+$
+    example: ["order", "payment", "customer"]
+    
+  retryCount:
+    type: integer
+    required: false
+    minimum: 0
+    default: 0
+    description: Number of times event processing has been retried
+    example: 0
+    
+  expiresAt:
+    type: datetime
+    required: false
+    description: When the event expires and should no longer be processed
+    example: "2024-01-15T12:30:00Z"
+    
+  processedAt:
+    type: datetime
+    required: false
+    description: When the event was successfully processed
+    example: "2024-01-15T10:31:00Z"
+    
+  processingErrors:
+    type: array
+    required: false
+    description: List of processing errors (for failed events)
+    items:
+      type: object
+      properties:
+        timestamp:
+          type: datetime
+          description: When the error occurred
+        error:
+          type: string
+          description: Error message
+        stackTrace:
+          type: string
+          description: Stack trace of the error
+
+examples:
+  order_created_event:
+    eventId: "evt-12345-67890-abcdef"
+    eventType: "ORDER_CREATED"
+    eventVersion: "v1.0"
+    source: "order-processing-service"
+    timestamp: "2024-01-15T10:30:00Z"
+    correlationId: "corr-12345-67890"
+    aggregateId: "order-12345"
+    aggregateType: "Order"
+    aggregateVersion: 1
+    payload:
+      data:
+        orderId: "order-12345"
+        customerId: "customer-67890"
+        totalAmount: 299.99
+        currency: "USD"
+        status: "CREATED"
+        items:
+          - productId: "product-001"
+            quantity: 2
+            unitPrice: 149.99
+      metadata:
+        userId: "user-123"
+        sessionId: "session-456"
+        clientId: "mobile-app"
+        ipAddress: "192.168.1.100"
+    priority: "HIGH"
+    tags: ["order", "creation", "customer"]
+    retryCount: 0
+    
+  payment_failed_event:
+    eventId: "evt-98765-43210-fedcba"
+    eventType: "PAYMENT_FAILED"
+    eventVersion: "v1.0"
+    source: "payment-processing-service"
+    timestamp: "2024-01-15T10:35:00Z"
+    correlationId: "corr-12345-67890"
+    causationId: "evt-12345-67890-abcdef"
+    aggregateId: "payment-789"
+    aggregateType: "Payment"
+    aggregateVersion: 2
+    payload:
+      data:
+        paymentId: "payment-789"
+        orderId: "order-12345"
+        amount: 299.99
+        currency: "USD"
+        failureReason: "INSUFFICIENT_FUNDS"
+        errorCode: "PAY_001"
+      metadata:
+        userId: "user-123"
+        sessionId: "session-456"
+    priority: "CRITICAL"
+    tags: ["payment", "failure", "order"]
+    retryCount: 2
+    processingErrors:
+      - timestamp: "2024-01-15T10:32:00Z"
+        error: "Connection timeout to payment gateway"
+      - timestamp: "2024-01-15T10:34:00Z"
+        error: "Payment gateway returned error: INSUFFICIENT_FUNDS"

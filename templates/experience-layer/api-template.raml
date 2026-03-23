@@ -1,0 +1,467 @@
+#%RAML 1.0
+title: Experience Layer API Template
+description: |
+  Template for Experience Layer APIs in MuleSoft Integration Architecture.
+  This template provides a foundation for customer-facing APIs with simplified
+  data models and consumer-centric design patterns.
+version: v1
+baseUri: https://api.{environment}.company.com/{title}/{version}
+mediaType: application/json
+
+documentation:
+  - title: API Overview
+    content: |
+      This Experience Layer API serves as the primary interface for external consumers
+      including mobile apps, web applications, and partner systems.
+      
+      Key Features:
+      - Simplified data models for ease of consumption
+      - Optimized for mobile and web channels
+      - Consumer-centric design patterns
+      - Rate limiting and throttling
+      - Comprehensive error handling
+
+types:
+  # Import common data types
+  StandardResponse: !include ../shared-components/data-types/StandardResponse.raml
+  ErrorResponse: !include ../shared-components/data-types/ErrorResponse.raml
+  PaginationInfo: !include ../shared-components/data-types/PaginationInfo.raml
+  
+  # Experience Layer specific types (simplified for consumers)
+  ExperienceRequest:
+    type: object
+    properties:
+      requestId:
+        type: string
+        required: true
+        description: Unique identifier for the request
+        example: "req-12345-67890"
+      timestamp:
+        type: datetime
+        required: true
+        description: Request timestamp
+        example: 2024-01-15T10:30:00Z
+      source:
+        type: string
+        required: true
+        enum: [mobile, web, api]
+        description: Request source channel
+      
+  ExperienceResponse:
+    type: object
+    properties:
+      responseId:
+        type: string
+        required: true
+        description: Unique identifier for the response
+      requestId:
+        type: string
+        required: true
+        description: Original request identifier
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+      data:
+        type: object
+        required: false
+        description: Response payload data
+
+traits:
+  # Import common traits
+  standardHeaders: !include ../shared-components/traits/standard-headers.raml
+  errorHandling: !include ../shared-components/traits/error-handling.raml
+  rateLimiting: !include ../shared-components/traits/rate-limiting.raml
+  
+  # Experience Layer specific traits
+  consumerOptimized:
+    description: Optimizations for consumer applications
+    headers:
+      X-Device-Type:
+        type: string
+        required: false
+        enum: [mobile, tablet, desktop]
+        description: Consumer device type
+      X-App-Version:
+        type: string
+        required: false
+        description: Consumer application version
+        example: "1.2.3"
+    responses:
+      200:
+        headers:
+          X-Cache-Status:
+            type: string
+            enum: [HIT, MISS, REFRESH]
+            description: Cache status for optimization
+
+securitySchemes:
+  OAuth2: !include ../shared-components/security-schemes/oauth2.raml
+  
+securedBy: [OAuth2]
+
+/resources:
+  displayName: Primary Resources
+  description: Main resource endpoints for the experience layer
+  
+  get:
+    displayName: Get Resources
+    description: Retrieve a list of resources with pagination support
+    is: [standardHeaders, errorHandling, rateLimiting, consumerOptimized]
+    queryParameters:
+      page:
+        type: integer
+        required: false
+        default: 1
+        minimum: 1
+        description: Page number for pagination
+        example: 1
+      limit:
+        type: integer
+        required: false
+        default: 20
+        minimum: 1
+        maximum: 100
+        description: Number of items per page
+        example: 20
+      filter:
+        type: string
+        required: false
+        description: Filter criteria
+        example: "status=active"
+      sort:
+        type: string
+        required: false
+        description: Sort order
+        example: "createdDate:desc"
+    responses:
+      200:
+        description: Successfully retrieved resources
+        body:
+          application/json:
+            type: object
+            properties:
+              data:
+                type: array
+                items: object
+                description: Array of resource items
+              pagination:
+                type: PaginationInfo
+                description: Pagination information
+              metadata:
+                type: object
+                properties:
+                  totalCount:
+                    type: integer
+                    description: Total number of items
+                  hasNext:
+                    type: boolean
+                    description: Whether there are more pages
+            example: |
+              {
+                "data": [
+                  {
+                    "id": "resource-001",
+                    "name": "Sample Resource",
+                    "status": "active",
+                    "createdDate": "2024-01-15T10:30:00Z"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 20,
+                  "totalPages": 5
+                },
+                "metadata": {
+                  "totalCount": 100,
+                  "hasNext": true
+                }
+              }
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse
+      429:
+        description: Rate limit exceeded
+        body:
+          application/json:
+            type: ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse
+  
+  post:
+    displayName: Create Resource
+    description: Create a new resource
+    is: [standardHeaders, errorHandling, rateLimiting, consumerOptimized]
+    body:
+      application/json:
+        type: ExperienceRequest
+        example: |
+          {
+            "requestId": "req-12345-67890",
+            "timestamp": "2024-01-15T10:30:00Z",
+            "source": "mobile",
+            "data": {
+              "name": "New Resource",
+              "description": "Resource description"
+            }
+          }
+    responses:
+      201:
+        description: Resource created successfully
+        body:
+          application/json:
+            type: ExperienceResponse
+            example: |
+              {
+                "responseId": "res-12345-67890",
+                "requestId": "req-12345-67890",
+                "timestamp": "2024-01-15T10:30:15Z",
+                "data": {
+                  "id": "resource-001",
+                  "status": "created",
+                  "location": "/resources/resource-001"
+                }
+              }
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse
+      409:
+        description: Conflict - resource already exists
+        body:
+          application/json:
+            type: ErrorResponse
+      429:
+        description: Rate limit exceeded
+        body:
+          application/json:
+            type: ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse
+
+  /{resourceId}:
+    displayName: Individual Resource
+    description: Operations on individual resources
+    
+    get:
+      displayName: Get Resource by ID
+      description: Retrieve a specific resource by its identifier
+      is: [standardHeaders, errorHandling, rateLimiting, consumerOptimized]
+      responses:
+        200:
+          description: Resource retrieved successfully
+          body:
+            application/json:
+              type: ExperienceResponse
+              example: |
+                {
+                  "responseId": "res-12345-67890",
+                  "requestId": "system-generated",
+                  "timestamp": "2024-01-15T10:30:15Z",
+                  "data": {
+                    "id": "resource-001",
+                    "name": "Sample Resource",
+                    "status": "active",
+                    "createdDate": "2024-01-15T10:30:00Z",
+                    "lastModified": "2024-01-15T10:30:00Z"
+                  }
+                }
+        400:
+          description: Bad request
+          body:
+            application/json:
+              type: ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse
+        404:
+          description: Resource not found
+          body:
+            application/json:
+              type: ErrorResponse
+        429:
+          description: Rate limit exceeded
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+    
+    put:
+      displayName: Update Resource
+      description: Update an existing resource
+      is: [standardHeaders, errorHandling, rateLimiting, consumerOptimized]
+      body:
+        application/json:
+          type: ExperienceRequest
+          example: |
+            {
+              "requestId": "req-12345-67891",
+              "timestamp": "2024-01-15T10:35:00Z",
+              "source": "web",
+              "data": {
+                "name": "Updated Resource",
+                "description": "Updated description"
+              }
+            }
+      responses:
+        200:
+          description: Resource updated successfully
+          body:
+            application/json:
+              type: ExperienceResponse
+              example: |
+                {
+                  "responseId": "res-12345-67891",
+                  "requestId": "req-12345-67891",
+                  "timestamp": "2024-01-15T10:35:15Z",
+                  "data": {
+                    "id": "resource-001",
+                    "status": "updated",
+                    "lastModified": "2024-01-15T10:35:15Z"
+                  }
+                }
+        400:
+          description: Bad request
+          body:
+            application/json:
+              type: ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse
+        404:
+          description: Resource not found
+          body:
+            application/json:
+              type: ErrorResponse
+        409:
+          description: Conflict - resource version mismatch
+          body:
+            application/json:
+              type: ErrorResponse
+        429:
+          description: Rate limit exceeded
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+    
+    delete:
+      displayName: Delete Resource
+      description: Delete a specific resource
+      is: [standardHeaders, errorHandling, rateLimiting, consumerOptimized]
+      responses:
+        204:
+          description: Resource deleted successfully
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse
+        404:
+          description: Resource not found
+          body:
+            application/json:
+              type: ErrorResponse
+        409:
+          description: Conflict - resource cannot be deleted
+          body:
+            application/json:
+              type: ErrorResponse
+        429:
+          description: Rate limit exceeded
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Health Status
+    description: Check the health status of the API
+    is: [standardHeaders]
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              version:
+                type: string
+              dependencies:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    status:
+                      type: string
+                      enum: [UP, DOWN]
+                    responseTime:
+                      type: number
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "version": "1.0.0",
+                "dependencies": [
+                  {
+                    "name": "process-api",
+                    "status": "UP",
+                    "responseTime": 125.5
+                  },
+                  {
+                    "name": "database",
+                    "status": "UP",
+                    "responseTime": 45.2
+                  }
+                ]
+              }
+      503:
+        description: API is unhealthy
+        body:
+          application/json:
+            type: ErrorResponse

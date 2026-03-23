@@ -1,0 +1,788 @@
+#%RAML 1.0
+title: Shipping System API
+version: v1
+baseUri: https://api.company.com/system/shipping/v1
+description: |
+  System API for shipping and logistics management.
+  This API provides direct connectivity to shipping carriers and logistics systems,
+  handling shipment creation, tracking, and delivery management.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  Shipment: ../raml-fragments/data-types/Shipment.raml
+  ErrorResponse: ../raml-fragments/data-types/ErrorResponse.raml
+  OAuth2Security: ../raml-fragments/security-schemes/oauth2-security.raml
+  CommonTraits: ../raml-fragments/traits/common-traits.raml
+  ShippingSysRequests: ../raml-fragments/data-types/requests/ShippingSystemRequests.raml
+  ShippingSysResponses: ../raml-fragments/data-types/responses/ShippingSystemResponses.raml
+
+securitySchemes:
+  oauth2: !include ../raml-fragments/security-schemes/oauth2-security.raml
+
+securedBy: [oauth2]
+
+traits:
+  standardHeaders: !include ../raml-fragments/traits/common-traits.raml
+
+types:
+  ShippingRate:
+    type: object
+    properties:
+      rateId:
+        type: string
+        description: Unique rate identifier
+        example: RATE-001
+        required: true
+      carrier:
+        type: string
+        enum: [FEDEX, UPS, USPS, DHL, LOCAL_DELIVERY]
+        description: Shipping carrier
+        example: FEDEX
+        required: true
+      serviceType:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, TWO_DAY, SAME_DAY]
+        description: Service type
+        example: STANDARD
+        required: true
+      cost:
+        type: number
+        format: decimal
+        minimum: 0.00
+        description: Shipping cost
+        example: 9.99
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        description: Currency code
+        example: USD
+        default: USD
+        required: true
+      estimatedDeliveryDays:
+        type: integer
+        minimum: 1
+        description: Estimated delivery days
+        example: 3
+        required: true
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+        example: "2024-01-20"
+        required: true
+
+/shipments:
+  displayName: Shipment Management
+  description: Shipment creation and management operations
+
+  post:
+    displayName: Create Shipment
+    description: Create a new shipment for order fulfillment
+    is: [standardHeaders]
+    body:
+      application/json:
+        type: ShippingSysRequests.CreateShipmentRequest
+        example: |
+          {
+            "orderId": "ORD-2024-001",
+            "customerId": "CUST-001",
+            "warehouseId": "WH-NYC-01",
+            "items": [
+              {
+                "productId": "PROD-001",
+                "quantity": 1,
+                "weight": 2.5,
+                "dimensions": {
+                  "length": 12.0,
+                  "width": 8.0,
+                  "height": 4.0,
+                  "unit": "inches"
+                }
+              }
+            ],
+            "shippingAddress": {
+              "name": "John Doe",
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "US",
+              "phone": "+1-555-0123"
+            },
+            "carrier": "FEDEX",
+            "serviceType": "STANDARD",
+            "requestedDeliveryDate": "2024-01-20",
+            "specialInstructions": "Handle with care"
+          }
+    responses:
+      201:
+        description: Shipment created successfully
+        body:
+          application/json:
+            type: ShippingSysResponses.CreateShipmentResponse
+            example: |
+              {
+                "shipmentId": "SHIP-2024-001",
+                "orderId": "ORD-2024-001",
+                "trackingNumber": "1Z999AA1234567890",
+                "carrier": "FEDEX",
+                "serviceType": "STANDARD",
+                "status": "CREATED",
+                "estimatedDeliveryDate": "2024-01-20",
+                "shippingCost": 12.99,
+                "currency": "USD",
+                "labelUrl": "https://shipping.api.com/labels/SHIP-2024-001.pdf",
+                "createdAt": "2024-01-17T10:00:00Z",
+                "message": "Shipment created successfully"
+              }
+      400:
+        description: Bad request - Invalid shipment data
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      422:
+        description: Unprocessable entity - Validation failed
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  get:
+    displayName: Get Shipments
+    description: Retrieve shipments with filtering and pagination
+    is: [standardHeaders]
+    queryParameters:
+      orderId:
+        type: string
+        pattern: ^ORD-[0-9]{4}-[0-9]{3,}$
+        description: Filter shipments by order ID
+        required: false
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{3,10}$
+        description: Filter shipments by customer ID
+        required: false
+      status:
+        type: string
+        enum: [CREATED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, EXCEPTION, RETURNED]
+        description: Filter shipments by status
+        required: false
+      carrier:
+        type: string
+        enum: [FEDEX, UPS, USPS, DHL, LOCAL_DELIVERY]
+        description: Filter shipments by carrier
+        required: false
+      dateFrom:
+        type: date-only
+        description: Filter shipments from date
+        required: false
+      dateTo:
+        type: date-only
+        description: Filter shipments to date
+        required: false
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Page number for pagination
+        required: false
+      size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of shipments per page
+        required: false
+    responses:
+      200:
+        description: Shipments retrieved successfully
+        body:
+          application/json:
+            type: ShippingSysResponses.GetShipmentsResponse
+            example: |
+              {
+                "shipments": [
+                  {
+                    "shipmentId": "SHIP-2024-001",
+                    "orderId": "ORD-2024-001",
+                    "customerId": "CUST-001",
+                    "trackingNumber": "1Z999AA1234567890",
+                    "carrier": "FEDEX",
+                    "serviceType": "STANDARD",
+                    "status": "IN_TRANSIT",
+                    "estimatedDeliveryDate": "2024-01-20",
+                    "createdAt": "2024-01-17T10:00:00Z",
+                    "lastUpdate": "2024-01-18T14:00:00Z"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "size": 20,
+                  "totalElements": 1,
+                  "totalPages": 1
+                }
+              }
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  /{shipmentId}:
+    displayName: Shipment by ID
+    description: Operations on a specific shipment
+    uriParameters:
+      shipmentId:
+        type: string
+        pattern: ^SHIP-[0-9]{4}-[0-9]{3,}$
+        description: Unique shipment identifier
+        example: SHIP-2024-001
+
+    get:
+      displayName: Get Shipment Details
+      description: Retrieve detailed information about a specific shipment
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Shipment details retrieved successfully
+          body:
+            application/json:
+              type: ShippingSysResponses.GetShipmentDetailsResponse
+              example: |
+                {
+                  "shipmentId": "SHIP-2024-001",
+                  "orderId": "ORD-2024-001",
+                  "customerId": "CUST-001",
+                  "trackingNumber": "1Z999AA1234567890",
+                  "carrier": "FEDEX",
+                  "serviceType": "STANDARD",
+                  "status": "IN_TRANSIT",
+                  "shippingAddress": {
+                    "name": "John Doe",
+                    "street": "123 Main St",
+                    "city": "New York",
+                    "state": "NY",
+                    "zipCode": "10001",
+                    "country": "US",
+                    "phone": "+1-555-0123"
+                  },
+                  "items": [
+                    {
+                      "productId": "PROD-001",
+                      "quantity": 1,
+                      "weight": 2.5,
+                      "dimensions": {
+                        "length": 12.0,
+                        "width": 8.0,
+                        "height": 4.0,
+                        "unit": "inches"
+                      }
+                    }
+                  ],
+                  "estimatedDeliveryDate": "2024-01-20",
+                  "actualDeliveryDate": null,
+                  "shippingCost": 12.99,
+                  "currency": "USD",
+                  "trackingEvents": [
+                    {
+                      "timestamp": "2024-01-17T10:00:00Z",
+                      "status": "CREATED",
+                      "location": "New York, NY",
+                      "description": "Shipment created"
+                    },
+                    {
+                      "timestamp": "2024-01-17T14:00:00Z",
+                      "status": "PICKED_UP",
+                      "location": "New York, NY",
+                      "description": "Package picked up by carrier"
+                    },
+                    {
+                      "timestamp": "2024-01-18T14:00:00Z",
+                      "status": "IN_TRANSIT",
+                      "location": "Newark, NJ",
+                      "description": "Package in transit"
+                    }
+                  ],
+                  "labelUrl": "https://shipping.api.com/labels/SHIP-2024-001.pdf",
+                  "createdAt": "2024-01-17T10:00:00Z",
+                  "updatedAt": "2024-01-18T14:00:00Z"
+                }
+        404:
+          description: Shipment not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    put:
+      displayName: Update Shipment
+      description: Update shipment information
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: ShippingSysRequests.UpdateShipmentRequest
+          example: |
+            {
+              "status": "DELIVERED",
+              "actualDeliveryDate": "2024-01-19T16:30:00Z",
+              "deliveryNotes": "Delivered to front door",
+              "signedBy": "John Doe"
+            }
+      responses:
+        200:
+          description: Shipment updated successfully
+          body:
+            application/json:
+              type: ShippingSysResponses.UpdateShipmentResponse
+              example: |
+                {
+                  "shipmentId": "SHIP-2024-001",
+                  "status": "DELIVERED",
+                  "actualDeliveryDate": "2024-01-19T16:30:00Z",
+                  "updatedAt": "2024-01-19T16:30:00Z",
+                  "message": "Shipment updated successfully"
+                }
+        400:
+          description: Bad request - Invalid update data
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Shipment not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    /cancel:
+      displayName: Cancel Shipment
+      description: Cancel a shipment
+      post:
+        displayName: Cancel Shipment
+        description: Cancel a shipment if it hasn't been picked up
+        is: [standardHeaders]
+        body:
+          application/json:
+            type: ShippingSysRequests.CancelShipmentRequest
+            example: |
+              {
+                "reason": "ORDER_CANCELLED",
+                "notes": "Customer cancelled order"
+              }
+        responses:
+          200:
+            description: Shipment cancelled successfully
+            body:
+              application/json:
+                type: ShippingSysResponses.CancelShipmentResponse
+                example: |
+                  {
+                    "shipmentId": "SHIP-2024-001",
+                    "status": "CANCELLED",
+                    "cancelledAt": "2024-01-17T11:00:00Z",
+                    "refundAmount": 12.99,
+                    "currency": "USD",
+                    "message": "Shipment cancelled successfully"
+                  }
+          400:
+            description: Bad request - Invalid cancellation request
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          404:
+            description: Shipment not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          409:
+            description: Conflict - Cannot cancel shipment in current status
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+/tracking:
+  displayName: Shipment Tracking
+  description: Shipment tracking operations
+
+  /{trackingNumber}:
+    displayName: Track by Tracking Number
+    description: Track shipment using tracking number
+    uriParameters:
+      trackingNumber:
+        type: string
+        description: Carrier tracking number
+        example: "1Z999AA1234567890"
+
+    get:
+      displayName: Track Shipment
+      description: Get real-time tracking information for a shipment
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Tracking information retrieved successfully
+          body:
+            application/json:
+              type: ShippingSysResponses.TrackingResponse
+              example: |
+                {
+                  "trackingNumber": "1Z999AA1234567890",
+                  "shipmentId": "SHIP-2024-001",
+                  "orderId": "ORD-2024-001",
+                  "carrier": "FEDEX",
+                  "status": "IN_TRANSIT",
+                  "estimatedDeliveryDate": "2024-01-20",
+                  "actualDeliveryDate": null,
+                  "currentLocation": "Newark, NJ",
+                  "trackingEvents": [
+                    {
+                      "timestamp": "2024-01-17T10:00:00Z",
+                      "status": "CREATED",
+                      "location": "New York, NY",
+                      "description": "Shipment information sent to carrier"
+                    },
+                    {
+                      "timestamp": "2024-01-17T14:00:00Z",
+                      "status": "PICKED_UP",
+                      "location": "New York, NY",
+                      "description": "Package picked up by carrier"
+                    },
+                    {
+                      "timestamp": "2024-01-18T14:00:00Z",
+                      "status": "IN_TRANSIT",
+                      "location": "Newark, NJ",
+                      "description": "Package in transit to destination facility"
+                    }
+                  ],
+                  "deliveryAddress": {
+                    "city": "New York",
+                    "state": "NY",
+                    "zipCode": "10001",
+                    "country": "US"
+                  },
+                  "lastUpdate": "2024-01-18T14:00:00Z"
+                }
+        404:
+          description: Tracking number not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/rates:
+  displayName: Shipping Rates
+  description: Shipping rate calculation operations
+
+  /calculate:
+    displayName: Calculate Shipping Rates
+    description: Calculate shipping rates for given parameters
+    post:
+      displayName: Calculate Rates
+      description: |
+        Calculate shipping rates from multiple carriers for the given
+        shipment parameters including origin, destination, and package details.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: ShippingSysRequests.CalculateRatesRequest
+          example: |
+            {
+              "originZipCode": "10001",
+              "originCountry": "US",
+              "destinationAddress": {
+                "street": "456 Oak Ave",
+                "city": "Los Angeles",
+                "state": "CA",
+                "zipCode": "90210",
+                "country": "US"
+              },
+              "packages": [
+                {
+                  "weight": 2.5,
+                  "dimensions": {
+                    "length": 12.0,
+                    "width": 8.0,
+                    "height": 4.0,
+                    "unit": "inches"
+                  },
+                  "value": 299.99
+                }
+              ],
+              "shipDate": "2024-01-17",
+              "requestedCarriers": ["FEDEX", "UPS", "USPS"]
+            }
+      responses:
+        200:
+          description: Shipping rates calculated successfully
+          body:
+            application/json:
+              type: ShippingSysResponses.CalculateRatesResponse
+              example: |
+                {
+                  "rates": [
+                    {
+                      "rateId": "RATE-FX-001",
+                      "carrier": "FEDEX",
+                      "serviceType": "STANDARD",
+                      "cost": 12.99,
+                      "currency": "USD",
+                      "estimatedDeliveryDays": 3,
+                      "estimatedDeliveryDate": "2024-01-20",
+                      "transitTime": "3 business days"
+                    },
+                    {
+                      "rateId": "RATE-FX-002",
+                      "carrier": "FEDEX",
+                      "serviceType": "EXPRESS",
+                      "cost": 24.99,
+                      "currency": "USD",
+                      "estimatedDeliveryDays": 2,
+                      "estimatedDeliveryDate": "2024-01-19",
+                      "transitTime": "2 business days"
+                    },
+                    {
+                      "rateId": "RATE-UP-001",
+                      "carrier": "UPS",
+                      "serviceType": "STANDARD",
+                      "cost": 11.99,
+                      "currency": "USD",
+                      "estimatedDeliveryDays": 3,
+                      "estimatedDeliveryDate": "2024-01-20",
+                      "transitTime": "3 business days"
+                    }
+                  ],
+                  "calculatedAt": "2024-01-17T09:00:00Z"
+                }
+        400:
+          description: Bad request - Invalid rate calculation parameters
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        422:
+          description: Unprocessable entity - Cannot calculate rates
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/carriers:
+  displayName: Carrier Management
+  description: Shipping carrier information and capabilities
+
+  get:
+    displayName: Get Available Carriers
+    description: Retrieve list of available shipping carriers and their capabilities
+    is: [standardHeaders]
+    queryParameters:
+      serviceArea:
+        type: string
+        enum: [DOMESTIC, INTERNATIONAL, LOCAL]
+        description: Filter carriers by service area
+        required: false
+      serviceType:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, TWO_DAY, SAME_DAY]
+        description: Filter carriers by service type
+        required: false
+    responses:
+      200:
+        description: Available carriers retrieved successfully
+        body:
+          application/json:
+            type: ShippingSysResponses.GetCarriersResponse
+            example: |
+              {
+                "carriers": [
+                  {
+                    "carrierId": "FEDEX",
+                    "name": "FedEx",
+                    "serviceTypes": [
+                      {
+                        "type": "STANDARD",
+                        "name": "FedEx Ground",
+                        "transitDays": "1-5 business days",
+                        "serviceAreas": ["DOMESTIC"]
+                      },
+                      {
+                        "type": "EXPRESS",
+                        "name": "FedEx Express Saver",
+                        "transitDays": "3 business days",
+                        "serviceAreas": ["DOMESTIC", "INTERNATIONAL"]
+                      },
+                      {
+                        "type": "OVERNIGHT",
+                        "name": "FedEx Priority Overnight",
+                        "transitDays": "Next business day",
+                        "serviceAreas": ["DOMESTIC"]
+                      }
+                    ],
+                    "capabilities": {
+                      "tracking": true,
+                      "insurance": true,
+                      "signatureRequired": true,
+                      "maxWeight": 150.0,
+                      "weightUnit": "lbs"
+                    }
+                  },
+                  {
+                    "carrierId": "UPS",
+                    "name": "United Parcel Service",
+                    "serviceTypes": [
+                      {
+                        "type": "STANDARD",
+                        "name": "UPS Ground",
+                        "transitDays": "1-5 business days",
+                        "serviceAreas": ["DOMESTIC"]
+                      }
+                    ],
+                    "capabilities": {
+                      "tracking": true,
+                      "insurance": true,
+                      "signatureRequired": true,
+                      "maxWeight": 150.0,
+                      "weightUnit": "lbs"
+                    }
+                  }
+                ]
+              }
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+/webhooks:
+  displayName: Shipping Webhooks
+  description: Webhook endpoints for carrier notifications
+
+  /carrier-update:
+    displayName: Carrier Webhook
+    description: Receive tracking updates from carriers
+    post:
+      displayName: Process Carrier Update
+      description: |
+        Receive and process webhook notifications from shipping carriers
+        for tracking updates and delivery confirmations.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: ShippingSysRequests.CarrierWebhookRequest
+          example: |
+            {
+              "eventType": "SHIPMENT_DELIVERED",
+              "trackingNumber": "1Z999AA1234567890",
+              "shipmentId": "SHIP-2024-001",
+              "carrier": "FEDEX",
+              "status": "DELIVERED",
+              "timestamp": "2024-01-19T16:30:00Z",
+              "location": "New York, NY",
+              "signedBy": "John Doe",
+              "carrierSignature": "carrier_signature_hash"
+            }
+      responses:
+        200:
+          description: Webhook processed successfully
+          body:
+            application/json:
+              type: ShippingSysResponses.CarrierWebhookResponse
+              example: |
+                {
+                  "processed": true,
+                  "trackingNumber": "1Z999AA1234567890",
+                  "shipmentId": "SHIP-2024-001",
+                  "eventType": "SHIPMENT_DELIVERED",
+                  "processedAt": "2024-01-19T16:30:15Z",
+                  "actions": [
+                    "UPDATE_SHIPMENT_STATUS",
+                    "NOTIFY_CUSTOMER",
+                    "UPDATE_ORDER_STATUS"
+                  ]
+                }
+        400:
+          description: Bad request - Invalid webhook data
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        401:
+          description: Unauthorized - Invalid carrier signature
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Get API Health
+    description: Check the health status of the Shipping System API
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "shippingDatabase": "UP",
+                  "fedexAPI": "UP",
+                  "upsAPI": "UP",
+                  "uspsAPI": "UP",
+                  "trackingService": "UP"
+                }
+              }
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "shippingDatabase": "UP",
+                  "fedexAPI": "DOWN",
+                  "upsAPI": "UP",
+                  "uspsAPI": "UP",
+                  "trackingService": "UP"
+                }
+              }

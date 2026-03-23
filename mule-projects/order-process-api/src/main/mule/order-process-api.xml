@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+
+    <!-- Main Process Order Flow -->
+    <flow name="process-order-main-flow" doc:id="process-order-main-flow">
+        <http:listener config-ref="HTTP_Listener_config" path="/process/orders" allowedMethods="POST" doc:name="Process Order Listener"/>
+        
+        <set-variable value="#[correlationId]" doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value="#[payload]" doc:name="Store Incoming Order" variableName="incomingOrder"/>
+        
+        <!-- Generate Order ID -->
+        <set-variable value="#['ORD-' ++ now() as String {format: 'yyyy'} ++ '-' ++ (randomInt(999) + 1)]" doc:name="Generate Order ID" variableName="orderId"/>
+        
+        <logger level="INFO" doc:name="Process Start Logger" message="Starting order processing for ID: #[vars.orderId], Correlation: #[vars.correlationId]"/>
+        
+        <!-- Validate Order -->
+        <flow-ref name="validate-order-subflow" doc:name="Validate Order"/>
+        
+        <choice doc:name="Validation Result Check">
+            <when expression="#[payload.valid == true]">
+                <!-- Begin Transaction Scope -->
+                <try doc:name="Order Processing Transaction">
+                    
+                    <!-- Step 1: Reserve Inventory -->
+                    <logger level="INFO" doc:name="Reserve Inventory Logger" message="Reserving inventory for order: #[vars.orderId]"/>
+                    <flow-ref name="reserve-inventory-subflow" doc:name="Reserve Inventory"/>
+                    
+                    <!-- Step 2: Authorize Payment -->
+                    <logger level="INFO" doc:name="Authorize Payment Logger" message="Authorizing payment for order: #[vars.orderId]"/>
+                    <flow-ref name="authorize-payment-subflow" doc:name="Authorize Payment"/>
+                    
+                    <!-- Step 3: Create Order Record -->
+                    <logger level="INFO" doc:name="Create Order Logger" message="Creating order record: #[vars.orderId]"/>
+                    <flow-ref name="create-order-record-subflow" doc:name="Create Order Record"/>
+                    
+                    <!-- Step 4: Create Shipment -->
+                    <logger level="INFO" doc:name="Create Shipment Logger" message="Creating shipment for order: #[vars.orderId]"/>
+                    <flow-ref name="create-shipment-subflow" doc:name="Create Shipment"/>
+                    
+                    <!-- Success Response -->
+                    <ee:transform doc:name="Success Response Transform">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderId,
+    status: "CONFIRMED",
+    totalAmount: vars.orderTotal,
+    estimatedDelivery: vars.shipmentInfo.estimatedDelivery,
+    trackingNumber: vars.shipmentInfo.trackingNumber,
+    reservationId: vars.inventoryReservation.reservationId,
+    paymentAuthId: vars.paymentAuth.authorizationId,
+    processedAt: now()
+}]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                    
+                    <error-handler>
+                        <on-error-propagate doc:name="Transaction Error Handler">
+                            <logger level="ERROR" doc:name="Transaction Error Logger" message="Order processing failed for #[vars.orderId]. Initiating compensation."/>
+                            <flow-ref name="compensation-subflow" doc:name="Execute Compensation"/>
+                            
+                            <ee:transform doc:name="Error Response Transform">
+                                <ee:message>
+                                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "ORDER_PROCESSING_FAILED",
+    orderId: vars.orderId,
+    message: "Order processing failed and compensation completed",
+    details: error.description,
+    timestamp: now(),
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+                                </ee:message>
+                                <ee:variables>
+                                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                                </ee:variables>
+                            </ee:transform>
+                        </on-error-propagate>
+                    </error-handler>
+                </try>
+            </when>
+            <otherwise>
+                <!-- Validation Failed Response -->
+                <set-variable variableName="httpStatus" value="422" doc:name="Set Validation Error Status"/>
+                <ee:transform doc:name="Validation Failed Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "ORDER_VALIDATION_FAILED",
+    message: "Order validation failed",
+    validationResults: payload,
+    orderId: vars.orderId,
+    timestamp: now(),
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <!-- Order Status Management Flow -->
+    <flow name="order-status-flow" doc:id="order-status-flow">
+        <http:listener config-ref="HTTP_Listener_config" path="/process/orders/{orderId}/status" allowedMethods="PUT" doc:name="Order Status Listener"/>
+        
+        <set-variable value="#[attributes.uriParams.orderId]" doc:name="Set Order ID" variableName="orderId"/>
+        <validation:matches-regex value="#[vars.orderId]" regex="^ORD-[0-9]{4}-[0-9]{3,}$" message="Invalid order ID format"/>
+        
+        <logger level="INFO" doc:name="Status Update Logger" message="Updating status for order: #[vars.orderId]"/>
+        
+        <!-- Status Update Logic Here -->
+        <ee:transform doc:name="Status Update Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderId,
+    previousStatus: payload.previousStatus,
+    newStatus: payload.newStatus,
+    statusUpdatedAt: now(),
+    updatedBy: payload.updatedBy default "SYSTEM"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- Get Order Flow -->
+    <flow name="get-order-flow" doc:id="get-order-flow">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders/{orderId}" allowedMethods="GET" doc:name="Get Order Listener"/>
+        
+        <set-variable value="#[attributes.uriParams.orderId]" doc:name="Set Order ID" variableName="orderId"/>
+        <validation:matches-regex value="#[vars.orderId]" regex="^ORD-[0-9]{4}-[0-9]{3,}$" message="Invalid order ID format"/>
+        
+        <logger level="INFO" doc:name="Get Order Logger" message="Retrieving order: #[vars.orderId]"/>
+        
+        <!-- Order Retrieval Logic Here -->
+        <ee:transform doc:name="Order Response Transform">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderId,
+    customerId: "CUST-001",
+    orderDate: now(),
+    status: "PROCESSING",
+    items: [],
+    totalAmount: 0,
+    currency: "USD"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- Order Validation Sub-flow -->
+    <sub-flow name="validate-order-subflow" doc:id="validate-order-subflow">
+        <logger level="INFO" doc:name="Validation Start Logger" message="Starting order validation for order: #[vars.orderId]"/>
+        
+        <!-- Parallel Validation using Scatter-Gather -->
+        <scatter-gather doc:name="Parallel Validation">
+            <route>
+                <!-- Customer Validation -->
+                <logger level="DEBUG" doc:name="Customer Validation Logger" message="Validating customer: #[vars.incomingOrder.customerId]"/>
+                <http:request config-ref="Customer_System_API_Config" path="#['/customers/' ++ vars.incomingOrder.customerId ++ '/validate']" method="GET" doc:name="Validate Customer">
+                    <http:headers><![CDATA[#[{
+                        'X-Correlation-ID': vars.correlationId,
+                        'Accept': 'application/json'
+                    }]]]></http:headers>
+                </http:request>
+                <set-variable variableName="customerValidation" value="#[payload]" doc:name="Store Customer Validation"/>
+            </route>
+            <route>
+                <!-- Inventory Validation -->
+                <logger level="DEBUG" doc:name="Inventory Validation Logger" message="Checking inventory for items: #[vars.incomingOrder.items]"/>
+                <http:request config-ref="Inventory_System_API_Config" path="/inventory/check-availability" method="POST" doc:name="Check Inventory">
+                    <http:headers><![CDATA[#[{
+                        'Content-Type': 'application/json',
+                        'X-Correlation-ID': vars.correlationId
+                    }]]]></http:headers>
+                    <http:body><![CDATA[#[{
+                        "items": vars.incomingOrder.items map {
+                            productId: $.productId,
+                            quantity: $.quantity
+                        }
+                    }]]]></http:body>
+                </http:request>
+                <set-variable variableName="inventoryValidation" value="#[payload]" doc:name="Store Inventory Validation"/>
+            </route>
+            <route>
+                <!-- Payment Validation -->
+                <logger level="DEBUG" doc:name="Payment Validation Logger" message="Validating payment method"/>
+                <http:request config-ref="Payment_System_API_Config" path="/payments/validate" method="POST" doc:name="Validate Payment">
+                    <http:headers><![CDATA[#[{
+                        'Content-Type': 'application/json',
+                        'X-Correlation-ID': vars.correlationId
+                    }]]]></http:headers>
+                    <http:body><![CDATA[#[{
+                        "paymentMethod": vars.incomingOrder.paymentDetails.type,
+                        "amount": sum(vars.incomingOrder.items map ($.quantity * $.unitPrice))
+                    }]]]></http:body>
+                </http:request>
+                <set-variable variableName="paymentValidation" value="#[payload]" doc:name="Store Payment Validation"/>
+            </route>
+        </scatter-gather>
+        
+        <!-- Aggregate Validation Results -->
+        <ee:transform doc:name="Aggregate Validation Results">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    valid: vars.customerValidation.valid and vars.inventoryValidation.valid and vars.paymentValidation.valid,
+    customerValidation: vars.customerValidation,
+    inventoryValidation: vars.inventoryValidation,
+    paymentValidation: vars.paymentValidation,
+    validationTimestamp: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Validation Complete Logger" message="Order validation completed. Result: #[payload.valid]"/>
+    </sub-flow>
+
+    <!-- Reserve Inventory Sub-flow -->
+    <sub-flow name="reserve-inventory-subflow" doc:id="reserve-inventory-subflow">
+        <http:request config-ref="Inventory_System_API_Config" path="/inventory/reserve" method="POST" doc:name="Reserve Inventory">
+            <http:headers><![CDATA[#[{
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': vars.correlationId
+            }]]]></http:headers>
+            <http:body><![CDATA[#[{
+                "orderId": vars.orderId,
+                "items": vars.incomingOrder.items map {
+                    productId: $.productId,
+                    quantity: $.quantity
+                }
+            }]]]></http:body>
+        </http:request>
+        <set-variable variableName="inventoryReservation" value="#[payload]" doc:name="Store Reservation Info"/>
+    </sub-flow>
+
+    <!-- Authorize Payment Sub-flow -->
+    <sub-flow name="authorize-payment-subflow" doc:id="authorize-payment-subflow">
+        <set-variable value="#[sum(vars.incomingOrder.items map ($.quantity * $.unitPrice))]" doc:name="Calculate Total" variableName="orderTotal"/>
+        
+        <http:request config-ref="Payment_System_API_Config" path="/payments/authorize" method="POST" doc:name="Authorize Payment">
+            <http:headers><![CDATA[#[{
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': vars.correlationId
+            }]]]></http:headers>
+            <http:body><![CDATA[#[{
+                "orderId": vars.orderId,
+                "amount": vars.orderTotal,
+                "currency": "USD",
+                "paymentMethod": vars.incomingOrder.paymentDetails
+            }]]]></http:body>
+        </http:request>
+        <set-variable variableName="paymentAuth" value="#[payload]" doc:name="Store Payment Auth"/>
+    </sub-flow>
+
+    <!-- Create Order Record Sub-flow -->
+    <sub-flow name="create-order-record-subflow" doc:id="create-order-record-subflow">
+        <!-- Placeholder for database insertion -->
+        <logger level="INFO" doc:name="Order Record Logger" message="Order record created for: #[vars.orderId]"/>
+    </sub-flow>
+
+    <!-- Create Shipment Sub-flow -->
+    <sub-flow name="create-shipment-subflow" doc:id="create-shipment-subflow">
+        <http:request config-ref="Shipping_System_API_Config" path="/shipments" method="POST" doc:name="Create Shipment">
+            <http:headers><![CDATA[#[{
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': vars.correlationId
+            }]]]></http:headers>
+            <http:body><![CDATA[#[{
+                "orderId": vars.orderId,
+                "customerId": vars.incomingOrder.customerId,
+                "shippingAddress": vars.incomingOrder.shippingAddress,
+                "items": vars.incomingOrder.items
+            }]]]></http:body>
+        </http:request>
+        <set-variable variableName="shipmentInfo" value="#[payload]" doc:name="Store Shipment Info"/>
+    </sub-flow>
+
+    <!-- Compensation Sub-flow -->
+    <sub-flow name="compensation-subflow" doc:id="compensation-subflow">
+        <logger level="ERROR" doc:name="Compensation Start Logger" message="Executing compensation logic for failed order processing: #[vars.orderId]"/>
+        
+        <!-- Release Inventory Reservations -->
+        <try doc:name="Release Inventory">
+            <http:request config-ref="Inventory_System_API_Config" path="#['/inventory/release/' ++ vars.inventoryReservation.reservationId]" method="DELETE" doc:name="Release Inventory">
+                <http:headers><![CDATA[#[{
+                    'X-Correlation-ID': vars.correlationId
+                }]]]></http:headers>
+            </http:request>
+            <logger level="INFO" doc:name="Inventory Release Success" message="Inventory reservation released successfully"/>
+            <error-handler>
+                <on-error-continue doc:name="Inventory Release Error">
+                    <logger level="WARN" doc:name="Inventory Release Warning" message="Failed to release inventory reservation"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+        
+        <!-- Void Payment Authorization -->
+        <try doc:name="Void Payment">
+            <http:request config-ref="Payment_System_API_Config" path="#['/payments/' ++ vars.paymentAuth.paymentId ++ '/void']" method="POST" doc:name="Void Payment">
+                <http:headers><![CDATA[#[{
+                    'X-Correlation-ID': vars.correlationId
+                }]]]></http:headers>
+            </http:request>
+            <logger level="INFO" doc:name="Payment Void Success" message="Payment authorization voided successfully"/>
+            <error-handler>
+                <on-error-continue doc:name="Payment Void Error">
+                    <logger level="WARN" doc:name="Payment Void Warning" message="Failed to void payment authorization"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+        
+        <logger level="INFO" doc:name="Compensation Complete Logger" message="Compensation logic completed for order: #[vars.orderId]"/>
+    </sub-flow>
+
+</mule>

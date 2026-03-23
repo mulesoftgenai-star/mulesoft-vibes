@@ -1,0 +1,180 @@
+#%RAML 1.0 DataType
+
+displayName: Pagination Information
+description: Standard pagination metadata for list responses
+
+type: object
+additionalProperties: false
+
+properties:
+  page:
+    type: integer
+    required: true
+    minimum: 1
+    description: Current page number (1-based)
+    example: 1
+    
+  limit:
+    type: integer
+    required: true
+    minimum: 1
+    maximum: 100
+    description: Number of items per page
+    example: 20
+    
+  totalElements:
+    type: integer
+    required: true
+    minimum: 0
+    description: Total number of items across all pages
+    example: 150
+    
+  totalPages:
+    type: integer
+    required: true
+    minimum: 0
+    description: Total number of pages
+    example: 8
+    
+  hasNext:
+    type: boolean
+    required: true
+    description: Indicates if there is a next page
+    example: true
+    
+  hasPrevious:
+    type: boolean
+    required: true
+    description: Indicates if there is a previous page
+    example: false
+    
+  firstPage:
+    type: boolean
+    required: false
+    description: Indicates if this is the first page
+    example: true
+    
+  lastPage:
+    type: boolean
+    required: false
+    description: Indicates if this is the last page
+    example: false
+    
+  size:
+    type: integer
+    required: false
+    description: Actual number of items in current page
+    minimum: 0
+    example: 20
+    
+  offset:
+    type: integer
+    required: false
+    description: Number of items skipped (for offset-based pagination)
+    minimum: 0
+    example: 0
+    
+  links:
+    type: object
+    required: false
+    description: Navigation links for pagination
+    properties:
+      first:
+        type: string
+        required: false
+        description: Link to first page
+        example: "/api/v1/orders?page=1&limit=20"
+      previous:
+        type: string
+        required: false
+        description: Link to previous page
+        example: "/api/v1/orders?page=1&limit=20"
+      next:
+        type: string
+        required: false
+        description: Link to next page
+        example: "/api/v1/orders?page=2&limit=20"
+      last:
+        type: string
+        required: false
+        description: Link to last page
+        example: "/api/v1/orders?page=8&limit=20"
+        
+  sort:
+    type: object
+    required: false
+    description: Current sort information
+    properties:
+      field:
+        type: string
+        description: Field being sorted on
+        example: "createdDate"
+      direction:
+        type: string
+        enum: [ASC, DESC]
+        description: Sort direction
+        example: "DESC"
+
+examples:
+  first_page:
+    page: 1
+    limit: 20
+    totalElements: 150
+    totalPages: 8
+    hasNext: true
+    hasPrevious: false
+    firstPage: true
+    lastPage: false
+    size: 20
+    offset: 0
+    links:
+      first: "/api/v1/orders?page=1&limit=20"
+      next: "/api/v1/orders?page=2&limit=20"
+      last: "/api/v1/orders?page=8&limit=20"
+    sort:
+      field: "createdDate"
+      direction: "DESC"
+      
+  middle_page:
+    page: 3
+    limit: 20
+    totalElements: 150
+    totalPages: 8
+    hasNext: true
+    hasPrevious: true
+    firstPage: false
+    lastPage: false
+    size: 20
+    offset: 40
+    links:
+      first: "/api/v1/orders?page=1&limit=20"
+      previous: "/api/v1/orders?page=2&limit=20"
+      next: "/api/v1/orders?page=4&limit=20"
+      last: "/api/v1/orders?page=8&limit=20"
+      
+  last_page:
+    page: 8
+    limit: 20
+    totalElements: 150
+    totalPages: 8
+    hasNext: false
+    hasPrevious: true
+    firstPage: false
+    lastPage: true
+    size: 10
+    offset: 140
+    links:
+      first: "/api/v1/orders?page=1&limit=20"
+      previous: "/api/v1/orders?page=7&limit=20"
+      
+  empty_result:
+    page: 1
+    limit: 20
+    totalElements: 0
+    totalPages: 0
+    hasNext: false
+    hasPrevious: false
+    firstPage: true
+    lastPage: true
+    size: 0
+    offset: 0

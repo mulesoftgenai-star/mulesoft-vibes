@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+
+    <!-- Main API Flow -->
+    <flow name="order-experience-main-flow" doc:id="main-flow">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders" allowedMethods="POST,GET,PUT,DELETE" doc:name="Order Experience API Listener"/>
+        
+        <set-variable value="#[correlationId]" doc:name="Set Correlation ID" variableName="correlationId"/>
+        <logger level="INFO" doc:name="Request Logger" message="Order Experience API - Method: #[attributes.method], Path: #[attributes.requestPath], Correlation ID: #[vars.correlationId]"/>
+        
+        <choice doc:name="HTTP Method Router">
+            <when expression="#[attributes.method == 'POST']">
+                <flow-ref name="create-order-subflow" doc:name="Create Order"/>
+            </when>
+            <when expression="#[attributes.method == 'GET' and attributes.uriParams.orderId != null]">
+                <flow-ref name="get-order-by-id-subflow" doc:name="Get Order By ID"/>
+            </when>
+            <when expression="#[attributes.method == 'GET']">
+                <flow-ref name="get-orders-subflow" doc:name="Get Orders"/>
+            </when>
+            <when expression="#[attributes.method == 'PUT']">
+                <flow-ref name="update-order-subflow" doc:name="Update Order"/>
+            </when>
+            <when expression="#[attributes.method == 'DELETE']">
+                <flow-ref name="cancel-order-subflow" doc:name="Cancel Order"/>
+            </when>
+            <otherwise>
+                <raise-error type="HTTP:METHOD_NOT_ALLOWED" description="Method not allowed"/>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="VALIDATION:INVALID_INPUT" doc:name="Validation Error">
+                <ee:transform doc:name="Validation Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: {
+        code: "VALIDATION_ERROR",
+        message: error.description,
+        details: error.detailedDescription,
+        timestamp: now(),
+        correlationId: vars.correlationId
+    }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="HTTP:NOT_FOUND" doc:name="Not Found Error">
+                <ee:transform doc:name="Not Found Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: {
+        code: "RESOURCE_NOT_FOUND",
+        message: "Requested resource not found",
+        timestamp: now(),
+        correlationId: vars.correlationId
+    }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="ANY" doc:name="Global Error Handler">
+                <logger level="ERROR" doc:name="Error Logger" message="Unexpected error: #[error.description]"/>
+                <ee:transform doc:name="Generic Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "An unexpected error occurred",
+        timestamp: now(),
+        correlationId: vars.correlationId
+    }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Order Tracking Flow -->
+    <flow name="order-tracking-flow" doc:id="tracking-flow">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders/{orderId}/tracking" allowedMethods="GET" doc:name="Order Tracking Listener"/>
+        
+        <set-variable value="#[attributes.uriParams.orderId]" doc:name="Set Order ID" variableName="orderId"/>
+        <validation:matches-regex value="#[vars.orderId]" regex="^ORD-[0-9]{4}-[0-9]{3,}$" message="Invalid order ID format"/>
+        
+        <logger level="INFO" doc:name="Tracking Request Logger" message="Tracking request for order: #[vars.orderId]"/>
+        
+        <http:request config-ref="Order_Process_API_Config" path="#['/orders/' ++ vars.orderId ++ '/tracking']" method="GET" doc:name="Get Tracking Info">
+            <http:headers><![CDATA[#[{
+                'X-Correlation-ID': vars.correlationId,
+                'Accept': 'application/json'
+            }]]]></http:headers>
+        </http:request>
+        
+        <ee:transform doc:name="Transform Tracking Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    trackingNumber: payload.trackingNumber,
+    carrier: payload.carrier,
+    status: payload.status,
+    estimatedDelivery: payload.estimatedDelivery,
+    trackingEvents: payload.trackingEvents default []
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- Create Order Sub-flow -->
+    <sub-flow name="create-order-subflow" doc:id="create-order-subflow">
+        <logger level="INFO" doc:name="Create Order Logger" message="Creating new order"/>
+        
+        <!-- Input Validation -->
+        <validation:is-not-null value="#[payload.customerId]" message="Customer ID is required"/>
+        <validation:is-not-empty collection="#[payload.items]" message="Order items are required"/>
+        <validation:is-not-null value="#[payload.shippingAddress]" message="Shipping address is required"/>
+        <validation:is-not-null value="#[payload.paymentMethod]" message="Payment method is required"/>
+        
+        <!-- Transform to Process API format -->
+        <ee:transform doc:name="Transform Order Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    customerId: payload.customerId,
+    items: payload.items map {
+        productId: $.productId,
+        quantity: $.quantity,
+        unitPrice: $.unitPrice
+    },
+    shippingAddress: payload.shippingAddress,
+    paymentDetails: payload.paymentMethod,
+    orderDate: now(),
+    source: "EXPERIENCE_API"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Process API -->
+        <http:request config-ref="Order_Process_API_Config" path="/process/orders" method="POST" doc:name="Create Order via Process API">
+            <http:headers><![CDATA[#[{
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': vars.correlationId
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Order Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: payload.status,
+    totalAmount: payload.totalAmount,
+    estimatedDelivery: payload.estimatedDelivery,
+    message: "Order created successfully"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <set-variable variableName="httpStatus" value="201" doc:name="Set Created Status"/>
+    </sub-flow>
+
+    <!-- Get Orders Sub-flow -->
+    <sub-flow name="get-orders-subflow" doc:id="get-orders-subflow">
+        <logger level="INFO" doc:name="Get Orders Logger" message="Retrieving orders list"/>
+        
+        <!-- Extract Query Parameters -->
+        <set-variable value="#[attributes.queryParams.customerId default null]" doc:name="Set Customer ID" variableName="customerId"/>
+        <set-variable value="#[attributes.queryParams.status default null]" doc:name="Set Status Filter" variableName="statusFilter"/>
+        <set-variable value="#[attributes.queryParams.page default '1']" doc:name="Set Page" variableName="page"/>
+        <set-variable value="#[attributes.queryParams.size default '20']" doc:name="Set Page Size" variableName="pageSize"/>
+        
+        <!-- Build Query Parameters -->
+        <ee:transform doc:name="Build Query String">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output text/plain
+---
+"?" ++ ((
+    (if (vars.customerId != null) ["customerId=" ++ vars.customerId] else []) ++
+    (if (vars.statusFilter != null) ["status=" ++ vars.statusFilter] else []) ++
+    ["page=" ++ vars.page] ++
+    ["size=" ++ vars.pageSize]
+) joinBy "&")]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="queryString"><![CDATA[%dw 2.0
+output text/plain
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Call Process API -->
+        <http:request config-ref="Order_Process_API_Config" path="#['/orders' ++ vars.queryString]" method="GET" doc:name="Get Orders from Process API">
+            <http:headers><![CDATA[#[{
+                'X-Correlation-ID': vars.correlationId,
+                'Accept': 'application/json'
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Orders Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orders: payload.orders map {
+        orderId: $.orderId,
+        customerId: $.customerId,
+        orderDate: $.orderDate,
+        status: $.status,
+        totalAmount: $.totalAmount,
+        currency: $.currency default "USD",
+        itemCount: sizeOf($.items default [])
+    },
+    pagination: payload.pagination
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+
+    <!-- Get Order By ID Sub-flow -->
+    <sub-flow name="get-order-by-id-subflow" doc:id="get-order-by-id-subflow">
+        <set-variable value="#[attributes.uriParams.orderId]" doc:name="Set Order ID" variableName="orderId"/>
+        
+        <!-- Validate Order ID Format -->
+        <validation:matches-regex value="#[vars.orderId]" regex="^ORD-[0-9]{4}-[0-9]{3,}$" message="Invalid order ID format"/>
+        
+        <logger level="INFO" doc:name="Get Order Logger" message="Retrieving order: #[vars.orderId]"/>
+        
+        <!-- Call Process API -->
+        <http:request config-ref="Order_Process_API_Config" path="#['/orders/' ++ vars.orderId]" method="GET" doc:name="Get Order from Process API">
+            <http:headers><![CDATA[#[{
+                'X-Correlation-ID': vars.correlationId,
+                'Accept': 'application/json'
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform Response for Customer View -->
+        <ee:transform doc:name="Transform Order Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    customerId: payload.customerId,
+    orderDate: payload.orderDate,
+    status: payload.status,
+    items: payload.items map {
+        productId: $.productId,
+        productName: $.productName,
+        quantity: $.quantity,
+        unitPrice: $.unitPrice,
+        totalPrice: $.totalPrice
+    },
+    totalAmount: payload.totalAmount,
+    currency: payload.currency default "USD",
+    shippingAddress: payload.shippingAddress,
+    trackingNumber: payload.trackingNumber,
+    estimatedDelivery: payload.estimatedDelivery,
+    orderHistory: payload.statusHistory default []
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+
+    <!-- Update Order Sub-flow -->
+    <sub-flow name="update-order-subflow" doc:id="update-order-subflow">
+        <set-variable value="#[attributes.uriParams.orderId]" doc:name="Set Order ID" variableName="orderId"/>
+        
+        <!-- Validate Order ID Format -->
+        <validation:matches-regex value="#[vars.orderId]" regex="^ORD-[0-9]{4}-[0-9]{3,}$" message="Invalid order ID format"/>
+        
+        <logger level="INFO" doc:name="Update Order Logger" message="Updating order: #[vars.orderId]"/>
+        
+        <!-- Call Process API -->
+        <http:request config-ref="Order_Process_API_Config" path="#['/orders/' ++ vars.orderId]" method="PUT" doc:name="Update Order via Process API">
+            <http:headers><![CDATA[#[{
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': vars.correlationId
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Update Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    message: "Order updated successfully",
+    updatedFields: payload.updatedFields default [],
+    updatedAt: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+
+    <!-- Cancel Order Sub-flow -->
+    <sub-flow name="cancel-order-subflow" doc:id="cancel-order-subflow">
+        <set-variable value="#[attributes.uriParams.orderId]" doc:name="Set Order ID" variableName="orderId"/>
+        
+        <!-- Validate Order ID Format -->
+        <validation:matches-regex value="#[vars.orderId]" regex="^ORD-[0-9]{4}-[0-9]{3,}$" message="Invalid order ID format"/>
+        
+        <logger level="INFO" doc:name="Cancel Order Logger" message="Cancelling order: #[vars.orderId]"/>
+        
+        <!-- Transform Cancellation Request -->
+        <ee:transform doc:name="Transform Cancellation Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    reason: payload.reason default "Customer requested cancellation",
+    refundRequested: payload.refundRequested default true,
+    cancelledBy: "CUSTOMER"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Process API -->
+        <http:request config-ref="Order_Process_API_Config" path="#['/orders/' ++ vars.orderId ++ '/cancel']" method="POST" doc:name="Cancel Order via Process API">
+            <http:headers><![CDATA[#[{
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': vars.correlationId
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Cancellation Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: "CANCELLED",
+    cancellationDate: payload.cancellationDate,
+    refundAmount: payload.refundAmount,
+    refundStatus: payload.refundStatus,
+    message: "Order cancelled successfully"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+
+</mule>

@@ -1,0 +1,924 @@
+#%RAML 1.0
+title: System Layer API Template
+description: |
+  Template for System Layer APIs in MuleSoft Integration Architecture.
+  This template provides direct connectivity to backend systems and databases,
+  focusing on CRUD operations and system-specific business logic.
+version: v1
+baseUri: https://system-api.{environment}.company.com/{title}/{version}
+mediaType: application/json
+
+documentation:
+  - title: API Overview
+    content: |
+      This System Layer API provides direct connectivity to backend systems,
+      databases, and legacy applications with system-specific operations.
+      
+      Key Features:
+      - Direct system connectivity and data access
+      - CRUD operations for system entities
+      - System-specific business logic
+      - Data transformation and validation
+      - Connection pooling and optimization
+      - System health monitoring and diagnostics
+
+types:
+  # Import common data types
+  StandardResponse: !include ../shared-components/data-types/StandardResponse.raml
+  ErrorResponse: !include ../shared-components/data-types/ErrorResponse.raml
+  PaginationInfo: !include ../shared-components/data-types/PaginationInfo.raml
+  
+  # System Layer specific types
+  SystemEntity:
+    type: object
+    properties:
+      id:
+        type: string
+        required: true
+        description: Unique identifier for the entity
+        example: "entity-12345"
+      systemId:
+        type: string
+        required: false
+        description: External system identifier
+        example: "SYS-67890"
+      createdAt:
+        type: datetime
+        required: true
+        description: Entity creation timestamp
+        example: "2024-01-15T10:30:00Z"
+      updatedAt:
+        type: datetime
+        required: true
+        description: Entity last update timestamp
+        example: "2024-01-15T10:30:00Z"
+      version:
+        type: integer
+        required: false
+        description: Entity version for optimistic locking
+        example: 1
+      status:
+        type: string
+        required: true
+        enum: [ACTIVE, INACTIVE, DELETED]
+        description: Entity status
+        example: "ACTIVE"
+        
+  SystemRequest:
+    type: object
+    properties:
+      requestId:
+        type: string
+        required: true
+        description: Unique request identifier
+        example: "req-system-12345"
+      timestamp:
+        type: datetime
+        required: true
+        description: Request timestamp
+        example: "2024-01-15T10:30:00Z"
+      systemContext:
+        type: object
+        required: false
+        properties:
+          sourceSystem:
+            type: string
+            description: Originating system
+          transactionId:
+            type: string
+            description: Transaction identifier
+          batchId:
+            type: string
+            description: Batch identifier for bulk operations
+            
+  SystemResponse:
+    type: object
+    properties:
+      responseId:
+        type: string
+        required: true
+        description: Unique response identifier
+      requestId:
+        type: string
+        required: true
+        description: Original request identifier
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+      systemMetadata:
+        type: object
+        required: false
+        properties:
+          systemVersion:
+            type: string
+            description: Backend system version
+          connectionPool:
+            type: string
+            description: Connection pool used
+          queryTime:
+            type: number
+            description: Database query time in milliseconds
+          cacheHit:
+            type: boolean
+            description: Whether response was served from cache
+
+traits:
+  # Import common traits
+  standardHeaders: !include ../shared-components/traits/standard-headers.raml
+  errorHandling: !include ../shared-components/traits/error-handling.raml
+  auditLogging: !include ../shared-components/traits/audit-logging.raml
+  
+  # System Layer specific traits
+  systemConnectivity:
+    description: System connectivity and performance monitoring
+    headers:
+      X-System-Timeout:
+        type: integer
+        required: false
+        description: Request timeout in seconds
+        default: 30
+        example: 30
+      X-Connection-Pool:
+        type: string
+        required: false
+        description: Preferred connection pool
+        example: "primary"
+      X-Read-Preference:
+        type: string
+        required: false
+        enum: [primary, secondary, nearest]
+        description: Database read preference
+        default: "primary"
+    responses:
+      200:
+        headers:
+          X-System-Response-Time:
+            type: number
+            description: Backend system response time in milliseconds
+            example: 45.2
+          X-Connection-Pool-Used:
+            type: string
+            description: Connection pool that served the request
+            example: "primary"
+          X-Cache-Status:
+            type: string
+            enum: [HIT, MISS, REFRESH, BYPASS]
+            description: Cache status
+            example: "HIT"
+            
+  dataConsistency:
+    description: Data consistency and transaction management
+    headers:
+      X-Transaction-Id:
+        type: string
+        required: false
+        description: Transaction identifier
+        example: "txn-12345-67890"
+      X-Consistency-Level:
+        type: string
+        required: false
+        enum: [eventual, strong, bounded]
+        description: Data consistency requirement
+        default: "strong"
+      X-Isolation-Level:
+        type: string
+        required: false
+        enum: [read-uncommitted, read-committed, repeatable-read, serializable]
+        description: Transaction isolation level
+        default: "read-committed"
+    responses:
+      200:
+        headers:
+          X-Data-Version:
+            type: string
+            description: Data version or timestamp
+            example: "v1.2024.01.15.103000"
+          X-Consistency-Achieved:
+            type: string
+            description: Actual consistency level achieved
+            example: "strong"
+
+securitySchemes:
+  OAuth2: !include ../shared-components/security-schemes/oauth2.raml
+  
+securedBy: [OAuth2]
+
+/entities:
+  displayName: System Entities
+  description: CRUD operations for system entities
+  
+  get:
+    displayName: List Entities
+    description: Retrieve a paginated list of entities with filtering and sorting
+    is: [standardHeaders, errorHandling, auditLogging, systemConnectivity]
+    queryParameters:
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, DELETED]
+        required: false
+        description: Filter by entity status
+        example: "ACTIVE"
+      systemId:
+        type: string
+        required: false
+        description: Filter by external system ID
+        example: "SYS-67890"
+      createdFrom:
+        type: datetime
+        required: false
+        description: Filter entities created after this timestamp
+        example: "2024-01-01T00:00:00Z"
+      createdTo:
+        type: datetime
+        required: false
+        description: Filter entities created before this timestamp
+        example: "2024-01-31T23:59:59Z"
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        required: false
+        description: Page number for pagination
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+        required: false
+        description: Number of items per page
+      sort:
+        type: string
+        required: false
+        description: Sort order (field:direction)
+        example: "createdAt:desc"
+      includeDeleted:
+        type: boolean
+        default: false
+        required: false
+        description: Include deleted entities in results
+    responses:
+      200:
+        description: Entities retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              entities:
+                type: array
+                items: SystemEntity
+                description: List of system entities
+              pagination:
+                type: PaginationInfo
+                description: Pagination information
+              metadata:
+                type: object
+                properties:
+                  totalCount:
+                    type: integer
+                    description: Total number of entities
+                  filters:
+                    type: object
+                    description: Applied filters
+            example: |
+              {
+                "entities": [
+                  {
+                    "id": "entity-12345",
+                    "systemId": "SYS-67890",
+                    "createdAt": "2024-01-15T10:30:00Z",
+                    "updatedAt": "2024-01-15T10:30:00Z",
+                    "version": 1,
+                    "status": "ACTIVE"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 100,
+                  "totalElements": 1,
+                  "totalPages": 1,
+                  "hasNext": false,
+                  "hasPrevious": false
+                },
+                "metadata": {
+                  "totalCount": 1,
+                  "filters": {
+                    "status": "ACTIVE"
+                  }
+                }
+              }
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse
+  
+  post:
+    displayName: Create Entity
+    description: Create a new system entity
+    is: [standardHeaders, errorHandling, auditLogging, systemConnectivity, dataConsistency]
+    body:
+      application/json:
+        type: SystemRequest
+        example: |
+          {
+            "requestId": "req-system-12345",
+            "timestamp": "2024-01-15T10:30:00Z",
+            "systemContext": {
+              "sourceSystem": "order-service",
+              "transactionId": "txn-98765"
+            },
+            "data": {
+              "systemId": "SYS-67890",
+              "name": "Sample Entity",
+              "description": "Entity description",
+              "attributes": {
+                "category": "TYPE_A",
+                "priority": "HIGH"
+              }
+            }
+          }
+    responses:
+      201:
+        description: Entity created successfully
+        body:
+          application/json:
+            type: SystemResponse
+            example: |
+              {
+                "responseId": "res-system-12345",
+                "requestId": "req-system-12345",
+                "timestamp": "2024-01-15T10:30:15Z",
+                "data": {
+                  "id": "entity-12345",
+                  "systemId": "SYS-67890",
+                  "createdAt": "2024-01-15T10:30:15Z",
+                  "updatedAt": "2024-01-15T10:30:15Z",
+                  "version": 1,
+                  "status": "ACTIVE"
+                },
+                "systemMetadata": {
+                  "systemVersion": "v2.1.0",
+                  "connectionPool": "primary",
+                  "queryTime": 12.5,
+                  "cacheHit": false
+                }
+              }
+      400:
+        description: Bad request - Invalid entity data
+        body:
+          application/json:
+            type: ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorResponse
+      409:
+        description: Conflict - Entity already exists
+        body:
+          application/json:
+            type: ErrorResponse
+      422:
+        description: Unprocessable entity - Validation failed
+        body:
+          application/json:
+            type: ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse
+
+  /{entityId}:
+    displayName: Individual Entity
+    description: Operations on individual system entities
+    uriParameters:
+      entityId:
+        type: string
+        pattern: ^[a-zA-Z0-9-]+$
+        description: Unique entity identifier
+        example: "entity-12345"
+    
+    get:
+      displayName: Get Entity by ID
+      description: Retrieve a specific entity by its identifier
+      is: [standardHeaders, errorHandling, auditLogging, systemConnectivity]
+      queryParameters:
+        includeHistory:
+          type: boolean
+          default: false
+          required: false
+          description: Include entity change history
+        version:
+          type: integer
+          required: false
+          description: Retrieve specific version of the entity
+      responses:
+        200:
+          description: Entity retrieved successfully
+          body:
+            application/json:
+              type: SystemResponse
+              example: |
+                {
+                  "responseId": "res-system-67890",
+                  "requestId": "system-generated",
+                  "timestamp": "2024-01-15T10:30:15Z",
+                  "data": {
+                    "id": "entity-12345",
+                    "systemId": "SYS-67890",
+                    "name": "Sample Entity",
+                    "description": "Entity description",
+                    "attributes": {
+                      "category": "TYPE_A",
+                      "priority": "HIGH"
+                    },
+                    "createdAt": "2024-01-15T10:30:00Z",
+                    "updatedAt": "2024-01-15T10:30:00Z",
+                    "version": 1,
+                    "status": "ACTIVE"
+                  },
+                  "systemMetadata": {
+                    "systemVersion": "v2.1.0",
+                    "connectionPool": "primary",
+                    "queryTime": 8.3,
+                    "cacheHit": true
+                  }
+                }
+        404:
+          description: Entity not found
+          body:
+            application/json:
+              type: ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse
+        403:
+          description: Forbidden
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+    
+    put:
+      displayName: Update Entity
+      description: Update an existing entity (full replacement)
+      is: [standardHeaders, errorHandling, auditLogging, systemConnectivity, dataConsistency]
+      headers:
+        If-Match:
+          type: string
+          required: false
+          description: Entity version for optimistic locking
+          example: "1"
+      body:
+        application/json:
+          type: SystemRequest
+          example: |
+            {
+              "requestId": "req-system-67891",
+              "timestamp": "2024-01-15T10:35:00Z",
+              "systemContext": {
+                "sourceSystem": "order-service",
+                "transactionId": "txn-98766"
+              },
+              "data": {
+                "systemId": "SYS-67890",
+                "name": "Updated Entity Name",
+                "description": "Updated description",
+                "attributes": {
+                  "category": "TYPE_B",
+                  "priority": "MEDIUM"
+                }
+              }
+            }
+      responses:
+        200:
+          description: Entity updated successfully
+          body:
+            application/json:
+              type: SystemResponse
+        400:
+          description: Bad request - Invalid update data
+          body:
+            application/json:
+              type: ErrorResponse
+        404:
+          description: Entity not found
+          body:
+            application/json:
+              type: ErrorResponse
+        409:
+          description: Conflict - Version mismatch
+          body:
+            application/json:
+              type: ErrorResponse
+        412:
+          description: Precondition Failed - If-Match header mismatch
+          body:
+            application/json:
+              type: ErrorResponse
+        422:
+          description: Unprocessable entity - Validation failed
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+    
+    patch:
+      displayName: Partial Update Entity
+      description: Partially update an existing entity
+      is: [standardHeaders, errorHandling, auditLogging, systemConnectivity, dataConsistency]
+      headers:
+        If-Match:
+          type: string
+          required: false
+          description: Entity version for optimistic locking
+          example: "1"
+      body:
+        application/json:
+          type: object
+          properties:
+            operations:
+              type: array
+              description: JSON Patch operations
+              items:
+                type: object
+                properties:
+                  op:
+                    type: string
+                    enum: [add, remove, replace, move, copy, test]
+                  path:
+                    type: string
+                  value:
+                    type: any
+          example: |
+            {
+              "operations": [
+                {
+                  "op": "replace",
+                  "path": "/name",
+                  "value": "Partially Updated Entity"
+                },
+                {
+                  "op": "add",
+                  "path": "/attributes/newField",
+                  "value": "newValue"
+                }
+              ]
+            }
+      responses:
+        200:
+          description: Entity updated successfully
+          body:
+            application/json:
+              type: SystemResponse
+        400:
+          description: Bad request - Invalid patch operations
+          body:
+            application/json:
+              type: ErrorResponse
+        404:
+          description: Entity not found
+          body:
+            application/json:
+              type: ErrorResponse
+        409:
+          description: Conflict - Version mismatch
+          body:
+            application/json:
+              type: ErrorResponse
+        412:
+          description: Precondition Failed - If-Match header mismatch
+          body:
+            application/json:
+              type: ErrorResponse
+        422:
+          description: Unprocessable entity - Patch validation failed
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+    
+    delete:
+      displayName: Delete Entity
+      description: Delete an entity (soft delete by default)
+      is: [standardHeaders, errorHandling, auditLogging, systemConnectivity, dataConsistency]
+      queryParameters:
+        permanent:
+          type: boolean
+          default: false
+          required: false
+          description: Perform permanent delete instead of soft delete
+        reason:
+          type: string
+          required: false
+          description: Reason for deletion
+          example: "Data cleanup"
+      responses:
+        204:
+          description: Entity deleted successfully
+        404:
+          description: Entity not found
+          body:
+            application/json:
+              type: ErrorResponse
+        409:
+          description: Conflict - Entity cannot be deleted
+          body:
+            application/json:
+              type: ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse
+
+/bulk:
+  displayName: Bulk Operations
+  description: Bulk operations for efficiency
+  
+  /entities:
+    displayName: Bulk Entity Operations
+    description: Bulk operations on multiple entities
+    
+    post:
+      displayName: Bulk Create Entities
+      description: Create multiple entities in a single request
+      is: [standardHeaders, errorHandling, auditLogging, systemConnectivity, dataConsistency]
+      body:
+        application/json:
+          type: object
+          properties:
+            requestId:
+              type: string
+              required: true
+              description: Unique bulk request identifier
+              example: "bulk-req-12345"
+            entities:
+              type: array
+              minItems: 1
+              maxItems: 1000
+              items: SystemRequest
+              description: Array of entities to create
+          example: |
+            {
+              "requestId": "bulk-req-12345",
+              "entities": [
+                {
+                  "requestId": "req-system-12345",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "systemContext": {
+                    "sourceSystem": "order-service",
+                    "transactionId": "txn-98765"
+                  },
+                  "data": {
+                    "systemId": "SYS-67890",
+                    "name": "Entity 1"
+                  }
+                },
+                {
+                  "requestId": "req-system-12346",
+                  "timestamp": "2024-01-15T10:30:01Z",
+                  "systemContext": {
+                    "sourceSystem": "order-service",
+                    "transactionId": "txn-98766"
+                  },
+                  "data": {
+                    "systemId": "SYS-67891",
+                    "name": "Entity 2"
+                  }
+                }
+              ]
+            }
+      responses:
+        207:
+          description: Multi-Status - Bulk operation completed with mixed results
+          body:
+            application/json:
+              type: object
+              properties:
+                requestId:
+                  type: string
+                  description: Bulk request identifier
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      status:
+                        type: integer
+                        enum: [200, 201, 400, 409, 422, 500]
+                      entity:
+                        type: SystemEntity
+                        required: false
+                      error:
+                        type: ErrorResponse
+                        required: false
+                summary:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                    successful:
+                      type: integer
+                    failed:
+                      type: integer
+              example: |
+                {
+                  "requestId": "bulk-req-12345",
+                  "results": [
+                    {
+                      "requestId": "req-system-12345",
+                      "status": 201,
+                      "entity": {
+                        "id": "entity-12345",
+                        "systemId": "SYS-67890",
+                        "status": "ACTIVE"
+                      }
+                    },
+                    {
+                      "requestId": "req-system-12346",
+                      "status": 409,
+                      "error": {
+                        "error": {
+                          "code": "ENTITY_ALREADY_EXISTS",
+                          "message": "Entity with this systemId already exists"
+                        }
+                      }
+                    }
+                  ],
+                  "summary": {
+                    "total": 2,
+                    "successful": 1,
+                    "failed": 1
+                  }
+                }
+
+/health:
+  displayName: System Health
+  description: System health and diagnostics endpoint
+  get:
+    displayName: Health Check
+    description: Check the health status of the system API and its dependencies
+    is: [standardHeaders]
+    responses:
+      200:
+        description: System is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              version:
+                type: string
+              system:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  environment:
+                    type: string
+              dependencies:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    status:
+                      type: string
+                      enum: [UP, DOWN]
+                    responseTime:
+                      type: number
+                    lastChecked:
+                      type: datetime
+              metrics:
+                type: object
+                properties:
+                  connectionPools:
+                    type: object
+                    properties:
+                      primary:
+                        type: object
+                        properties:
+                          active:
+                            type: integer
+                          idle:
+                            type: integer
+                          max:
+                            type: integer
+                  cache:
+                    type: object
+                    properties:
+                      hitRate:
+                        type: number
+                      size:
+                        type: integer
+                      maxSize:
+                        type: integer
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "version": "1.0.0",
+                "system": {
+                  "name": "customer-system-api",
+                  "version": "v1.0",
+                  "environment": "production"
+                },
+                "dependencies": [
+                  {
+                    "name": "customer-database",
+                    "status": "UP",
+                    "responseTime": 12.5,
+                    "lastChecked": "2024-01-15T10:29:55Z"
+                  },
+                  {
+                    "name": "cache-service",
+                    "status": "UP",
+                    "responseTime": 2.1,
+                    "lastChecked": "2024-01-15T10:29:58Z"
+                  }
+                ],
+                "metrics": {
+                  "connectionPools": {
+                    "primary": {
+                      "active": 5,
+                      "idle": 15,
+                      "max": 20
+                    }
+                  },
+                  "cache": {
+                    "hitRate": 0.85,
+                    "size": 1024,
+                    "maxSize": 2048
+                  }
+                }
+              }
+      503:
+        description: System is unhealthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              errors:
+                type: array
+                items:
+                  type: string
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "errors": [
+                  "Database connection failed",
+                  "Cache service unavailable"
+                ]
+              }

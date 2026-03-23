@@ -1,0 +1,504 @@
+#%RAML 1.0
+title: Customer System API
+version: v1
+baseUri: https://api.company.com/system/customers/v1
+description: |
+  System API for customer data management and validation.
+  This API provides direct connectivity to customer management systems,
+  handling customer profile operations, validation, and authentication.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  Customer: ../raml-fragments/data-types/Customer.raml
+  ErrorResponse: ../raml-fragments/data-types/ErrorResponse.raml
+  OAuth2Security: ../raml-fragments/security-schemes/oauth2-security.raml
+  CommonTraits: ../raml-fragments/traits/common-traits.raml
+  CustomerSysRequests: ../raml-fragments/data-types/requests/CustomerSystemRequests.raml
+  CustomerSysResponses: ../raml-fragments/data-types/responses/CustomerSystemResponses.raml
+
+securitySchemes:
+  oauth2: !include ../raml-fragments/security-schemes/oauth2-security.raml
+
+securedBy: [oauth2]
+
+traits:
+  standardHeaders: !include ../raml-fragments/traits/common-traits.raml
+
+/customers:
+  displayName: Customer Management
+  description: Customer data and profile management operations
+
+  get:
+    displayName: Get Customers
+    description: Retrieve customer list with filtering and pagination
+    is: [standardHeaders]
+    queryParameters:
+      email:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+        description: Filter customers by email address
+        required: false
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, SUSPENDED, BLOCKED]
+        description: Filter customers by status
+        required: false
+      customerType:
+        type: string
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        description: Filter customers by type
+        required: false
+      createdFrom:
+        type: date-only
+        description: Filter customers created from date
+        required: false
+      createdTo:
+        type: date-only
+        description: Filter customers created to date
+        required: false
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Page number for pagination
+        required: false
+      size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of customers per page
+        required: false
+    responses:
+      200:
+        description: Customers retrieved successfully
+        body:
+          application/json:
+            type: CustomerSysResponses.GetCustomersResponse
+            example: |
+              {
+                "customers": [
+                  {
+                    "customerId": "CUST-001",
+                    "email": "john.doe@email.com",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "status": "ACTIVE",
+                    "customerType": "INDIVIDUAL",
+                    "createdAt": "2024-01-10T10:30:00Z",
+                    "lastOrderDate": "2024-01-15T14:30:00Z",
+                    "totalOrders": 5,
+                    "totalSpent": 1250.75
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "size": 20,
+                  "totalElements": 1,
+                  "totalPages": 1
+                }
+              }
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  post:
+    displayName: Create Customer
+    description: Create a new customer profile
+    is: [standardHeaders]
+    body:
+      application/json:
+        type: CustomerSysRequests.CreateCustomerRequest
+        example: |
+          {
+            "email": "jane.smith@email.com",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "phone": "+1-555-0123",
+            "dateOfBirth": "1990-05-15",
+            "customerType": "INDIVIDUAL",
+            "addresses": [
+              {
+                "type": "HOME",
+                "street": "456 Oak Avenue",
+                "city": "Los Angeles",
+                "state": "CA",
+                "zipCode": "90210",
+                "country": "USA",
+                "isDefault": true
+              }
+            ],
+            "preferences": {
+              "emailNotifications": true,
+              "smsNotifications": false,
+              "language": "en-US",
+              "currency": "USD"
+            }
+          }
+    responses:
+      201:
+        description: Customer created successfully
+        body:
+          application/json:
+            type: CustomerSysResponses.CreateCustomerResponse
+            example: |
+              {
+                "customerId": "CUST-002",
+                "email": "jane.smith@email.com",
+                "status": "ACTIVE",
+                "createdAt": "2024-01-16T10:00:00Z",
+                "message": "Customer profile created successfully"
+              }
+      400:
+        description: Bad request - Invalid customer data
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      409:
+        description: Conflict - Customer already exists
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      422:
+        description: Unprocessable entity - Validation failed
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  /{customerId}:
+    displayName: Customer by ID
+    description: Operations on a specific customer
+    uriParameters:
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{3,10}$
+        description: Unique customer identifier
+        example: CUST-001
+
+    get:
+      displayName: Get Customer Details
+      description: Retrieve detailed customer information
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Customer details retrieved successfully
+          body:
+            application/json:
+              type: Customer.Customer
+              example: |
+                {
+                  "customerId": "CUST-001",
+                  "email": "john.doe@email.com",
+                  "firstName": "John",
+                  "lastName": "Doe",
+                  "fullName": "John Doe",
+                  "phone": "+1-555-0123",
+                  "dateOfBirth": "1985-06-15",
+                  "customerType": "INDIVIDUAL",
+                  "status": "ACTIVE",
+                  "addresses": [
+                    {
+                      "addressId": "ADDR-001",
+                      "type": "HOME",
+                      "street": "123 Main Street",
+                      "city": "New York",
+                      "state": "NY",
+                      "zipCode": "10001",
+                      "country": "USA",
+                      "isDefault": true
+                    }
+                  ],
+                  "preferences": {
+                    "emailNotifications": true,
+                    "smsNotifications": false,
+                    "language": "en-US",
+                    "currency": "USD"
+                  },
+                  "loyaltyInfo": {
+                    "memberId": "LTY-001",
+                    "tier": "GOLD",
+                    "points": 2500,
+                    "memberSince": "2024-01-01"
+                  },
+                  "createdAt": "2024-01-01T10:30:00Z",
+                  "updatedAt": "2024-01-15T14:20:00Z",
+                  "lastOrderDate": "2024-01-15T14:30:00Z",
+                  "totalOrders": 5,
+                  "totalSpent": 1250.75,
+                  "isValidated": true
+                }
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        403:
+          description: Forbidden
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    put:
+      displayName: Update Customer
+      description: Update customer profile information
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: CustomerSysRequests.UpdateCustomerRequest
+          example: |
+            {
+              "firstName": "John",
+              "lastName": "Doe Jr.",
+              "phone": "+1-555-9876",
+              "addresses": [
+                {
+                  "addressId": "ADDR-001",
+                  "type": "HOME",
+                  "street": "789 New Street",
+                  "city": "New York",
+                  "state": "NY",
+                  "zipCode": "10002",
+                  "country": "USA",
+                  "isDefault": true
+                }
+              ],
+              "preferences": {
+                "emailNotifications": true,
+                "smsNotifications": true,
+                "language": "en-US"
+              }
+            }
+      responses:
+        200:
+          description: Customer updated successfully
+          body:
+            application/json:
+              type: CustomerSysResponses.UpdateCustomerResponse
+              example: |
+                {
+                  "customerId": "CUST-001",
+                  "updatedFields": [
+                    "lastName",
+                    "phone",
+                    "addresses",
+                    "preferences"
+                  ],
+                  "updatedAt": "2024-01-16T11:00:00Z",
+                  "message": "Customer profile updated successfully"
+                }
+        400:
+          description: Bad request - Invalid update data
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Data conflict
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        422:
+          description: Unprocessable entity - Validation failed
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    delete:
+      displayName: Delete Customer
+      description: Delete customer profile (soft delete)
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Customer deleted successfully
+          body:
+            application/json:
+              type: CustomerSysResponses.DeleteCustomerResponse
+              example: |
+                {
+                  "customerId": "CUST-001",
+                  "status": "INACTIVE",
+                  "deletedAt": "2024-01-16T12:00:00Z",
+                  "message": "Customer profile has been deactivated"
+                }
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Cannot delete customer with active orders
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    /validate:
+      displayName: Customer Validation
+      description: Validate customer information
+      post:
+        displayName: Validate Customer
+        description: Validate customer data against business rules
+        is: [standardHeaders]
+        body:
+          application/json:
+            type: CustomerSysRequests.ValidateCustomerRequest
+            example: |
+              {
+                "customerId": "CUST-001",
+                "validationType": "ORDER_PLACEMENT",
+                "orderAmount": 500.00,
+                "checkCreditLimit": true,
+                "checkActiveStatus": true
+              }
+        responses:
+          200:
+            description: Customer validation completed
+            body:
+              application/json:
+                type: CustomerSysResponses.ValidateCustomerResponse
+                example: |
+                  {
+                    "customerId": "CUST-001",
+                    "isValid": true,
+                    "validationResults": {
+                      "activeStatus": {
+                        "valid": true,
+                        "message": "Customer is active"
+                      },
+                      "creditLimit": {
+                        "valid": true,
+                        "availableCredit": 4500.00,
+                        "message": "Sufficient credit available"
+                      },
+                      "orderHistory": {
+                        "valid": true,
+                        "averageOrderValue": 250.15,
+                        "message": "Good order history"
+                      }
+                    },
+                    "warnings": [],
+                    "recommendedActions": []
+                  }
+          400:
+            description: Bad request - Invalid validation request
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          422:
+            description: Validation failed
+            body:
+              application/json:
+                type: CustomerSysResponses.ValidateCustomerResponse
+                example: |
+                  {
+                    "customerId": "CUST-001",
+                    "isValid": false,
+                    "validationResults": {
+                      "activeStatus": {
+                        "valid": false,
+                        "message": "Customer account is suspended"
+                      },
+                      "creditLimit": {
+                        "valid": false,
+                        "availableCredit": 0.00,
+                        "message": "Credit limit exceeded"
+                      }
+                    },
+                    "warnings": ["Customer has payment issues"],
+                    "recommendedActions": ["Contact customer service"]
+                  }
+          404:
+            description: Customer not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Get API Health
+    description: Check the health status of the Customer System API
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "customerDatabase": "UP",
+                  "loyaltySystem": "UP",
+                  "cacheService": "UP"
+                }
+              }
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "customerDatabase": "DOWN",
+                  "loyaltySystem": "UP",
+                  "cacheService": "UP"
+                }
+              }

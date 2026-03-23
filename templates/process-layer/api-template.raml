@@ -1,0 +1,217 @@
+#%RAML 1.0
+title: Process Layer API Template
+description: |
+  Template for Process Layer APIs in MuleSoft Integration Architecture.
+  This template provides orchestration capabilities for complex business processes
+  and coordinates multiple system APIs to fulfill business requirements.
+version: v1
+baseUri: https://process-api.{environment}.company.com/{title}/{version}
+mediaType: application/json
+
+documentation:
+  - title: API Overview
+    content: |
+      This Process Layer API orchestrates business processes by coordinating
+      multiple System APIs and implementing complex business logic.
+      
+      Key Features:
+      - Business process orchestration
+      - Complex workflow management
+      - Transaction management
+      - Event-driven architecture support
+      - Comprehensive audit logging
+      - Business rule engine integration
+
+types:
+  # Import common data types
+  StandardResponse: !include ../shared-components/data-types/StandardResponse.raml
+  ErrorResponse: !include ../shared-components/data-types/ErrorResponse.raml
+  BusinessEvent: !include ../shared-components/data-types/BusinessEvent.raml
+  
+  # Process Layer specific types
+  ProcessRequest:
+    type: object
+    properties:
+      processId:
+        type: string
+        required: true
+        description: Unique process instance identifier
+        example: "proc-12345-67890"
+      requestId:
+        type: string
+        required: true
+        description: Unique request identifier
+        example: "req-12345-67890"
+      timestamp:
+        type: datetime
+        required: true
+        description: Process initiation timestamp
+        example: 2024-01-15T10:30:00Z
+      initiator:
+        type: object
+        required: true
+        properties:
+          userId:
+            type: string
+            description: User who initiated the process
+          system:
+            type: string
+            description: System that initiated the process
+          role:
+            type: string
+            description: Role of the initiator
+      businessContext:
+        type: object
+        required: true
+        properties:
+          domain:
+            type: string
+            description: Business domain
+            example: "orders"
+          operation:
+            type: string
+            description: Business operation
+            example: "fulfillment"
+          priority:
+            type: string
+            enum: [LOW, MEDIUM, HIGH, CRITICAL]
+            description: Process priority level
+      
+  ProcessResponse:
+    type: object
+    properties:
+      processId:
+        type: string
+        required: true
+        description: Process instance identifier
+      requestId:
+        type: string
+        required: true
+        description: Original request identifier
+      status:
+        type: string
+        required: true
+        enum: [INITIATED, PROCESSING, COMPLETED, FAILED, CANCELLED]
+        description: Current process status
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+      result:
+        type: object
+        required: false
+        description: Process execution results
+        properties:
+          outcome:
+            type: string
+            description: Process outcome
+          data:
+            type: object
+            description: Result data
+          metrics:
+            type: object
+            description: Process execution metrics
+            properties:
+              duration:
+                type: number
+                description: Process duration in milliseconds
+              systemCalls:
+                type: integer
+                description: Number of system API calls made
+              businessRulesExecuted:
+                type: integer
+                description: Number of business rules executed
+      
+  ProcessStatus:
+    type: object
+    properties:
+      processId:
+        type: string
+        required: true
+      status:
+        type: string
+        required: true
+        enum: [INITIATED, PROCESSING, COMPLETED, FAILED, CANCELLED]
+      currentStep:
+        type: string
+        required: false
+        description: Current process step
+      progress:
+        type: object
+        required: false
+        properties:
+          percentage:
+            type: number
+            minimum: 0
+            maximum: 100
+            description: Process completion percentage
+          completedSteps:
+            type: integer
+            description: Number of completed steps
+          totalSteps:
+            type: integer
+            description: Total number of process steps
+      lastUpdated:
+        type: datetime
+        required: true
+        description: Last status update timestamp
+
+traits:
+  # Import common traits
+  standardHeaders: !include ../shared-components/traits/standard-headers.raml
+  errorHandling: !include ../shared-components/traits/error-handling.raml
+  auditLogging: !include ../shared-components/traits/audit-logging.raml
+  
+  # Process Layer specific traits
+  processOrchestration:
+    description: Process orchestration capabilities
+    headers:
+      X-Process-Type:
+        type: string
+        required: false
+        enum: [synchronous, asynchronous, batch]
+        description: Type of process execution
+      X-Transaction-Id:
+        type: string
+        required: false
+        description: Transaction identifier for distributed transactions
+        example: "txn-12345-67890"
+      X-Correlation-Id:
+        type: string
+        required: false
+        description: Correlation identifier for request tracing
+        example: "corr-12345-67890"
+      X-Business-Context:
+        type: string
+        required: false
+        description: Business context information
+        example: "order-fulfillment"
+    responses:
+      202:
+        description: Process accepted for asynchronous execution
+        headers:
+          X-Process-Id:
+            type: string
+            description: Process instance identifier
+          Location:
+            type: string
+            description: URL to check process status
+      
+  transactionManagement:
+    description: Transaction management capabilities
+    headers:
+      X-Idempotency-Key:
+        type: string
+        required: false
+        description: Idempotency key for safe retries
+        example: "idem-12345-67890"
+      X-Retry-Count:
+        type: integer
+        required: false
+        description: Number of retry attempts
+        default: 0
+    responses:
+      409:
+        description: Transaction conflict
+        body:
+          application/json:

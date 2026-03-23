@@ -1,0 +1,664 @@
+#%RAML 1.0
+title: Payment System API
+version: v1
+baseUri: https://api.company.com/system/payments/v1
+description: |
+  System API for payment processing and transaction management.
+  This API provides direct connectivity to payment gateways and processors,
+  handling payment authorizations, captures, refunds, and transaction status.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  Payment: ../raml-fragments/data-types/Payment.raml
+  ErrorResponse: ../raml-fragments/data-types/ErrorResponse.raml
+  OAuth2Security: ../raml-fragments/security-schemes/oauth2-security.raml
+  CommonTraits: ../raml-fragments/traits/common-traits.raml
+  PaymentSysRequests: ../raml-fragments/data-types/requests/PaymentSystemRequests.raml
+  PaymentSysResponses: ../raml-fragments/data-types/responses/PaymentSystemResponses.raml
+
+securitySchemes:
+  oauth2: !include ../raml-fragments/security-schemes/oauth2-security.raml
+
+securedBy: [oauth2]
+
+traits:
+  standardHeaders: !include ../raml-fragments/traits/common-traits.raml
+
+types:
+  PaymentTransaction:
+    type: object
+    properties:
+      transactionId:
+        type: string
+        pattern: ^TXN-[A-Z0-9]{8,12}$
+        description: Unique transaction identifier
+        example: TXN-PAY12345
+        required: true
+      orderId:
+        type: string
+        pattern: ^ORD-[0-9]{4}-[0-9]{3,}$
+        description: Associated order identifier
+        example: ORD-2024-001
+        required: true
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{3,10}$
+        description: Customer identifier
+        example: CUST-001
+        required: true
+      amount:
+        type: number
+        format: decimal
+        minimum: 0.01
+        description: Transaction amount
+        example: 299.99
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        description: Currency code
+        example: USD
+        default: USD
+        required: true
+      status:
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED]
+        description: Transaction status
+        example: AUTHORIZED
+        required: true
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, APPLE_PAY, GOOGLE_PAY, BANK_TRANSFER]
+        description: Payment method used
+        example: CREDIT_CARD
+        required: true
+      processorId:
+        type: string
+        description: Payment processor identifier
+        example: STRIPE
+        required: true
+
+/payments:
+  displayName: Payment Management
+  description: Payment processing and transaction management operations
+
+  /authorize:
+    displayName: Payment Authorization
+    description: Authorize payment for order processing
+    post:
+      displayName: Authorize Payment
+      description: |
+        Authorize payment amount for an order. This creates a payment authorization 
+        that can later be captured or voided.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: PaymentSysRequests.AuthorizePaymentRequest
+          example: |
+            {
+              "orderId": "ORD-2024-001",
+              "customerId": "CUST-001",
+              "amount": 299.99,
+              "currency": "USD",
+              "paymentMethod": {
+                "type": "CREDIT_CARD",
+                "cardToken": "tok_1234567890",
+                "cardLast4": "1234",
+                "cardBrand": "VISA",
+                "expiryMonth": "12",
+                "expiryYear": "2025"
+              },
+              "billingAddress": {
+                "street": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "zipCode": "10001",
+                "country": "USA"
+              },
+              "description": "Order payment authorization"
+            }
+      responses:
+        200:
+          description: Payment authorized successfully
+          body:
+            application/json:
+              type: PaymentSysResponses.AuthorizePaymentResponse
+              example: |
+                {
+                  "transactionId": "TXN-PAY12345",
+                  "orderId": "ORD-2024-001",
+                  "authorizationId": "AUTH-987654321",
+                  "status": "AUTHORIZED",
+                  "amount": 299.99,
+                  "currency": "USD",
+                  "authorizedAt": "2024-01-16T12:00:00Z",
+                  "expiresAt": "2024-01-23T12:00:00Z",
+                  "paymentMethod": {
+                    "type": "CREDIT_CARD",
+                    "cardLast4": "1234",
+                    "cardBrand": "VISA"
+                  },
+                  "processorResponse": {
+                    "code": "APPROVED",
+                    "message": "Transaction approved",
+                    "avsResult": "Y",
+                    "cvvResult": "M"
+                  },
+                  "fees": {
+                    "processingFee": 8.70,
+                    "currency": "USD"
+                  }
+                }
+        400:
+          description: Bad request - Invalid payment data
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        402:
+          description: Payment required - Authorization declined
+          body:
+            application/json:
+              type: PaymentSysResponses.AuthorizePaymentResponse
+              example: |
+                {
+                  "transactionId": "TXN-PAY12346",
+                  "orderId": "ORD-2024-001",
+                  "status": "FAILED",
+                  "amount": 299.99,
+                  "currency": "USD",
+                  "processorResponse": {
+                    "code": "DECLINED",
+                    "message": "Insufficient funds",
+                    "declineReason": "INSUFFICIENT_FUNDS"
+                  },
+                  "failedAt": "2024-01-16T12:00:00Z"
+                }
+        422:
+          description: Unprocessable entity - Payment validation failed
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+  /capture:
+    displayName: Payment Capture
+    description: Capture previously authorized payment
+    post:
+      displayName: Capture Payment
+      description: |
+        Capture funds from a previously authorized payment. 
+        The amount can be less than or equal to the authorized amount.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: PaymentSysRequests.CapturePaymentRequest
+          example: |
+            {
+              "transactionId": "TXN-PAY12345",
+              "authorizationId": "AUTH-987654321",
+              "orderId": "ORD-2024-001",
+              "amount": 299.99,
+              "currency": "USD",
+              "description": "Order fulfillment payment capture"
+            }
+      responses:
+        200:
+          description: Payment captured successfully
+          body:
+            application/json:
+              type: PaymentSysResponses.CapturePaymentResponse
+              example: |
+                {
+                  "transactionId": "TXN-PAY12345",
+                  "captureId": "CAP-123456789",
+                  "orderId": "ORD-2024-001",
+                  "status": "CAPTURED",
+                  "amount": 299.99,
+                  "currency": "USD",
+                  "capturedAt": "2024-01-17T10:00:00Z",
+                  "processorResponse": {
+                    "code": "CAPTURED",
+                    "message": "Payment captured successfully"
+                  },
+                  "settlementDate": "2024-01-18",
+                  "fees": {
+                    "processingFee": 8.70,
+                    "currency": "USD"
+                  }
+                }
+        400:
+          description: Bad request - Invalid capture request
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Authorization not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Cannot capture (expired, already captured, etc.)
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+  /refund:
+    displayName: Payment Refund
+    description: Process payment refund
+    post:
+      displayName: Refund Payment
+      description: |
+        Process a refund for a previously captured payment.
+        Supports both full and partial refunds.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: PaymentSysRequests.RefundPaymentRequest
+          example: |
+            {
+              "transactionId": "TXN-PAY12345",
+              "orderId": "ORD-2024-001",
+              "amount": 299.99,
+              "currency": "USD",
+              "reason": "CUSTOMER_REQUEST",
+              "description": "Customer requested refund for order cancellation"
+            }
+      responses:
+        200:
+          description: Refund processed successfully
+          body:
+            application/json:
+              type: PaymentSysResponses.RefundPaymentResponse
+              example: |
+                {
+                  "refundId": "REF-987654321",
+                  "transactionId": "TXN-PAY12345",
+                  "orderId": "ORD-2024-001",
+                  "status": "REFUNDED",
+                  "amount": 299.99,
+                  "currency": "USD",
+                  "refundedAt": "2024-01-18T14:00:00Z",
+                  "processorResponse": {
+                    "code": "REFUNDED",
+                    "message": "Refund processed successfully"
+                  },
+                  "estimatedArrival": "2024-01-20",
+                  "refundMethod": "ORIGINAL_PAYMENT_METHOD"
+                }
+        400:
+          description: Bad request - Invalid refund request
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Transaction not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Cannot refund (not captured, already refunded, etc.)
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+  /void:
+    displayName: Payment Void
+    description: Void authorized payment
+    post:
+      displayName: Void Payment Authorization
+      description: |
+        Void a previously authorized payment that has not been captured.
+        This cancels the authorization and releases the hold on funds.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: PaymentSysRequests.VoidPaymentRequest
+          example: |
+            {
+              "transactionId": "TXN-PAY12345",
+              "authorizationId": "AUTH-987654321",
+              "orderId": "ORD-2024-001",
+              "reason": "ORDER_CANCELLED",
+              "description": "Order cancelled - voiding authorization"
+            }
+      responses:
+        200:
+          description: Authorization voided successfully
+          body:
+            application/json:
+              type: PaymentSysResponses.VoidPaymentResponse
+              example: |
+                {
+                  "transactionId": "TXN-PAY12345",
+                  "authorizationId": "AUTH-987654321",
+                  "orderId": "ORD-2024-001",
+                  "status": "CANCELLED",
+                  "voidedAt": "2024-01-16T15:00:00Z",
+                  "processorResponse": {
+                    "code": "VOIDED",
+                    "message": "Authorization voided successfully"
+                  }
+                }
+        400:
+          description: Bad request - Invalid void request
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Authorization not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Cannot void (expired, already captured, etc.)
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/transactions:
+  displayName: Transaction Management
+  description: Payment transaction query and management operations
+
+  get:
+    displayName: Get Transactions
+    description: Retrieve payment transactions with filtering and pagination
+    is: [standardHeaders]
+    queryParameters:
+      orderId:
+        type: string
+        pattern: ^ORD-[0-9]{4}-[0-9]{3,}$
+        description: Filter transactions by order ID
+        required: false
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{3,10}$
+        description: Filter transactions by customer ID
+        required: false
+      status:
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED]
+        description: Filter transactions by status
+        required: false
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, APPLE_PAY, GOOGLE_PAY, BANK_TRANSFER]
+        description: Filter transactions by payment method
+        required: false
+      dateFrom:
+        type: date-only
+        description: Filter transactions from date
+        required: false
+      dateTo:
+        type: date-only
+        description: Filter transactions to date
+        required: false
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Page number for pagination
+        required: false
+      size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of transactions per page
+        required: false
+    responses:
+      200:
+        description: Transactions retrieved successfully
+        body:
+          application/json:
+            type: PaymentSysResponses.GetTransactionsResponse
+            example: |
+              {
+                "transactions": [
+                  {
+                    "transactionId": "TXN-PAY12345",
+                    "orderId": "ORD-2024-001",
+                    "customerId": "CUST-001",
+                    "amount": 299.99,
+                    "currency": "USD",
+                    "status": "CAPTURED",
+                    "paymentMethod": "CREDIT_CARD",
+                    "createdAt": "2024-01-16T12:00:00Z",
+                    "capturedAt": "2024-01-17T10:00:00Z",
+                    "processorId": "STRIPE"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "size": 20,
+                  "totalElements": 1,
+                  "totalPages": 1
+                }
+              }
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  /{transactionId}:
+    displayName: Transaction by ID
+    description: Operations on a specific payment transaction
+    uriParameters:
+      transactionId:
+        type: string
+        pattern: ^TXN-[A-Z0-9]{8,12}$
+        description: Unique transaction identifier
+        example: TXN-PAY12345
+
+    get:
+      displayName: Get Transaction Details
+      description: Retrieve detailed information about a specific payment transaction
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Transaction details retrieved successfully
+          body:
+            application/json:
+              type: PaymentSysResponses.GetTransactionDetailsResponse
+              example: |
+                {
+                  "transactionId": "TXN-PAY12345",
+                  "orderId": "ORD-2024-001",
+                  "customerId": "CUST-001",
+                  "amount": 299.99,
+                  "currency": "USD",
+                  "status": "CAPTURED",
+                  "paymentMethod": {
+                    "type": "CREDIT_CARD",
+                    "cardLast4": "1234",
+                    "cardBrand": "VISA",
+                    "cardType": "CREDIT"
+                  },
+                  "processorId": "STRIPE",
+                  "authorizationId": "AUTH-987654321",
+                  "captureId": "CAP-123456789",
+                  "timeline": [
+                    {
+                      "status": "AUTHORIZED",
+                      "timestamp": "2024-01-16T12:00:00Z",
+                      "amount": 299.99,
+                      "processorResponse": {
+                        "code": "APPROVED",
+                        "message": "Transaction approved"
+                      }
+                    },
+                    {
+                      "status": "CAPTURED",
+                      "timestamp": "2024-01-17T10:00:00Z",
+                      "amount": 299.99,
+                      "processorResponse": {
+                        "code": "CAPTURED",
+                        "message": "Payment captured successfully"
+                      }
+                    }
+                  ],
+                  "fees": {
+                    "processingFee": 8.70,
+                    "currency": "USD"
+                  },
+                  "settlementDate": "2024-01-18",
+                  "createdAt": "2024-01-16T12:00:00Z",
+                  "updatedAt": "2024-01-17T10:00:00Z"
+                }
+        404:
+          description: Transaction not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        403:
+          description: Forbidden
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/webhooks:
+  displayName: Payment Webhooks
+  description: Webhook endpoints for payment processor notifications
+
+  /processor-notification:
+    displayName: Processor Webhook
+    description: Receive notifications from payment processors
+    post:
+      displayName: Process Webhook Notification
+      description: |
+        Receive and process webhook notifications from payment processors
+        for transaction status updates and events.
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: PaymentSysRequests.ProcessorWebhookRequest
+          example: |
+            {
+              "eventType": "PAYMENT_CAPTURED",
+              "transactionId": "TXN-PAY12345",
+              "processorTransactionId": "pi_1234567890",
+              "status": "CAPTURED",
+              "amount": 299.99,
+              "currency": "USD",
+              "timestamp": "2024-01-17T10:00:00Z",
+              "processorId": "STRIPE",
+              "signature": "webhook_signature_hash"
+            }
+      responses:
+        200:
+          description: Webhook processed successfully
+          body:
+            application/json:
+              type: PaymentSysResponses.ProcessorWebhookResponse
+              example: |
+                {
+                  "processed": true,
+                  "transactionId": "TXN-PAY12345",
+                  "eventType": "PAYMENT_CAPTURED",
+                  "processedAt": "2024-01-17T10:00:15Z",
+                  "actions": [
+                    "UPDATE_TRANSACTION_STATUS",
+                    "NOTIFY_ORDER_SERVICE"
+                  ]
+                }
+        400:
+          description: Bad request - Invalid webhook data
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        401:
+          description: Unauthorized - Invalid webhook signature
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Get API Health
+    description: Check the health status of the Payment System API
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "paymentDatabase": "UP",
+                  "stripeProcessor": "UP",
+                  "paypalProcessor": "UP",
+                  "fraudDetection": "UP"
+                }
+              }
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "paymentDatabase": "UP",
+                  "stripeProcessor": "DOWN",
+                  "paypalProcessor": "UP",
+                  "fraudDetection": "UP"
+                }
+              }

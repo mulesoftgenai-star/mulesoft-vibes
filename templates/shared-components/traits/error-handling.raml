@@ -1,0 +1,261 @@
+#%RAML 1.0 Trait
+
+displayName: Error Handling
+description: Standardized error handling behavior across all API endpoints
+
+responses:
+  400:
+    description: Bad Request - The request is malformed or contains invalid parameters
+    headers:
+      X-Error-Code:
+        type: string
+        description: Specific error code for the bad request
+        example: "INVALID_REQUEST_FORMAT"
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "BAD_REQUEST"
+            message: "The request is malformed"
+            details: "Missing required field: customerId"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "abc123-def456-ghi789"
+            path: "/api/v1/orders"
+            method: "POST"
+            statusCode: 400
+            validationErrors:
+              - field: "customerId"
+                message: "This field is required"
+                code: "REQUIRED_FIELD_MISSING"
+            retryable: false
+
+  401:
+    description: Unauthorized - Authentication is required and has failed or not been provided
+    headers:
+      WWW-Authenticate:
+        type: string
+        description: Authentication challenge
+        example: 'Bearer error="invalid_token", error_description="The access token is invalid"'
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "UNAUTHORIZED"
+            message: "Authentication required"
+            details: "Access token is missing or invalid"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "def456-ghi789-jkl012"
+            path: "/api/v1/orders"
+            method: "GET"
+            statusCode: 401
+            retryable: false
+            helpUrl: "https://docs.api.company.com/authentication"
+
+  403:
+    description: Forbidden - The request is valid but access is denied due to insufficient permissions
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "FORBIDDEN"
+            message: "Access denied"
+            details: "Insufficient permissions to access this resource"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "ghi789-jkl012-mno345"
+            path: "/api/v1/orders"
+            method: "POST"
+            statusCode: 403
+            context:
+              userId: "user-123"
+              requiredPermission: "orders:write"
+              currentPermissions: ["orders:read"]
+            retryable: false
+            helpUrl: "https://docs.api.company.com/permissions"
+
+  404:
+    description: Not Found - The requested resource could not be found
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "RESOURCE_NOT_FOUND"
+            message: "Resource not found"
+            details: "The requested order does not exist"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "jkl012-mno345-pqr678"
+            path: "/api/v1/orders/ORD-999999"
+            method: "GET"
+            statusCode: 404
+            retryable: false
+
+  409:
+    description: Conflict - The request conflicts with the current state of the resource
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "RESOURCE_CONFLICT"
+            message: "Resource conflict"
+            details: "Order cannot be cancelled in current status"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "mno345-pqr678-stu901"
+            path: "/api/v1/orders/ORD-12345/cancel"
+            method: "POST"
+            statusCode: 409
+            context:
+              resourceId: "ORD-12345"
+              currentStatus: "SHIPPED"
+              requiredStatus: "PENDING"
+            retryable: false
+
+  422:
+    description: Unprocessable Entity - The request is well-formed but contains semantic errors
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "UNPROCESSABLE_ENTITY"
+            message: "Business validation failed"
+            details: "Customer credit limit exceeded"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "pqr678-stu901-vwx234"
+            path: "/api/v1/orders"
+            method: "POST"
+            statusCode: 422
+            context:
+              customerId: "CUST-123"
+              creditLimit: 5000.00
+              requestedAmount: 6000.00
+            retryable: false
+
+  429:
+    description: Too Many Requests - Rate limit exceeded
+    headers:
+      Retry-After:
+        type: integer
+        description: Seconds to wait before retrying
+        example: 60
+      X-RateLimit-Limit:
+        type: integer
+        description: Request limit per time window
+        example: 1000
+      X-RateLimit-Remaining:
+        type: integer
+        description: Requests remaining in current window
+        example: 0
+      X-RateLimit-Reset:
+        type: integer
+        description: Unix timestamp when rate limit resets
+        example: 1640995200
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "RATE_LIMIT_EXCEEDED"
+            message: "Rate limit exceeded"
+            details: "Too many requests in the given time frame"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "stu901-vwx234-yza567"
+            path: "/api/v1/orders"
+            method: "GET"
+            statusCode: 429
+            retryable: true
+            retryAfter: 60
+            helpUrl: "https://docs.api.company.com/rate-limits"
+
+  500:
+    description: Internal Server Error - An unexpected error occurred on the server
+    headers:
+      X-Error-Reference:
+        type: string
+        description: Internal error reference for debugging
+        example: "ERR-20240115-103000-ABC123"
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "INTERNAL_SERVER_ERROR"
+            message: "Internal server error"
+            details: "An unexpected error occurred while processing the request"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "vwx234-yza567-bcd890"
+            path: "/api/v1/orders"
+            method: "POST"
+            statusCode: 500
+            retryable: true
+            retryAfter: 30
+            helpUrl: "https://docs.api.company.com/errors/server-errors"
+
+  502:
+    description: Bad Gateway - Invalid response from upstream server
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "BAD_GATEWAY"
+            message: "Bad gateway"
+            details: "Invalid response from upstream service"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "yza567-bcd890-efg123"
+            path: "/api/v1/orders"
+            method: "GET"
+            statusCode: 502
+            context:
+              upstreamService: "inventory-service"
+              upstreamError: "Connection timeout"
+            retryable: true
+            retryAfter: 10
+
+  503:
+    description: Service Unavailable - The service is temporarily unavailable
+    headers:
+      Retry-After:
+        type: integer
+        description: Seconds to wait before retrying
+        example: 120
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "SERVICE_UNAVAILABLE"
+            message: "Service temporarily unavailable"
+            details: "The service is undergoing maintenance"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "bcd890-efg123-hij456"
+            path: "/api/v1/orders"
+            method: "POST"
+            statusCode: 503
+            retryable: true
+            retryAfter: 120
+            helpUrl: "https://status.api.company.com"
+
+  504:
+    description: Gateway Timeout - Timeout while waiting for upstream server
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "GATEWAY_TIMEOUT"
+            message: "Gateway timeout"
+            details: "Timeout while waiting for upstream service response"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "efg123-hij456-klm789"
+            path: "/api/v1/orders"
+            method: "GET"
+            statusCode: 504
+            context:
+              upstreamService: "payment-service"
+              timeoutDuration: "30s"
+            retryable: true
+            retryAfter: 30

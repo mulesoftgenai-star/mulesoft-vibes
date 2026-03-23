@@ -1,0 +1,197 @@
+#%RAML 1.0 DataType
+
+displayName: Error Response
+description: Standardized error response structure for all API operations
+
+type: object
+additionalProperties: false
+
+properties:
+  error:
+    type: object
+    required: true
+    description: Error information container
+    additionalProperties: false
+    properties:
+      code:
+        type: string
+        required: true
+        description: Machine-readable error code
+        pattern: ^[A-Z][A-Z0-9_]*$
+        example: "VALIDATION_ERROR"
+        
+      message:
+        type: string
+        required: true
+        description: Human-readable error message
+        maxLength: 255
+        example: "The provided data failed validation"
+        
+      details:
+        type: string
+        required: false
+        description: Detailed error description
+        maxLength: 1000
+        example: "Field 'email' must be a valid email address"
+        
+      timestamp:
+        type: datetime
+        required: true
+        description: Error occurrence timestamp
+        example: "2024-01-15T10:30:00Z"
+        
+      traceId:
+        type: string
+        required: true
+        description: Unique trace identifier for debugging
+        pattern: ^[a-f0-9-]+$
+        example: "abc123-def456-ghi789"
+        
+      path:
+        type: string
+        required: true
+        description: API endpoint path where error occurred
+        example: "/api/v1/orders"
+        
+      method:
+        type: string
+        required: false
+        description: HTTP method used
+        enum: [GET, POST, PUT, PATCH, DELETE]
+        example: "POST"
+        
+      statusCode:
+        type: integer
+        required: false
+        description: HTTP status code
+        minimum: 100
+        maximum: 599
+        example: 400
+        
+      validationErrors:
+        type: array
+        required: false
+        description: Detailed validation errors for form/field validation
+        items:
+          type: object
+          properties:
+            field:
+              type: string
+              description: Field name that failed validation
+              example: "email"
+            message:
+              type: string
+              description: Validation error message
+              example: "Must be a valid email address"
+            value:
+              type: string
+              required: false
+              description: Invalid value that was provided
+              example: "invalid-email"
+            code:
+              type: string
+              required: false
+              description: Specific validation error code
+              example: "INVALID_EMAIL_FORMAT"
+              
+      context:
+        type: object
+        required: false
+        description: Additional context information
+        properties:
+          userId:
+            type: string
+            description: User ID associated with the request
+          sessionId:
+            type: string
+            description: Session ID for the request
+          correlationId:
+            type: string
+            description: Correlation ID for request tracking
+          businessContext:
+            type: string
+            description: Business context information
+            
+      retryable:
+        type: boolean
+        required: false
+        description: Indicates if the operation can be retried
+        default: false
+        example: false
+        
+      retryAfter:
+        type: integer
+        required: false
+        description: Seconds to wait before retrying (for retryable errors)
+        minimum: 1
+        example: 60
+        
+      helpUrl:
+        type: string
+        required: false
+        description: URL to documentation about this error
+        example: "https://docs.api.company.com/errors/VALIDATION_ERROR"
+
+examples:
+  validation_error:
+    error:
+      code: "VALIDATION_ERROR"
+      message: "Request validation failed"
+      details: "One or more fields contain invalid data"
+      timestamp: "2024-01-15T10:30:00Z"
+      traceId: "abc123-def456-ghi789"
+      path: "/api/v1/orders"
+      method: "POST"
+      statusCode: 400
+      validationErrors:
+        - field: "email"
+          message: "Must be a valid email address"
+          value: "invalid-email"
+          code: "INVALID_EMAIL_FORMAT"
+        - field: "quantity"
+          message: "Must be greater than 0"
+          value: "0"
+          code: "INVALID_QUANTITY"
+      retryable: false
+      helpUrl: "https://docs.api.company.com/errors/VALIDATION_ERROR"
+      
+  system_error:
+    error:
+      code: "INTERNAL_SERVER_ERROR"
+      message: "An internal server error occurred"
+      details: "Database connection timeout"
+      timestamp: "2024-01-15T10:30:00Z"
+      traceId: "xyz789-abc123-def456"
+      path: "/api/v1/orders"
+      method: "GET"
+      statusCode: 500
+      retryable: true
+      retryAfter: 30
+      helpUrl: "https://docs.api.company.com/errors/INTERNAL_SERVER_ERROR"
+      
+  authorization_error:
+    error:
+      code: "INSUFFICIENT_PERMISSIONS"
+      message: "Insufficient permissions for this operation"
+      details: "Required scope: orders:write, Current scope: orders:read"
+      timestamp: "2024-01-15T10:30:00Z"
+      traceId: "def456-ghi789-jkl012"
+      path: "/api/v1/orders"
+      method: "POST"
+      statusCode: 403
+      retryable: false
+      helpUrl: "https://docs.api.company.com/errors/INSUFFICIENT_PERMISSIONS"
+      
+  rate_limit_error:
+    error:
+      code: "RATE_LIMIT_EXCEEDED"
+      message: "Too many requests"
+      details: "Rate limit of 1000 requests per hour exceeded"
+      timestamp: "2024-01-15T10:30:00Z"
+      traceId: "ghi789-jkl012-mno345"
+      path: "/api/v1/orders"
+      method: "GET"
+      statusCode: 429
+      retryable: true
+      retryAfter: 60
+      helpUrl: "https://docs.api.company.com/errors/RATE_LIMIT_EXCEEDED"

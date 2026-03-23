@@ -1,0 +1,474 @@
+#%RAML 1.0
+title: Order Process API
+version: v1
+baseUri: https://api.company.com/process/orders/v1
+description: |
+  Process API that orchestrates order-related business processes and workflows.
+  This API coordinates between multiple system APIs to fulfill complex order operations
+  including order validation, inventory checks, payment processing, and fulfillment.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  Order: ../raml-fragments/data-types/Order.raml
+  Customer: ../raml-fragments/data-types/Customer.raml
+  Payment: ../raml-fragments/data-types/Payment.raml
+  Shipment: ../raml-fragments/data-types/Shipment.raml
+  ErrorResponse: ../raml-fragments/data-types/ErrorResponse.raml
+  OAuth2Security: ../raml-fragments/security-schemes/oauth2-security.raml
+  CommonTraits: ../raml-fragments/traits/common-traits.raml
+  OrderProcRequests: ../raml-fragments/data-types/requests/OrderProcessRequests.raml
+  OrderProcResponses: ../raml-fragments/data-types/responses/OrderProcessResponses.raml
+
+securitySchemes:
+  oauth2: !include ../raml-fragments/security-schemes/oauth2-security.raml
+
+securedBy: [oauth2]
+
+traits:
+  standardHeaders: !include ../raml-fragments/traits/common-traits.raml
+
+/orders:
+  displayName: Order Processing
+  description: Core order processing operations
+
+  /validate:
+    displayName: Order Validation
+    description: Validate order data and business rules
+    post:
+      displayName: Validate Order
+      description: |
+        Validate order information including customer details, product availability,
+        pricing, and business rules before order creation
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: OrderProcRequests.ValidateOrderRequest
+          example: |
+            {
+              "customerId": "CUST-001",
+              "items": [
+                {
+                  "productId": "PROD-001",
+                  "quantity": 2,
+                  "unitPrice": 149.99
+                }
+              ],
+              "shippingAddress": {
+                "street": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "zipCode": "10001",
+                "country": "USA"
+              },
+              "paymentMethod": {
+                "type": "CREDIT_CARD",
+                "cardNumber": "****-****-****-1234"
+              }
+            }
+      responses:
+        200:
+          description: Order validation completed
+          body:
+            application/json:
+              type: OrderProcResponses.ValidateOrderResponse
+              example: |
+                {
+                  "valid": true,
+                  "validationResults": {
+                    "customer": {
+                      "valid": true,
+                      "message": "Customer validated successfully"
+                    },
+                    "inventory": {
+                      "valid": true,
+                      "availableQuantity": 10,
+                      "message": "All items are in stock"
+                    },
+                    "pricing": {
+                      "valid": true,
+                      "calculatedTotal": 299.98,
+                      "message": "Pricing validated successfully"
+                    },
+                    "payment": {
+                      "valid": true,
+                      "message": "Payment method validated"
+                    },
+                    "shipping": {
+                      "valid": true,
+                      "estimatedDelivery": "2024-01-20",
+                      "shippingCost": 9.99,
+                      "message": "Shipping address valid"
+                    }
+                  },
+                  "estimatedTotal": 309.97,
+                  "warnings": []
+                }
+        400:
+          description: Bad request - Invalid validation request
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        422:
+          description: Validation failed - Business rules violated
+          body:
+            application/json:
+              type: OrderProcResponses.ValidateOrderResponse
+              example: |
+                {
+                  "valid": false,
+                  "validationResults": {
+                    "customer": {
+                      "valid": false,
+                      "message": "Customer account is suspended"
+                    },
+                    "inventory": {
+                      "valid": false,
+                      "availableQuantity": 0,
+                      "message": "Insufficient inventory"
+                    }
+                  },
+                  "warnings": [
+                    "Customer has reached credit limit",
+                    "Product will be discontinued next month"
+                  ]
+                }
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+  /process:
+    displayName: Order Processing
+    description: Process complete order workflow
+    post:
+      displayName: Process Order
+      description: |
+        Execute the complete order processing workflow including inventory allocation,
+        payment processing, and fulfillment initiation
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: OrderProcRequests.ProcessOrderRequest
+          example: |
+            {
+              "orderId": "ORD-2024-001",
+              "customerId": "CUST-001",
+              "items": [
+                {
+                  "productId": "PROD-001",
+                  "quantity": 1,
+                  "unitPrice": 299.99
+                }
+              ],
+              "paymentDetails": {
+                "type": "CREDIT_CARD",
+                "amount": 299.99,
+                "currency": "USD",
+                "cardToken": "token_123456"
+              },
+              "shippingDetails": {
+                "method": "STANDARD",
+                "address": {
+                  "street": "123 Main St",
+                  "city": "New York",
+                  "state": "NY",
+                  "zipCode": "10001",
+                  "country": "USA"
+                }
+              },
+              "priority": "NORMAL"
+            }
+      responses:
+        201:
+          description: Order processed successfully
+          body:
+            application/json:
+              type: OrderProcResponses.ProcessOrderResponse
+              example: |
+                {
+                  "orderId": "ORD-2024-001",
+                  "status": "CONFIRMED",
+                  "processedAt": "2024-01-15T11:00:00Z",
+                  "results": {
+                    "inventory": {
+                      "reserved": true,
+                      "reservationId": "RES-001",
+                      "expiryTime": "2024-01-15T15:00:00Z"
+                    },
+                    "payment": {
+                      "processed": true,
+                      "paymentId": "PAY-001",
+                      "authorizationCode": "AUTH123456",
+                      "amount": 299.99,
+                      "currency": "USD"
+                    },
+                    "fulfillment": {
+                      "initiated": true,
+                      "fulfillmentId": "FUL-001",
+                      "warehouseId": "WH-NYC-01",
+                      "estimatedShipDate": "2024-01-16"
+                    }
+                  },
+                  "estimatedDelivery": "2024-01-18T18:00:00Z",
+                  "trackingNumber": null
+                }
+        400:
+          description: Bad request - Invalid processing request
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Order cannot be processed in current state
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        422:
+          description: Unprocessable entity - Business validation failed
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+  /{orderId}:
+    displayName: Order by ID
+    description: Operations on a specific order
+    uriParameters:
+      orderId:
+        type: string
+        pattern: ^ORD-[0-9]{4}-[0-9]{3,}$
+        description: Unique order identifier
+        example: ORD-2024-001
+
+    /status:
+      displayName: Order Status Update
+      description: Update order status through workflow
+      patch:
+        displayName: Update Order Status
+        description: Update order status based on workflow progression
+        is: [standardHeaders]
+        body:
+          application/json:
+            type: OrderProcRequests.UpdateOrderStatusRequest
+            example: |
+              {
+                "orderId": "ORD-2024-001",
+                "newStatus": "SHIPPED",
+                "statusReason": "Order shipped from warehouse",
+                "trackingInfo": {
+                  "carrier": "FedEx",
+                  "trackingNumber": "TRK123456789",
+                  "estimatedDelivery": "2024-01-18"
+                },
+                "updatedBy": "SYSTEM"
+              }
+        responses:
+          200:
+            description: Status updated successfully
+            body:
+              application/json:
+                type: OrderProcResponses.UpdateStatusResponse
+                example: |
+                  {
+                    "orderId": "ORD-2024-001",
+                    "previousStatus": "PROCESSING",
+                    "newStatus": "SHIPPED",
+                    "statusUpdatedAt": "2024-01-16T14:00:00Z",
+                    "trackingNumber": "TRK123456789",
+                    "estimatedDelivery": "2024-01-18T18:00:00Z",
+                    "notificationsSent": {
+                      "email": true,
+                      "sms": false,
+                      "push": true
+                    }
+                  }
+          400:
+            description: Bad request - Invalid status update
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          409:
+            description: Conflict - Invalid status transition
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+    /compensation:
+      displayName: Order Compensation
+      description: Handle order compensation scenarios
+      post:
+        displayName: Execute Compensation
+        description: Execute compensation logic for failed orders
+        is: [standardHeaders]
+        body:
+          application/json:
+            type: OrderProcRequests.CompensationRequest
+            example: |
+              {
+                "orderId": "ORD-2024-001",
+                "compensationType": "FULL_REFUND",
+                "reason": "PAYMENT_FAILED",
+                "affectedOperations": [
+                  "INVENTORY_RESERVATION",
+                  "PAYMENT_AUTHORIZATION"
+                ]
+              }
+        responses:
+          200:
+            description: Compensation executed successfully
+            body:
+              application/json:
+                type: OrderProcResponses.CompensationResponse
+                example: |
+                  {
+                    "orderId": "ORD-2024-001",
+                    "compensationId": "COMP-001",
+                    "compensationType": "FULL_REFUND",
+                    "compensationResults": [
+                      {
+                        "operation": "INVENTORY_RESERVATION",
+                        "status": "RELEASED",
+                        "timestamp": "2024-01-16T15:00:00Z"
+                      },
+                      {
+                        "operation": "PAYMENT_AUTHORIZATION",
+                        "status": "VOIDED",
+                        "timestamp": "2024-01-16T15:01:00Z"
+                      }
+                    ],
+                    "finalOrderStatus": "CANCELLED"
+                  }
+          400:
+            description: Bad request - Invalid compensation request
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+/workflow:
+  displayName: Order Workflow Management
+  description: Workflow orchestration operations
+
+  /status:
+    displayName: Workflow Status
+    description: Get workflow execution status
+    get:
+      displayName: Get Workflow Status
+      description: Retrieve status of order workflow execution
+      is: [standardHeaders]
+      queryParameters:
+        orderId:
+          type: string
+          pattern: ^ORD-[0-9]{4}-[0-9]{3,}$
+          description: Order ID to check workflow status
+          required: true
+        includeDetails:
+          type: boolean
+          default: false
+          description: Include detailed workflow step information
+          required: false
+      responses:
+        200:
+          description: Workflow status retrieved successfully
+          body:
+            application/json:
+              type: OrderProcResponses.WorkflowStatusResponse
+              example: |
+                {
+                  "orderId": "ORD-2024-001",
+                  "workflowStatus": "IN_PROGRESS",
+                  "currentStep": "PAYMENT_PROCESSING",
+                  "completedSteps": [
+                    "ORDER_VALIDATION",
+                    "INVENTORY_CHECK",
+                    "CUSTOMER_VALIDATION"
+                  ],
+                  "failedSteps": [],
+                  "estimatedCompletion": "2024-01-16T16:00:00Z",
+                  "retryCount": 0,
+                  "lastUpdate": "2024-01-16T15:30:00Z"
+                }
+        400:
+          description: Bad request - Invalid parameters
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Workflow not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Get API Health
+    description: Check the health status of the Order Process API
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "customerSystem": "UP",
+                  "inventorySystem": "UP",
+                  "paymentSystem": "UP",
+                  "shippingSystem": "UP",
+                  "database": "UP",
+                  "messageQueue": "UP"
+                }
+              }
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "customerSystem": "UP",
+                  "inventorySystem": "DOWN",
+                  "paymentSystem": "UP",
+                  "shippingSystem": "UP",
+                  "database": "UP",
+                  "messageQueue": "DOWN"
+                }
+              }

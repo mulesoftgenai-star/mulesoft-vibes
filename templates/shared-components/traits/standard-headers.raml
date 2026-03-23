@@ -1,0 +1,130 @@
+#%RAML 1.0 Trait
+
+displayName: Standard Headers
+description: Common headers used across all API endpoints
+
+headers:
+  Content-Type:
+    type: string
+    required: true
+    enum: [application/json, application/xml]
+    default: application/json
+    description: Media type of the request/response body
+    example: application/json
+    
+  Accept:
+    type: string
+    required: false
+    enum: [application/json, application/xml]
+    default: application/json
+    description: Media types acceptable for the response
+    example: application/json
+    
+  X-Request-ID:
+    type: string
+    required: false
+    pattern: ^[a-f0-9-]+$
+    description: Unique identifier for the request for tracing
+    example: "req-12345-67890-abcdef"
+    
+  X-Correlation-ID:
+    type: string
+    required: false
+    pattern: ^[a-f0-9-]+$
+    description: Correlation ID for tracking across services
+    example: "corr-98765-43210-fedcba"
+    
+  X-Client-ID:
+    type: string
+    required: false
+    description: Client application identifier
+    example: "mobile-app-v1.2.3"
+    
+  X-API-Version:
+    type: string
+    required: false
+    pattern: ^v[0-9]+(\.[0-9]+)?$
+    description: API version preference
+    example: "v1.0"
+    
+  User-Agent:
+    type: string
+    required: false
+    description: User agent string
+    example: "MyApp/1.0 (iOS; Version 14.0)"
+    
+  X-Forwarded-For:
+    type: string
+    required: false
+    description: Original IP address of the client
+    example: "192.168.1.100"
+    
+  Authorization:
+    type: string
+    required: false
+    pattern: ^Bearer [a-zA-Z0-9\-._~+/]+=*$
+    description: Authorization token
+    example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+responses:
+  200:
+    headers:
+      X-Request-ID:
+        type: string
+        required: false
+        description: Echo of the request ID or system-generated ID
+        example: "req-12345-67890-abcdef"
+        
+      X-Correlation-ID:
+        type: string
+        required: false
+        description: Echo of the correlation ID
+        example: "corr-98765-43210-fedcba"
+        
+      X-Response-Time:
+        type: integer
+        required: false
+        description: Response time in milliseconds
+        example: 125
+        
+      X-API-Version:
+        type: string
+        required: false
+        description: Actual API version used
+        example: "v1.0"
+        
+      X-Rate-Limit-Limit:
+        type: integer
+        required: false
+        description: Request limit per time window
+        example: 1000
+        
+      X-Rate-Limit-Remaining:
+        type: integer
+        required: false
+        description: Requests remaining in current window
+        example: 999
+        
+      X-Rate-Limit-Reset:
+        type: integer
+        required: false
+        description: Unix timestamp when rate limit resets
+        example: 1640995200
+        
+      Cache-Control:
+        type: string
+        required: false
+        description: Cache control directives
+        example: "public, max-age=300"
+        
+      ETag:
+        type: string
+        required: false
+        description: Entity tag for caching
+        example: '"686897696a7c876b7e"'
+        
+      Last-Modified:
+        type: string
+        required: false
+        description: Last modification date
+        example: "Wed, 15 Jan 2024 10:30:00 GMT"

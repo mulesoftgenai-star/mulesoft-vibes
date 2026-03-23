@@ -1,0 +1,165 @@
+#%RAML 1.0 SecurityScheme
+
+displayName: OAuth 2.0 Security
+description: |
+  OAuth 2.0 security scheme for Order Management System APIs.
+  Supports Client Credentials flow for system-to-system communication
+  and Authorization Code flow for user-based access.
+
+type: OAuth 2.0
+settings:
+  authorizationUri: https://auth.{environment}.company.com/oauth/authorize
+  accessTokenUri: https://auth.{environment}.company.com/oauth/token
+  authorizationGrants:
+    - client_credentials
+    - authorization_code
+  scopes:
+    - "experience:read"
+    - "experience:write"
+    - "process:read"
+    - "process:write"
+    - "process:admin"
+    - "system:read"
+    - "system:write"
+    - "system:admin"
+    - "orders:read"
+    - "orders:write"
+    - "orders:delete"
+    - "orders:admin"
+    - "customers:read"
+    - "customers:write"
+    - "customers:admin"
+    - "payments:read"
+    - "payments:write"
+    - "payments:admin"
+    - "inventory:read"
+    - "inventory:write"
+    - "inventory:admin"
+    - "shipping:read"
+    - "shipping:write"
+    - "shipping:admin"
+    - "reports:read"
+    - "analytics:read"
+    - "monitoring:read"
+
+describedBy:
+  headers:
+    Authorization:
+      displayName: Authorization Header
+      description: |
+        OAuth 2.0 Bearer token for API access.
+        Format: Bearer {access_token}
+        
+        Token Requirements:
+        - Must be a valid JWT token
+        - Must not be expired
+        - Must contain required scopes for the operation
+        - Must be signed by trusted authorization server
+      type: string
+      pattern: ^Bearer [a-zA-Z0-9\-._~+/]+=*$
+      example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhdXRoLmNvbXBhbnkuY29tIiwic3ViIjoidXNlci0xMjM0NSIsImF1ZCI6Im9yZGVyLWFwaSIsImV4cCI6MTY0MDk5NTIwMCwiaWF0IjoxNjQwOTkxNjAwLCJzY29wZSI6Im9yZGVyczpyZWFkIG9yZGVyczp3cml0ZSJ9..."
+      required: true
+      
+  queryParameters:
+    access_token:
+      displayName: Access Token Query Parameter
+      description: |
+        Alternative method to send access token via query parameter.
+        Header method is preferred for security reasons.
+      type: string
+      pattern: ^[a-zA-Z0-9\-._~+/]+=*$
+      example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+      required: false
+      
+  responses:
+    401:
+      description: |
+        Unauthorized - Authentication failed or token is invalid.
+        Common causes:
+        - Missing or malformed Authorization header
+        - Invalid or expired access token
+        - Token signature verification failed
+        - Insufficient scopes for the requested operation
+      headers:
+        WWW-Authenticate:
+          displayName: WWW-Authenticate Header
+          description: Authentication challenge with error details
+          type: string
+          example: |
+            Bearer error="invalid_token", 
+            error_description="The access token is invalid or expired"
+      body:
+        application/json:
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  enum: [UNAUTHORIZED, INVALID_TOKEN, EXPIRED_TOKEN, INSUFFICIENT_SCOPE]
+                  example: "INVALID_TOKEN"
+                message:
+                  type: string
+                  example: "The provided access token is invalid"
+                details:
+                  type: string
+                  example: "Token signature verification failed"
+                timestamp:
+                  type: datetime
+                  example: "2024-01-15T10:30:00Z"
+                traceId:
+                  type: string
+                  example: "auth-abc123def456"
+          example:
+            error:
+              code: "INVALID_TOKEN"
+              message: "The provided access token is invalid"
+              details: "Token signature verification failed"
+              timestamp: "2024-01-15T10:30:00Z"
+              traceId: "auth-abc123def456"
+              
+    403:
+      description: |
+        Forbidden - Access token is valid but lacks sufficient permissions.
+        The token does not contain the required scopes for this operation.
+      body:
+        application/json:
+          type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  enum: [FORBIDDEN, INSUFFICIENT_SCOPE]
+                  example: "INSUFFICIENT_SCOPE"
+                message:
+                  type: string
+                  example: "Insufficient scope for this operation"
+                details:
+                  type: string
+                  example: "Required scope: orders:write, Available scopes: orders:read"
+                requiredScopes:
+                  type: array
+                  items: string
+                  example: ["orders:write"]
+                availableScopes:
+                  type: array
+                  items: string
+                  example: ["orders:read"]
+                timestamp:
+                  type: datetime
+                  example: "2024-01-15T10:30:00Z"
+                traceId:
+                  type: string
+                  example: "auth-def456ghi789"
+          example:
+            error:
+              code: "INSUFFICIENT_SCOPE"
+              message: "Insufficient scope for this operation"
+              details: "Required scope: orders:write, Available scopes: orders:read"
+              requiredScopes: ["orders:write"]
+              availableScopes: ["orders:read"]
+              timestamp: "2024-01-15T10:30:00Z"
+              traceId: "auth-def456ghi789"

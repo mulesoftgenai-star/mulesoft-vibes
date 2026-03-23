@@ -1,0 +1,679 @@
+#%RAML 1.0
+title: Inventory System API
+version: v1
+baseUri: https://api.company.com/system/inventory/v1
+description: |
+  System API for inventory management and product availability validation.
+  This API provides direct connectivity to inventory management systems,
+  handling product stock levels, reservations, and availability checks.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  ErrorResponse: ../raml-fragments/data-types/ErrorResponse.raml
+  OAuth2Security: ../raml-fragments/security-schemes/oauth2-security.raml
+  CommonTraits: ../raml-fragments/traits/common-traits.raml
+  InventorySysRequests: ../raml-fragments/data-types/requests/InventorySystemRequests.raml
+  InventorySysResponses: ../raml-fragments/data-types/responses/InventorySystemResponses.raml
+
+securitySchemes:
+  oauth2: !include ../raml-fragments/security-schemes/oauth2-security.raml
+
+securedBy: [oauth2]
+
+traits:
+  standardHeaders: !include ../raml-fragments/traits/common-traits.raml
+
+types:
+  Product:
+    type: object
+    properties:
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{3,10}$
+        description: Unique product identifier
+        example: PROD-001
+        required: true
+      productName:
+        type: string
+        maxLength: 255
+        description: Product name
+        example: "Wireless Headphones"
+        required: true
+      sku:
+        type: string
+        maxLength: 50
+        description: Stock keeping unit
+        example: "WH-BT-001"
+        required: true
+      category:
+        type: string
+        maxLength: 100
+        description: Product category
+        example: "Electronics"
+      brand?:
+        type: string
+        maxLength: 100
+        description: Product brand
+        example: "TechBrand"
+      unitPrice:
+        type: number
+        format: decimal
+        minimum: 0.01
+        description: Unit price
+        example: 299.99
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        description: Currency code
+        example: "USD"
+        default: "USD"
+        required: true
+
+/inventory:
+  displayName: Inventory Management
+  description: Product inventory and stock management operations
+
+  /products:
+    displayName: Product Inventory
+    description: Product inventory operations
+    get:
+      displayName: Get Product Inventory
+      description: Retrieve product inventory levels with filtering and pagination
+      is: [standardHeaders]
+      queryParameters:
+        productId:
+          type: string
+          pattern: ^PROD-[A-Z0-9]{3,10}$
+          description: Filter by specific product ID
+          required: false
+        sku:
+          type: string
+          description: Filter by product SKU
+          required: false
+        category:
+          type: string
+          description: Filter by product category
+          required: false
+        lowStockThreshold:
+          type: integer
+          minimum: 0
+          description: Show products with stock below this threshold
+          required: false
+        warehouseId:
+          type: string
+          description: Filter by warehouse location
+          required: false
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Page number for pagination
+          required: false
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+          description: Number of products per page
+          required: false
+      responses:
+        200:
+          description: Product inventory retrieved successfully
+          body:
+            application/json:
+              type: InventorySysResponses.GetProductInventoryResponse
+              example: |
+                {
+                  "products": [
+                    {
+                      "productId": "PROD-001",
+                      "productName": "Wireless Headphones",
+                      "sku": "WH-BT-001",
+                      "category": "Electronics",
+                      "totalStock": 150,
+                      "availableStock": 125,
+                      "reservedStock": 15,
+                      "allocatedStock": 10,
+                      "reorderLevel": 20,
+                      "isLowStock": false,
+                      "warehouseLocations": [
+                        {
+                          "warehouseId": "WH-NYC-01",
+                          "location": "New York",
+                          "stock": 75
+                        },
+                        {
+                          "warehouseId": "WH-LA-01", 
+                          "location": "Los Angeles",
+                          "stock": 50
+                        }
+                      ],
+                      "lastUpdated": "2024-01-16T10:00:00Z"
+                    }
+                  ],
+                  "pagination": {
+                    "page": 1,
+                    "size": 20,
+                    "totalElements": 1,
+                    "totalPages": 1
+                  }
+                }
+        400:
+          description: Bad request - Invalid query parameters
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        403:
+          description: Forbidden
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    /{productId}:
+      displayName: Product by ID
+      description: Operations on a specific product's inventory
+      uriParameters:
+        productId:
+          type: string
+          pattern: ^PROD-[A-Z0-9]{3,10}$
+          description: Unique product identifier
+          example: PROD-001
+
+      get:
+        displayName: Get Product Inventory Details
+        description: Retrieve detailed inventory information for a specific product
+        is: [standardHeaders]
+        responses:
+          200:
+            description: Product inventory details retrieved successfully
+            body:
+              application/json:
+                type: InventorySysResponses.GetProductDetailsResponse
+                example: |
+                  {
+                    "productId": "PROD-001",
+                    "productName": "Wireless Headphones",
+                    "sku": "WH-BT-001",
+                    "category": "Electronics",
+                    "brand": "TechBrand",
+                    "unitPrice": 299.99,
+                    "currency": "USD",
+                    "inventory": {
+                      "totalStock": 150,
+                      "availableStock": 125,
+                      "reservedStock": 15,
+                      "allocatedStock": 10,
+                      "inTransitStock": 25,
+                      "reorderLevel": 20,
+                      "maxStockLevel": 200,
+                      "isLowStock": false,
+                      "stockStatus": "IN_STOCK"
+                    },
+                    "warehouseLocations": [
+                      {
+                        "warehouseId": "WH-NYC-01",
+                        "location": "New York",
+                        "address": "123 Storage Ave, NY",
+                        "stock": 75,
+                        "reservedStock": 8,
+                        "allocatedStock": 5
+                      }
+                    ],
+                    "stockHistory": [
+                      {
+                        "date": "2024-01-15",
+                        "operation": "SALE",
+                        "quantity": -5,
+                        "newBalance": 150
+                      },
+                      {
+                        "date": "2024-01-10",
+                        "operation": "RESTOCK",
+                        "quantity": 50,
+                        "newBalance": 155
+                      }
+                    ],
+                    "lastUpdated": "2024-01-16T10:00:00Z"
+                  }
+          404:
+            description: Product not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+      put:
+        displayName: Update Product Inventory
+        description: Update inventory levels for a specific product
+        is: [standardHeaders]
+        body:
+          application/json:
+            type: InventorySysRequests.UpdateInventoryRequest
+            example: |
+              {
+                "productId": "PROD-001",
+                "warehouseId": "WH-NYC-01",
+                "operation": "RESTOCK",
+                "quantity": 50,
+                "reason": "New shipment received",
+                "referenceNumber": "PO-2024-001"
+              }
+        responses:
+          200:
+            description: Inventory updated successfully
+            body:
+              application/json:
+                type: InventorySysResponses.UpdateInventoryResponse
+                example: |
+                  {
+                    "productId": "PROD-001",
+                    "operation": "RESTOCK",
+                    "quantity": 50,
+                    "previousStock": 125,
+                    "newStock": 175,
+                    "transactionId": "TXN-INV-001",
+                    "updatedAt": "2024-01-16T11:00:00Z",
+                    "message": "Inventory updated successfully"
+                  }
+          400:
+            description: Bad request - Invalid inventory update
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          404:
+            description: Product not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          422:
+            description: Unprocessable entity - Invalid operation
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+      /availability:
+        displayName: Product Availability Check
+        description: Check product availability for orders
+        post:
+          displayName: Check Availability
+          description: Verify product availability for specified quantity
+          is: [standardHeaders]
+          body:
+            application/json:
+              type: InventorySysRequests.CheckAvailabilityRequest
+              example: |
+                {
+                  "productId": "PROD-001",
+                  "requestedQuantity": 10,
+                  "warehouseId": "WH-NYC-01",
+                  "deliveryAddress": {
+                    "city": "New York",
+                    "state": "NY",
+                    "zipCode": "10001",
+                    "country": "USA"
+                  }
+                }
+          responses:
+            200:
+              description: Availability check completed
+              body:
+                application/json:
+                  type: InventorySysResponses.AvailabilityResponse
+                  example: |
+                    {
+                      "productId": "PROD-001",
+                      "requestedQuantity": 10,
+                      "isAvailable": true,
+                      "availableQuantity": 125,
+                      "reservationDetails": {
+                        "canReserve": true,
+                        "reservationExpiry": "2024-01-16T15:00:00Z"
+                      },
+                      "fulfillmentOptions": [
+                        {
+                          "warehouseId": "WH-NYC-01",
+                          "location": "New York",
+                          "availableQuantity": 75,
+                          "estimatedShipDate": "2024-01-17",
+                          "estimatedDelivery": "2024-01-19",
+                          "shippingCost": 9.99
+                        }
+                      ],
+                      "alternativeProducts": [],
+                      "checkedAt": "2024-01-16T12:00:00Z"
+                    }
+            400:
+              description: Bad request - Invalid availability request
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+            404:
+              description: Product not found
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+            500:
+              description: Internal server error
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+
+      /reserve:
+        displayName: Reserve Product Inventory
+        description: Reserve inventory for order processing
+        post:
+          displayName: Reserve Inventory
+          description: Reserve specified quantity for order fulfillment
+          is: [standardHeaders]
+          body:
+            application/json:
+              type: InventorySysRequests.ReserveInventoryRequest
+              example: |
+                {
+                  "productId": "PROD-001",
+                  "quantity": 5,
+                  "orderId": "ORD-2024-001",
+                  "customerId": "CUST-001",
+                  "warehouseId": "WH-NYC-01",
+                  "reservationExpiry": "2024-01-16T18:00:00Z"
+                }
+          responses:
+            201:
+              description: Inventory reserved successfully
+              body:
+                application/json:
+                  type: InventorySysResponses.ReserveInventoryResponse
+                  example: |
+                    {
+                      "reservationId": "RES-001",
+                      "productId": "PROD-001",
+                      "quantity": 5,
+                      "orderId": "ORD-2024-001",
+                      "warehouseId": "WH-NYC-01",
+                      "reservedAt": "2024-01-16T12:30:00Z",
+                      "expiresAt": "2024-01-16T18:00:00Z",
+                      "status": "ACTIVE",
+                      "remainingStock": 120,
+                      "message": "Inventory reserved successfully"
+                    }
+            400:
+              description: Bad request - Invalid reservation request
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+            409:
+              description: Conflict - Insufficient inventory
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+            422:
+              description: Unprocessable entity - Business rules violated
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+            500:
+              description: Internal server error
+              body:
+                application/json:
+                  type: ErrorResponse.ErrorResponse
+
+/reservations:
+  displayName: Inventory Reservations
+  description: Manage inventory reservations
+
+  /{reservationId}:
+    displayName: Reservation by ID
+    description: Operations on a specific reservation
+    uriParameters:
+      reservationId:
+        type: string
+        pattern: ^RES-[A-Z0-9]{3,10}$
+        description: Unique reservation identifier
+        example: RES-001
+
+    get:
+      displayName: Get Reservation Details
+      description: Retrieve details about a specific reservation
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Reservation details retrieved successfully
+          body:
+            application/json:
+              type: InventorySysResponses.GetReservationResponse
+              example: |
+                {
+                  "reservationId": "RES-001",
+                  "productId": "PROD-001",
+                  "quantity": 5,
+                  "orderId": "ORD-2024-001",
+                  "customerId": "CUST-001",
+                  "warehouseId": "WH-NYC-01",
+                  "status": "ACTIVE",
+                  "reservedAt": "2024-01-16T12:30:00Z",
+                  "expiresAt": "2024-01-16T18:00:00Z",
+                  "timeRemaining": "PT5H30M"
+                }
+        404:
+          description: Reservation not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    delete:
+      displayName: Release Reservation
+      description: Release or cancel an inventory reservation
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: InventorySysRequests.ReleaseReservationRequest
+          example: |
+            {
+              "reservationId": "RES-001",
+              "reason": "ORDER_CANCELLED",
+              "notes": "Customer cancelled order"
+            }
+      responses:
+        200:
+          description: Reservation released successfully
+          body:
+            application/json:
+              type: InventorySysResponses.ReleaseReservationResponse
+              example: |
+                {
+                  "reservationId": "RES-001",
+                  "productId": "PROD-001",
+                  "releasedQuantity": 5,
+                  "releasedAt": "2024-01-16T13:00:00Z",
+                  "newAvailableStock": 125,
+                  "status": "RELEASED",
+                  "message": "Reservation released successfully"
+                }
+        404:
+          description: Reservation not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Reservation cannot be released
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/warehouses:
+  displayName: Warehouse Management
+  description: Warehouse and location management operations
+
+  get:
+    displayName: Get Warehouses
+    description: Retrieve list of warehouses and their information
+    is: [standardHeaders]
+    queryParameters:
+      region:
+        type: string
+        description: Filter warehouses by region
+        required: false
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, MAINTENANCE]
+        description: Filter warehouses by operational status
+        required: false
+    responses:
+      200:
+        description: Warehouses retrieved successfully
+        body:
+          application/json:
+            type: InventorySysResponses.GetWarehousesResponse
+            example: |
+              {
+                "warehouses": [
+                  {
+                    "warehouseId": "WH-NYC-01",
+                    "name": "New York Distribution Center",
+                    "location": "New York, NY",
+                    "address": "123 Storage Avenue, NY 10001",
+                    "region": "NORTHEAST",
+                    "status": "ACTIVE",
+                    "capacity": 10000,
+                    "currentUtilization": 7500,
+                    "utilizationPercentage": 75,
+                    "operatingHours": "24/7",
+                    "contactInfo": {
+                      "manager": "John Smith",
+                      "phone": "+1-555-0123",
+                      "email": "warehouse.nyc@company.com"
+                    }
+                  }
+                ]
+              }
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  /{warehouseId}:
+    displayName: Warehouse by ID
+    description: Operations on a specific warehouse
+    uriParameters:
+      warehouseId:
+        type: string
+        pattern: ^WH-[A-Z0-9]{3,10}$
+        description: Unique warehouse identifier
+        example: WH-NYC-01
+
+    get:
+      displayName: Get Warehouse Details
+      description: Retrieve detailed information about a specific warehouse
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Warehouse details retrieved successfully
+          body:
+            application/json:
+              type: InventorySysResponses.GetWarehouseDetailsResponse
+              example: |
+                {
+                  "warehouseId": "WH-NYC-01",
+                  "name": "New York Distribution Center",
+                  "location": "New York, NY",
+                  "address": "123 Storage Avenue, NY 10001",
+                  "region": "NORTHEAST",
+                  "status": "ACTIVE",
+                  "capacity": 10000,
+                  "currentUtilization": 7500,
+                  "utilizationPercentage": 75,
+                  "operatingHours": "24/7",
+                  "inventorySummary": {
+                    "totalProducts": 2500,
+                    "totalUnits": 7500,
+                    "lowStockItems": 25,
+                    "outOfStockItems": 5
+                  },
+                  "contactInfo": {
+                    "manager": "John Smith",
+                    "phone": "+1-555-0123",
+                    "email": "warehouse.nyc@company.com"
+                  },
+                  "lastUpdated": "2024-01-16T10:00:00Z"
+                }
+        404:
+          description: Warehouse not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Get API Health
+    description: Check the health status of the Inventory System API
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "inventoryDatabase": "UP",
+                  "warehouseSystem": "UP",
+                  "reservationCache": "UP"
+                }
+              }
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "inventoryDatabase": "DOWN",
+                  "warehouseSystem": "UP",
+                  "reservationCache": "UP"
+                }
+              }

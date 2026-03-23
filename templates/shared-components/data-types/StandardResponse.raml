@@ -1,0 +1,75 @@
+#%RAML 1.0 DataType
+
+displayName: Standard Response
+description: Standard response structure for all API operations
+
+type: object
+additionalProperties: false
+
+properties:
+  success:
+    type: boolean
+    required: true
+    description: Indicates if the operation was successful
+    example: true
+    
+  message:
+    type: string
+    required: false
+    description: Human-readable message about the operation
+    example: "Operation completed successfully"
+    
+  timestamp:
+    type: datetime
+    required: true
+    description: Response timestamp in ISO 8601 format
+    example: "2024-01-15T10:30:00Z"
+    
+  requestId:
+    type: string
+    required: false
+    description: Original request identifier for correlation
+    example: "req-12345-67890"
+    
+  version:
+    type: string
+    required: false
+    description: API version that processed the request
+    example: "v1.0"
+    
+  metadata:
+    type: object
+    required: false
+    description: Additional metadata about the response
+    properties:
+      processingTime:
+        type: number
+        description: Processing time in milliseconds
+        example: 125.5
+      server:
+        type: string
+        description: Server instance that processed the request
+        example: "api-server-01"
+      region:
+        type: string
+        description: Geographic region where request was processed
+        example: "us-east-1"
+
+examples:
+  success_response:
+    success: true
+    message: "Data retrieved successfully"
+    timestamp: "2024-01-15T10:30:00Z"
+    requestId: "req-12345-67890"
+    version: "v1.0"
+    metadata:
+      processingTime: 125.5
+      server: "api-server-01"
+      region: "us-east-1"
+      
+  error_response:
+    success: false
+    message: "Validation failed"
+    timestamp: "2024-01-15T10:30:00Z"
+    requestId: "req-12345-67890"
+    version: "v1.0"

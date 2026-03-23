@@ -1,0 +1,484 @@
+#%RAML 1.0
+title: Order Experience API
+version: v1
+baseUri: https://api.company.com/experience/orders/v1
+description: |
+  Experience API that provides a simplified, customer-focused interface for order management operations.
+  This API abstracts the complexity of underlying systems and provides a unified experience for web,
+  mobile, and partner channels.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  Order: ../raml-fragments/data-types/Order.raml
+  Customer: ../raml-fragments/data-types/Customer.raml
+  ErrorResponse: ../raml-fragments/data-types/ErrorResponse.raml
+  OAuth2Security: ../raml-fragments/security-schemes/oauth2-security.raml
+  CommonTraits: ../raml-fragments/traits/common-traits.raml
+  OrderExpRequests: ../raml-fragments/data-types/requests/OrderExperienceRequests.raml
+  OrderExpResponses: ../raml-fragments/data-types/responses/OrderExperienceResponses.raml
+
+securitySchemes:
+  oauth2: !include ../raml-fragments/security-schemes/oauth2-security.raml
+
+securedBy: [oauth2]
+
+traits:
+  standardHeaders: !include ../raml-fragments/traits/common-traits.raml
+
+/orders:
+  displayName: Orders
+  description: Order management operations for customer experience
+  
+  get:
+    displayName: Get Orders
+    description: Retrieve customer orders with filtering and pagination
+    is: [standardHeaders]
+    queryParameters:
+      customerId:
+        type: string
+        description: Filter orders by customer ID
+        required: false
+      status:
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+        description: Filter orders by status
+        required: false
+      dateFrom:
+        type: date-only
+        description: Filter orders from date (YYYY-MM-DD)
+        required: false
+      dateTo:
+        type: date-only
+        description: Filter orders to date (YYYY-MM-DD)
+        required: false
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Page number for pagination
+        required: false
+      size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of orders per page
+        required: false
+    responses:
+      200:
+        description: Orders retrieved successfully
+        body:
+          application/json:
+            type: OrderExpResponses.GetOrdersResponse
+            example: |
+              {
+                "orders": [
+                  {
+                    "orderId": "ORD-2024-001",
+                    "customerId": "CUST-001",
+                    "orderDate": "2024-01-15",
+                    "status": "CONFIRMED",
+                    "totalAmount": 299.99,
+                    "currency": "USD",
+                    "items": [
+                      {
+                        "productId": "PROD-001",
+                        "productName": "Wireless Headphones",
+                        "quantity": 1,
+                        "unitPrice": 299.99,
+                        "totalPrice": 299.99
+                      }
+                    ],
+                    "shippingAddress": {
+                      "street": "123 Main St",
+                      "city": "New York",
+                      "state": "NY",
+                      "zipCode": "10001",
+                      "country": "USA"
+                    }
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "size": 20,
+                  "totalElements": 1,
+                  "totalPages": 1
+                }
+              }
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      401:
+        description: Unauthorized - Invalid or missing authentication
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  post:
+    displayName: Create Order
+    description: Create a new customer order
+    is: [standardHeaders]
+    body:
+      application/json:
+        type: OrderExpRequests.CreateOrderRequest
+        example: |
+          {
+            "customerId": "CUST-001",
+            "items": [
+              {
+                "productId": "PROD-001",
+                "quantity": 2,
+                "unitPrice": 149.99
+              }
+            ],
+            "shippingAddress": {
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "billingAddress": {
+              "street": "123 Main St",
+              "city": "New York", 
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "paymentMethod": {
+              "type": "CREDIT_CARD",
+              "cardNumber": "****-****-****-1234",
+              "expiryMonth": "12",
+              "expiryYear": "2025"
+            }
+          }
+    responses:
+      201:
+        description: Order created successfully
+        body:
+          application/json:
+            type: OrderExpResponses.CreateOrderResponse
+            example: |
+              {
+                "orderId": "ORD-2024-002",
+                "status": "PENDING",
+                "totalAmount": 299.98,
+                "currency": "USD",
+                "estimatedDelivery": "2024-01-20",
+                "trackingNumber": null,
+                "message": "Order created successfully and is being processed"
+              }
+      400:
+        description: Bad request - Invalid order data
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      422:
+        description: Unprocessable entity - Business validation failed
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorResponse.ErrorResponse
+
+  /{orderId}:
+    displayName: Order by ID
+    description: Operations on a specific order
+    uriParameters:
+      orderId:
+        type: string
+        pattern: ^ORD-[0-9]{4}-[0-9]{3,}$
+        description: Unique order identifier
+        example: ORD-2024-001
+
+    get:
+      displayName: Get Order Details
+      description: Retrieve detailed information about a specific order
+      is: [standardHeaders]
+      responses:
+        200:
+          description: Order details retrieved successfully
+          body:
+            application/json:
+              type: OrderExpResponses.GetOrderResponse
+              example: |
+                {
+                  "orderId": "ORD-2024-001",
+                  "customerId": "CUST-001",
+                  "orderDate": "2024-01-15",
+                  "status": "SHIPPED",
+                  "totalAmount": 299.99,
+                  "currency": "USD",
+                  "items": [
+                    {
+                      "productId": "PROD-001",
+                      "productName": "Wireless Headphones",
+                      "quantity": 1,
+                      "unitPrice": 299.99,
+                      "totalPrice": 299.99
+                    }
+                  ],
+                  "shippingAddress": {
+                    "street": "123 Main St",
+                    "city": "New York",
+                    "state": "NY",
+                    "zipCode": "10001",
+                    "country": "USA"
+                  },
+                  "trackingNumber": "TRK123456789",
+                  "estimatedDelivery": "2024-01-18",
+                  "orderHistory": [
+                    {
+                      "status": "PENDING",
+                      "timestamp": "2024-01-15T10:00:00Z",
+                      "description": "Order received"
+                    },
+                    {
+                      "status": "CONFIRMED",
+                      "timestamp": "2024-01-15T11:00:00Z",
+                      "description": "Payment confirmed"
+                    },
+                    {
+                      "status": "SHIPPED",
+                      "timestamp": "2024-01-16T14:00:00Z",
+                      "description": "Order shipped"
+                    }
+                  ]
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        403:
+          description: Forbidden
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    patch:
+      displayName: Update Order
+      description: Update specific fields of an existing order
+      is: [standardHeaders]
+      body:
+        application/json:
+          type: OrderExpRequests.UpdateOrderRequest
+          example: |
+            {
+              "shippingAddress": {
+                "street": "456 Oak Ave",
+                "city": "Boston",
+                "state": "MA", 
+                "zipCode": "02101",
+                "country": "USA"
+              }
+            }
+      responses:
+        200:
+          description: Order updated successfully
+          body:
+            application/json:
+              type: OrderExpResponses.UpdateOrderResponse
+              example: |
+                {
+                  "orderId": "ORD-2024-001",
+                  "message": "Order updated successfully",
+                  "updatedFields": ["shippingAddress"]
+                }
+        400:
+          description: Bad request - Invalid update data
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        409:
+          description: Conflict - Order cannot be updated in current status
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        422:
+          description: Unprocessable entity - Business validation failed
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorResponse.ErrorResponse
+
+    /cancel:
+      displayName: Cancel Order
+      description: Cancel a specific order
+      post:
+        displayName: Cancel Order
+        description: Cancel an existing order if it's in a cancellable state
+        is: [standardHeaders]
+        body:
+          application/json:
+            type: OrderExpRequests.CancelOrderRequest
+            example: |
+              {
+                "reason": "Customer requested cancellation",
+                "refundRequested": true
+              }
+        responses:
+          200:
+            description: Order cancelled successfully
+            body:
+              application/json:
+                type: OrderExpResponses.CancelOrderResponse
+                example: |
+                  {
+                    "orderId": "ORD-2024-001",
+                    "status": "CANCELLED",
+                    "cancellationDate": "2024-01-16T10:00:00Z",
+                    "refundAmount": 299.99,
+                    "refundStatus": "PROCESSING",
+                    "message": "Order cancelled successfully. Refund will be processed within 3-5 business days."
+                  }
+          400:
+            description: Bad request - Invalid cancellation request
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          409:
+            description: Conflict - Order cannot be cancelled in current status
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+    /tracking:
+      displayName: Order Tracking
+      description: Get tracking information for the order
+      get:
+        displayName: Get Tracking Information
+        description: Retrieve tracking details for a shipped order
+        is: [standardHeaders]
+        responses:
+          200:
+            description: Tracking information retrieved successfully
+            body:
+              application/json:
+                type: OrderExpResponses.TrackingResponse
+                example: |
+                  {
+                    "orderId": "ORD-2024-001",
+                    "trackingNumber": "TRK123456789",
+                    "carrier": "FedEx",
+                    "status": "IN_TRANSIT",
+                    "estimatedDelivery": "2024-01-18T18:00:00Z",
+                    "trackingEvents": [
+                      {
+                        "timestamp": "2024-01-16T14:00:00Z",
+                        "location": "New York, NY",
+                        "status": "PICKED_UP",
+                        "description": "Package picked up"
+                      },
+                      {
+                        "timestamp": "2024-01-16T20:00:00Z",
+                        "location": "Newark, NJ",
+                        "status": "IN_TRANSIT",
+                        "description": "In transit to destination"
+                      }
+                    ]
+                  }
+          404:
+            description: Order not found or tracking not available
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorResponse.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health check endpoint
+  get:
+    displayName: Get API Health
+    description: Check the health status of the Order Experience API
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "orderProcess": "UP",
+                  "database": "UP",
+                  "cache": "UP"
+                }
+              }
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-01-16T10:00:00Z",
+                "version": "v1",
+                "dependencies": {
+                  "orderProcess": "DOWN",
+                  "database": "UP",
+                  "cache": "UP"
+                }
+              }

@@ -1,0 +1,143 @@
+#%RAML 1.0 Trait
+
+displayName: Rate Limiting
+description: Rate limiting behavior and headers for API endpoints
+
+headers:
+  X-Rate-Limit-Tier:
+    type: string
+    required: false
+    enum: [basic, premium, enterprise]
+    description: Rate limiting tier for the client
+    example: "premium"
+
+responses:
+  200:
+    headers:
+      X-RateLimit-Limit:
+        type: integer
+        required: false
+        description: Request limit per time window
+        example: 1000
+        
+      X-RateLimit-Remaining:
+        type: integer
+        required: false
+        description: Number of requests remaining in current window
+        example: 999
+        
+      X-RateLimit-Reset:
+        type: integer
+        required: false
+        description: Unix timestamp when rate limit resets
+        example: 1640995200
+        
+      X-RateLimit-Window:
+        type: integer
+        required: false
+        description: Rate limit time window in seconds
+        example: 3600
+        
+      X-RateLimit-Used:
+        type: integer
+        required: false
+        description: Number of requests used in current window
+        example: 1
+        
+      X-RateLimit-Policy:
+        type: string
+        required: false
+        description: Rate limiting policy applied
+        example: "1000req/hour"
+
+  201:
+    headers:
+      X-RateLimit-Limit:
+        type: integer
+        required: false
+        description: Request limit per time window
+        example: 1000
+        
+      X-RateLimit-Remaining:
+        type: integer
+        required: false
+        description: Number of requests remaining in current window
+        example: 999
+        
+      X-RateLimit-Reset:
+        type: integer
+        required: false
+        description: Unix timestamp when rate limit resets
+        example: 1640995200
+
+  429:
+    description: |
+      Too Many Requests - Rate limit exceeded.
+      Client should wait before making additional requests.
+      
+      Rate Limiting Tiers:
+      - Basic: 100 requests/hour
+      - Premium: 1000 requests/hour  
+      - Enterprise: 10000 requests/hour
+      
+      Headers provide information about current limits and reset times.
+    headers:
+      Retry-After:
+        displayName: Retry After
+        description: Seconds to wait before retrying
+        type: integer
+        minimum: 1
+        example: 60
+        
+      X-RateLimit-Limit:
+        displayName: Rate Limit
+        description: Request limit per time window
+        type: integer
+        example: 1000
+        
+      X-RateLimit-Remaining:
+        displayName: Remaining Requests
+        description: Number of requests remaining (should be 0)
+        type: integer
+        example: 0
+        
+      X-RateLimit-Reset:
+        displayName: Rate Limit Reset
+        description: Unix timestamp when rate limit resets
+        type: integer
+        example: 1640995200
+        
+      X-RateLimit-Window:
+        displayName: Rate Limit Window
+        description: Rate limit time window in seconds
+        type: integer
+        example: 3600
+        
+      X-RateLimit-Policy:
+        displayName: Rate Limit Policy
+        description: Rate limiting policy that was exceeded
+        type: string
+        example: "1000req/hour"
+        
+    body:
+      application/json:
+        type: !include ../data-types/ErrorResponse.raml
+        example:
+          error:
+            code: "RATE_LIMIT_EXCEEDED"
+            message: "Rate limit exceeded"
+            details: "Request limit of 1000 requests per hour has been exceeded"
+            timestamp: "2024-01-15T10:30:00Z"
+            traceId: "rate-limit-abc123def456"
+            path: "/api/v1/orders"
+            method: "GET"
+            statusCode: 429
+            context:
+              rateLimitTier: "premium"
+              currentUsage: 1001
+              limitValue: 1000
+              windowDuration: 3600
+              resetTime: "2024-01-15T11:00:00Z"
+            retryable: true
+            retryAfter: 60
+            helpUrl: "https://docs.api.company.com/rate-limits"
