@@ -1,0 +1,421 @@
+#%RAML 1.0 DataType
+
+displayName: Process Layer Error Responses
+description: |
+  Standardized error response structures for Process Layer APIs.
+  Orchestration APIs that coordinate business processes across multiple systems.
+  
+type: object
+properties:
+  error:
+    type: object
+    properties:
+      code:
+        type: string
+        enum: [
+          "ORCHESTRATION_FAILED",
+          "BUSINESS_PROCESS_ERROR",
+          "SYSTEM_INTEGRATION_FAILED",
+          "TRANSACTION_ROLLBACK",
+          "WORKFLOW_TIMEOUT",
+          "DEPENDENCY_UNAVAILABLE",
+          "DATA_CONSISTENCY_ERROR",
+          "COMPENSATION_FAILED",
+          "PROCESS_VALIDATION_ERROR",
+          "CIRCUIT_BREAKER_OPEN"
+        ]
+        description: Process-specific error code
+        example: "ORCHESTRATION_FAILED"
+        required: true
+      message:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: Technical error message for system administrators and developers
+        example: "Order processing orchestration failed due to multiple system failures"
+        required: true
+      details:
+        type: string
+        maxLength: 1000
+        description: Detailed technical information about the process failure
+        example: "Customer validation succeeded, inventory check failed, payment authorization not attempted"
+        required: false
+      timestamp:
+        type: datetime-only
+        description: When the error occurred
+        example: "2024-03-23T14:00:00"
+        required: true
+      path:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: Process API endpoint where the error occurred
+        example: "/process/v1/order-processing"
+        required: true
+      method:
+        type: string
+        enum: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        description: HTTP method used in the request
+        example: "POST"
+        required: false
+      transactionId:
+        type: string
+        pattern: ^TXN-[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+        description: Unique transaction identifier for end-to-end tracing
+        example: "TXN-550e8400-e29b-41d4-a716-446655440000"
+        required: false
+      correlationId:
+        type: string
+        pattern: ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+        description: Request correlation identifier for distributed tracing
+        example: "550e8400-e29b-41d4-a716-446655440000"
+        required: false
+    required: true
+    description: Core process error information
+  processContext:
+    type: object
+    properties:
+      workflowId:
+        type: string
+        pattern: ^WF-[0-9]{8}$
+        description: Unique workflow instance identifier
+        example: "WF-12345678"
+        required: false
+      stepId:
+        type: string
+        pattern: ^STEP-[0-9]{6}$
+        description: Current workflow step where error occurred
+        example: "STEP-123456"
+        required: false
+      stepName:
+        type: string
+        description: Name of the workflow step
+        example: "payment-authorization"
+        required: false
+      processName:
+        type: string
+        description: Name of the business process
+        example: "order-fulfillment-process"
+        required: false
+      processVersion:
+        type: string
+        pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$
+        description: Version of the business process definition
+        example: "v1.2.3"
+        required: false
+      executionMode:
+        type: string
+        enum: ["SYNCHRONOUS", "ASYNCHRONOUS", "BATCH"]
+        description: Process execution mode
+        example: "SYNCHRONOUS"
+        required: false
+    description: Business process context information
+    required: false
+  systemFailures:
+    type: array
+    items:
+      type: object
+      properties:
+        systemName:
+          type: string
+          description: Name of the failed system
+          example: "inventory-management-system"
+          required: true
+        systemId:
+          type: string
+          pattern: ^SYS-[0-9]{8}$
+          description: Unique system identifier
+          example: "SYS-87654321"
+          required: false
+        errorCode:
+          type: string
+          description: System-specific error code
+          example: "CONN_TIMEOUT"
+          required: true
+        errorMessage:
+          type: string
+          description: System-specific error message
+          example: "Connection timeout after 30 seconds"
+          required: true
+        failureTime:
+          type: datetime-only
+          description: When the system failure occurred
+          example: "2024-03-23T13:58:45"
+          required: true
+        retryAttempts:
+          type: integer
+          minimum: 0
+          description: Number of retry attempts made
+          example: 3
+          required: false
+        lastRetryTime:
+          type: datetime-only
+          description: Timestamp of last retry attempt
+          example: "2024-03-23T13:59:15"
+          required: false
+    minItems: 0
+    description: Details of individual system failures during orchestration
+    required: false
+  rollbackInfo:
+    type: object
+    properties:
+      rollbackRequired:
+        type: boolean
+        description: Whether transaction rollback is required
+        example: true
+        required: true
+      rollbackStatus:
+        type: string
+        enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "PARTIAL"]
+        description: Current status of rollback operation
+        example: "COMPLETED"
+        required: false
+      compensationActions:
+        type: array
+        items:
+          type: object
+          properties:
+            actionId:
+              type: string
+              pattern: ^COMP-[0-9]{8}$
+              description: Unique compensation action identifier
+              example: "COMP-11223344"
+            actionType:
+              type: string
+              enum: ["RELEASE_INVENTORY", "REVERSE_PAYMENT", "CANCEL_SHIPMENT", "RESTORE_DATA", "NOTIFY_CUSTOMER"]
+              description: Type of compensation action
+              example: "RELEASE_INVENTORY"
+            targetSystem:
+              type: string
+              description: System where compensation action should be executed
+              example: "inventory-management-system"
+            status:
+              type: string
+              enum: ["PENDING", "EXECUTING", "COMPLETED", "FAILED"]
+              description: Status of the compensation action
+              example: "COMPLETED"
+            executedAt:
+              type: datetime-only
+              description: When compensation action was executed
+              example: "2024-03-23T14:01:30"
+              required: false
+            result:
+              type: string
+              description: Result or outcome of the compensation action
+              example: "Successfully released 2 units of product WH-PREM-001"
+              required: false
+        description: List of compensation actions to undo partial transaction
+        required: false
+    description: Transaction rollback and compensation information
+    required: false
+  performanceMetrics:
+    type: object
+    properties:
+      totalProcessingTime:
+        type: integer
+        minimum: 0
+        description: Total processing time in milliseconds
+        example: 15000
+        required: false
+      stepExecutionTimes:
+        type: object
+        properties:
+          customerValidation:
+            type: integer
+            minimum: 0
+            example: 250
+          inventoryCheck:
+            type: integer
+            minimum: 0
+            example: 1200
+          paymentAuthorization:
+            type: integer
+            minimum: 0
+            example: 3500
+        description: Execution time for each process step in milliseconds
+        required: false
+      retryCount:
+        type: integer
+        minimum: 0
+        description: Total number of retry attempts across all systems
+        example: 5
+        required: false
+      circuitBreakerStatus:
+        type: object
+        properties:
+          inventoryService:
+            type: string
+            enum: ["CLOSED", "OPEN", "HALF_OPEN"]
+            example: "OPEN"
+          paymentService:
+            type: string
+            enum: ["CLOSED", "OPEN", "HALF_OPEN"]
+            example: "CLOSED"
+        description: Current status of circuit breakers for dependent services
+        required: false
+    description: Process execution performance metrics
+    required: false
+  diagnostics:
+    type: object
+    properties:
+      traceId:
+        type: string
+        pattern: ^[a-fA-F0-9]{32}$
+        description: Distributed tracing identifier
+        example: "550e8400e29b41d4a716446655440000"
+        required: false
+      spanId:
+        type: string
+        pattern: ^[a-fA-F0-9]{16}$
+        description: Current span identifier in distributed trace
+        example: "a716446655440000"
+        required: false
+      logLevel:
+        type: string
+        enum: ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"]
+        description: Recommended log level for this error
+        example: "ERROR"
+        required: false
+      troubleshootingSteps:
+        type: array
+        items:
+          type: string
+        description: Suggested troubleshooting steps for operations teams
+        example: [
+          "Check inventory service health",
+          "Verify payment gateway connectivity",
+          "Review circuit breaker thresholds"
+        ]
+        required: false
+      relatedIncidents:
+        type: array
+        items:
+          type: string
+          pattern: ^INC-[0-9]{8}$
+        description: Related incident identifiers
+        example: ["INC-12345678", "INC-87654321"]
+        required: false
+    description: Diagnostic information for troubleshooting
+    required: false
+
+examples:
+  OrchestrationFailure: |
+    {
+      "error": {
+        "code": "ORCHESTRATION_FAILED",
+        "message": "Order processing orchestration failed due to multiple system failures",
+        "details": "Customer validation succeeded, inventory check failed, payment authorization not attempted",
+        "timestamp": "2024-03-23T14:00:00",
+        "path": "/process/v1/order-processing",
+        "method": "POST",
+        "transactionId": "TXN-550e8400-e29b-41d4-a716-446655440000",
+        "correlationId": "550e8400-e29b-41d4-a716-446655440000"
+      },
+      "processContext": {
+        "workflowId": "WF-12345678",
+        "stepId": "STEP-000003",
+        "stepName": "inventory-validation",
+        "processName": "order-fulfillment-process",
+        "processVersion": "v1.2.3",
+        "executionMode": "SYNCHRONOUS"
+      },
+      "systemFailures": [
+        {
+          "systemName": "inventory-management-system",
+          "systemId": "SYS-87654321",
+          "errorCode": "SERVICE_UNAVAILABLE",
+          "errorMessage": "Service health check failed - circuit breaker open",
+          "failureTime": "2024-03-23T13:58:45",
+          "retryAttempts": 3,
+          "lastRetryTime": "2024-03-23T13:59:15"
+        }
+      ],
+      "rollbackInfo": {
+        "rollbackRequired": true,
+        "rollbackStatus": "COMPLETED",
+        "compensationActions": [
+          {
+            "actionId": "COMP-11223344",
+            "actionType": "RELEASE_INVENTORY",
+            "targetSystem": "inventory-management-system",
+            "status": "COMPLETED",
+            "executedAt": "2024-03-23T14:01:30",
+            "result": "Successfully released reserved inventory"
+          }
+        ]
+      },
+      "performanceMetrics": {
+        "totalProcessingTime": 15000,
+        "stepExecutionTimes": {
+          "customerValidation": 250,
+          "inventoryCheck": 14500,
+          "paymentAuthorization": 0
+        },
+        "retryCount": 3,
+        "circuitBreakerStatus": {
+          "inventoryService": "OPEN",
+          "paymentService": "CLOSED"
+        }
+      },
+      "diagnostics": {
+        "traceId": "550e8400e29b41d4a716446655440000",
+        "spanId": "a716446655440000",
+        "logLevel": "ERROR",
+        "troubleshootingSteps": [
+          "Check inventory service health dashboard",
+          "Review circuit breaker configuration",
+          "Verify network connectivity to inventory service"
+        ],
+        "relatedIncidents": ["INC-12345678"]
+      }
+    }
+  
+  TransactionRollback: |
+    {
+      "error": {
+        "code": "TRANSACTION_ROLLBACK",
+        "message": "Transaction rolled back due to payment authorization failure",
+        "details": "Payment gateway returned decline code 05 - Do not honor",
+        "timestamp": "2024-03-23T14:05:00",
+        "path": "/process/v1/order-processing",
+        "method": "POST",
+        "transactionId": "TXN-550e8400-e29b-41d4-a716-446655440001"
+      },
+      "processContext": {
+        "workflowId": "WF-87654321",
+        "stepId": "STEP-000004",
+        "stepName": "payment-authorization",
+        "processName": "order-fulfillment-process",
+        "processVersion": "v1.2.3",
+        "executionMode": "SYNCHRONOUS"
+      },
+      "rollbackInfo": {
+        "rollbackRequired": true,
+        "rollbackStatus": "COMPLETED",
+        "compensationActions": [
+          {
+            "actionId": "COMP-22334455",
+            "actionType": "RELEASE_INVENTORY",
+            "targetSystem": "inventory-management-system",
+            "status": "COMPLETED",
+            "executedAt": "2024-03-23T14:05:30"
+          },
+          {
+            "actionId": "COMP-33445566",
+            "actionType": "NOTIFY_CUSTOMER",
+            "targetSystem": "notification-service",
+            "status": "COMPLETED",
+            "executedAt": "2024-03-23T14:05:45"
+          }
+        ]
+      },
+      "performanceMetrics": {
+        "totalProcessingTime": 8500,
+        "stepExecutionTimes": {
+          "customerValidation": 200,
+          "inventoryCheck": 800,
+          "paymentAuthorization": 7500
+        },
+        "retryCount": 0
+      }
+    }

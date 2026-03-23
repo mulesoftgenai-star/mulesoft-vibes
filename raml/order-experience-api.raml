@@ -1,0 +1,343 @@
+#%RAML 1.0
+title: Order Experience API
+version: v1
+baseUri: https://api.mulesoft-vibes.com/experience/orders/{version}
+mediaType: application/json
+
+documentation:
+  - title: Order Experience API
+    content: |
+      This API provides a unified interface for order management operations in the MuleSoft Vibes Order Management System.
+      It serves as the Experience layer API that orchestrates interactions with Process and System APIs.
+      
+      Key Features:
+      - Order creation and management
+      - Order status tracking
+      - Customer order history
+      - Integration with downstream systems
+      
+      Security:
+      - OAuth 2.0 with client credentials flow
+      - Rate limiting and throttling policies applied
+      
+      Compliance:
+      - API-Led Connectivity pattern
+      - Experience Layer implementation
+
+types:
+  Order: !include ../Fragment-Creation/data-types/order-data-type.raml
+  Customer: !include ../Fragment-Creation/data-types/customer-data-type.raml
+  ExperienceError: !include ../Fragment-Creation/error-responses/experience-layer-errors.raml
+  OrderExperienceRequest: !include ../request-response/experience-api/order-experience-request.raml
+  OrderExperienceResponse: !include ../request-response/experience-api/order-experience-response.raml
+
+securitySchemes:
+  oauth_2_0:
+    type: OAuth 2.0
+    description: OAuth 2.0 authentication
+    settings:
+      authorizationUri: https://auth.mulesoft-vibes.com/oauth/authorize
+      accessTokenUri: https://auth.mulesoft-vibes.com/oauth/token
+      authorizationGrants: [ client_credentials, authorization_code ]
+
+securedBy: [ oauth_2_0 ]
+
+traits:
+  oauth2-secured: !include ../Fragment-Creation/security-traits/oauth2-security-trait.raml
+  cacheable:
+    headers:
+      Cache-Control?:
+        description: Cache control header
+        type: string
+        example: max-age=3600
+  rateLimited:
+    headers:
+      X-RateLimit-Limit?:
+        description: Request limit per hour
+        type: integer
+        example: 1000
+      X-RateLimit-Remaining?:
+        description: Remaining requests in the current hour
+        type: integer
+        example: 999
+
+/orders:
+  displayName: Orders Collection
+  description: Manage customer orders in the system
+  
+  get:
+    displayName: Get Orders
+    description: Retrieve a list of orders with optional filtering
+    is: [cacheable, rateLimited, oauth2-secured]
+    queryParameters:
+      customerId?:
+        type: string
+        description: Filter orders by customer ID
+        example: "CUST12345"
+      status?:
+        type: string
+        enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+        description: Filter orders by status
+        example: "CONFIRMED"
+      startDate?:
+        type: date-only
+        description: Filter orders from this date
+        example: "2024-01-01"
+      endDate?:
+        type: date-only
+        description: Filter orders until this date
+        example: "2024-12-31"
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of orders to return
+        example: 20
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+        description: Number of orders to skip
+        example: 0
+    responses:
+      200:
+        description: Successfully retrieved orders
+        headers:
+          X-Total-Count:
+            description: Total number of orders matching the criteria
+            type: integer
+            example: 150
+        body:
+          application/json:
+            type: object
+            properties:
+              orders:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    orderId: string
+                    customerId: string
+                    orderDate: datetime
+                    status: 
+                      enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+                    totalAmount: number
+                    currency: string
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          productId: string
+                          productName: string
+                          quantity: integer
+                          unitPrice: number
+                    shippingAddress:
+                      type: object
+                      properties:
+                        street: string
+                        city: string
+                        state: string
+                        zipCode: string
+                        country: string
+              pagination:
+                type: object
+                properties:
+                  limit: integer
+                  offset: integer
+                  total: integer
+                  hasMore: boolean
+            example: |
+              {
+                "orders": [
+                  {
+                    "orderId": "ORD123456",
+                    "customerId": "CUST12345",
+                    "orderDate": "2024-01-15T10:30:00Z",
+                    "status": "CONFIRMED",
+                    "totalAmount": 299.99,
+                    "currency": "USD",
+                    "items": [
+                      {
+                        "productId": "PROD789",
+                        "productName": "Premium Headphones",
+                        "quantity": 1,
+                        "unitPrice": 299.99
+                      }
+                    ],
+                    "shippingAddress": {
+                      "street": "123 Main St",
+                      "city": "San Francisco",
+                      "state": "CA",
+                      "zipCode": "94105",
+                      "country": "USA"
+                    }
+                  }
+                ],
+                "pagination": {
+                  "limit": 20,
+                  "offset": 0,
+                  "total": 150,
+                  "hasMore": true
+                }
+              }
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: object
+            example: |
+              {
+                "error": {
+                  "code": "INVALID_REQUEST",
+                  "message": "Invalid query parameter provided",
+                  "timestamp": "2024-01-15T10:30:00"
+                }
+              }
+      401:
+        description: Unauthorized - Invalid or missing authentication token
+        body:
+          application/json:
+            type: object
+            example: |
+              {
+                "error": {
+                  "code": "UNAUTHORIZED",
+                  "message": "Invalid or missing authentication token",
+                  "timestamp": "2024-01-15T10:30:00"
+                }
+              }
+      403:
+        description: Forbidden - Insufficient permissions
+        body:
+          application/json:
+            type: object
+            example: |
+              {
+                "error": {
+                  "code": "FORBIDDEN",
+                  "message": "Insufficient permissions to access this resource",
+                  "timestamp": "2024-01-15T10:30:00"
+                }
+              }
+      429:
+        description: Too many requests - Rate limit exceeded
+        body:
+          application/json:
+            type: object
+            example: |
+              {
+                "error": {
+                  "code": "RATE_LIMIT_EXCEEDED",
+                  "message": "Rate limit exceeded",
+                  "timestamp": "2024-01-15T10:30:00"
+                }
+              }
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: object
+            example: |
+              {
+                "error": {
+                  "code": "INTERNAL_SERVER_ERROR",
+                  "message": "An unexpected error occurred",
+                  "timestamp": "2024-01-15T10:30:00"
+                }
+              }
+
+  post:
+    displayName: Create Order
+    description: Create a new order in the system
+    is: [rateLimited, oauth2-secured]
+    body:
+      application/json:
+        type: object
+        properties:
+          customerId:
+            type: string
+            pattern: ^CUST[0-9A-Z]{5,}$
+            description: Customer identifier
+            example: "CUST12345"
+          items:
+            type: array
+            minItems: 1
+            items:
+              type: object
+              properties:
+                productId:
+                  type: string
+                  description: Product identifier
+                  example: "PROD789"
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: Quantity to order
+                  example: 2
+                unitPrice:
+                  type: number
+                  minimum: 0
+                  multipleOf: 0.01
+                  description: Unit price
+                  example: 299.99
+          shippingAddress:
+            type: object
+            properties:
+              street: string
+              city: string
+              state: string
+              zipCode: string
+              country: string
+          billingAddress:
+            type: object
+            properties:
+              street: string
+              city: string
+              state: string
+              zipCode: string
+              country: string
+          paymentMethod:
+            type: object
+            properties:
+              type:
+                enum: ["CREDIT_CARD", "DEBIT_CARD", "PAYPAL", "BANK_TRANSFER"]
+              cardNumber: string
+              expiryMonth: string
+              expiryYear: string
+          specialInstructions:
+            type: string
+            required: false
+        example: |
+          {
+            "customerId": "CUST12345",
+            "items": [
+              {
+                "productId": "PROD789",
+                "quantity": 2,
+                "unitPrice": 299.99
+              }
+            ],
+            "shippingAddress": {
+              "street": "123 Main St",
+              "city": "San Francisco",
+              "state": "CA",
+              "zipCode": "94105",
+              "country": "USA"
+            },
+            "billingAddress": {
+              "street": "123 Main St",
+              "city": "San Francisco",
+              "state": "CA",
+              "zipCode": "94105",
+              "country": "USA"
+            },
+            "paymentMethod": {
+              "type": "CREDIT_CARD",
+              "cardNumber": "****-****-****-1234",
+              "expiryMonth": "12",
+              "expiryYear": "2025"
+            },
+            "specialInstructions": "Handle with care"
+          }

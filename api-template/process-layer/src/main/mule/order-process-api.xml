@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xmlns:anypoint-mq="http://www.mulesoft.org/schema/mule/anypoint-mq"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+                          http://www.mulesoft.org/schema/mule/anypoint-mq http://www.mulesoft.org/schema/mule/anypoint-mq/current/mule-anypoint-mq.xsd">
+    
+    <!-- API Configuration - References existing RAML specification -->
+    <apikit:config name="order-process-api-config" 
+                   api="../../raml/order-process-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" />
+    
+    <!-- Anypoint MQ Configuration -->
+    <anypoint-mq:config name="Anypoint_MQ_Config" doc:name="Anypoint MQ Config">
+        <anypoint-mq:connection url="${anypoint.mq.url}" 
+                               clientId="${secure::anypoint.mq.client.id}"
+                               clientSecret="${secure::anypoint.mq.client.secret}" />
+    </anypoint-mq:config>
+    
+    <!-- Object Store Configuration -->
+    <os:object-store name="Order_Processing_Store" 
+                     doc:name="Order Processing Store"
+                     persistent="true" 
+                     maxEntries="10000" 
+                     entryTtl="86400" 
+                     expirationInterval="3600" />
+    
+    <!-- Main API Flow -->
+    <flow name="order-process-api-main">
+        <http:listener doc:name="HTTP Listener" 
+                       config-ref="HTTP_Listener_config" 
+                       path="/process/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <apikit:router config-ref="order-process-api-config" />
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Bad request",
+  message: "Invalid request format or missing required fields",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- POST /orders Implementation - Order Processing Orchestration -->
+    <flow name="post:\orders:application\json:order-process-api-config">
+        <logger level="INFO" doc:name="Start Order Processing" 
+                message="Starting order processing for correlation ID: #[correlationId]" />
+        
+        <ee:transform doc:name="Set Processing Variables">
+            <ee:variables>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+                <ee:set-variable variableName="processStartTime"><![CDATA[%dw 2.0
+output application/java
+---
+now()]]></ee:set-variable>
+                <ee:set-variable variableName="originalPayload"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Store Order Processing State -->
+        <os:store doc:name="Store Processing State" 
+                  key="#[vars.correlationId]" 
+                  objectStore="Order_Processing_Store">
+            <os:value><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    status: "STARTED",
+    startTime: vars.processStartTime as String,
+    orderData: vars.originalPayload
+}]]></os:value>
+        </os:store>
+        
+        <!-- Step 1: Validate Customer -->
+        <flow-ref doc:name="Validate Customer" name="validate-customer-subflow" />
+        
+        <!-- Step 2: Check Inventory -->
+        <flow-ref doc:name="Check Inventory" name="check-inventory-subflow" />
+        
+        <!-- Step 3: Process Payment -->
+        <flow-ref doc:name="Process Payment" name="process-payment-subflow" />
+        
+        <!-- Step 4: Create Order in System -->
+        <flow-ref doc:name="Create Order" name="create-order-subflow" />
+        
+        <!-- Step 5: Initiate Fulfillment -->
+        <flow-ref doc:name="Initiate Fulfillment" name="initiate-fulfillment-subflow" />
+        
+        <!-- Update Processing State -->
+        <os:store doc:name="Update Processing State" 
+                  key="#[vars.correlationId]" 
+                  objectStore="Order_Processing_Store">
+            <os:value><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    status: "COMPLETED",
+    startTime: vars.processStartTime as String,
+    endTime: now() as String,
+    orderData: vars.originalPayload,
+    result: payload
+}]]></os:value>
+        </os:store>
+        
+        <!-- Publish Order Created Event -->
+        <anypoint-mq:publish doc:name="Publish Order Created Event" 
+                            config-ref="Anypoint_MQ_Config"
+                            destination="order-events">
+            <anypoint-mq:body><![CDATA[%dw 2.0
+output application/json
+---
+{
+    eventType: "ORDER_CREATED",
+    correlationId: vars.correlationId,
+    timestamp: now() as String,
+    orderId: payload.orderId,
+    customerId: payload.customerId,
+    totalAmount: payload.totalAmount
+}]]></anypoint-mq:body>
+        </anypoint-mq:publish>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <!-- Store Error State -->
+                <os:store doc:name="Store Error State" 
+                          key="#[vars.correlationId]" 
+                          objectStore="Order_Processing_Store">
+                    <os:value><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    status: "FAILED",
+    startTime: vars.processStartTime as String,
+    endTime: now() as String,
+    orderData: vars.originalPayload,
+    error: {
+        message: error.description,
+        type: error.errorType.identifier
+    }
+}]]></os:value>
+                </os:store>
+                
+                <!-- Publish Order Failed Event -->
+                <anypoint-mq:publish doc:name="Publish Order Failed Event" 
+                                    config-ref="Anypoint_MQ_Config"
+                                    destination="order-events">
+                    <anypoint-mq:body><![CDATA[%dw 2.0
+output application/json
+---
+{
+    eventType: "ORDER_FAILED",
+    correlationId: vars.correlationId,
+    timestamp: now() as String,
+    error: error.description
+}]]></anypoint-mq:body>
+                </anypoint-mq:publish>
+                
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Order processing failed",
+    message: error.description default "An error occurred during order processing",
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- GET /orders/{orderId} Implementation -->
+    <flow name="get:\orders\(orderId):order-process-api-config">
+        <logger level="INFO" doc:name="Logger" message="Retrieving order: #[attributes.uriParams.orderId]" />
+        
+        <ee:transform doc:name="Set Variables">
+            <ee:variables>
+                <ee:set-variable variableName="orderId"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.uriParams.orderId]]></ee:set-variable>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Call System Layer API to get order -->
+        <http:request method="GET" 
+                      doc:name="Get Order from System API" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/system/orders/#[vars.orderId]" 
+                      responseTimeout="15000">
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Order Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    
+    <!-- Customer Validation Subflow -->
+    <sub-flow name="validate-customer-subflow">
+        <logger level="INFO" doc:name="Logger" message="Validating customer: #[payload.customerId]" />
+        
+        <!-- Call Customer System API -->
+        <http:request method="GET" 
+                      doc:name="Get Customer" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/system/customers/#[payload.customerId]" 
+                      responseTimeout="10000">
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Store Customer Data -->
+        <ee:transform doc:name="Store Customer Data">
+            <ee:variables>
+                <ee:set-variable variableName="customerData"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.originalPayload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+    
+    <!-- Inventory Check Subflow -->
+    <sub-flow name="check-inventory-subflow">
+        <logger level="INFO" doc:name="Logger" message="Checking inventory for items: #[payload.items]" />
+        
+        <!-- Call Inventory System API -->
+        <http:request method="POST" 
+                      doc:name="Check Inventory" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/system/inventory/check" 
+                      responseTimeout="15000">
+            <http:body><![CDATA[%dw 2.0
+output application/json
+---
+{
+    items: payload.items map (item) -> {
+        productId: item.productId,
+        quantity: item.quantity
+    }
+}]]></http:body>
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "Content-Type" : "application/json",
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Store Inventory Data -->
+        <ee:transform doc:name="Store Inventory Data">
+            <ee:variables>
+                <ee:set-variable variableName="inventoryData"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.originalPayload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+    
+    <!-- Payment Processing Subflow -->
+    <sub-flow name="process-payment-subflow">
+        <logger level="INFO" doc:name="Logger" message="Processing payment for amount: #[sum(payload.items map ($.quantity * $.unitPrice))]" />
+        
+        <!-- Call Payment System API -->
+        <http:request method="POST" 
+                      doc:name="Process Payment" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/system/payments/authorize" 
+                      responseTimeout="20000">
+            <http:body><![CDATA[%dw 2.0
+output application/json
+---
+{
+    customerId: payload.customerId,
+    paymentMethod: payload.paymentMethod,
+    amount: sum(payload.items map ($.quantity * $.unitPrice)),
+    currency: "USD",
+    correlationId: vars.correlationId
+}]]></http:body>
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "Content-Type" : "application/json",
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Store Payment Data -->
+        <ee:transform doc:name="Store Payment Data">
+            <ee:variables>
+                <ee:set-variable variableName="paymentData"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.originalPayload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+    
+    <!-- Create Order Subflow -->
+    <sub-flow name="create-order-subflow">
+        <logger level="INFO" doc:name="Logger" message="Creating order in system" />
+        
+        <!-- Transform to System API Format -->
+        <ee:transform doc:name="Transform to System Format">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    customerId: payload.customerId,
+    customerData: vars.customerData,
+    items: payload.items,
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress,
+    paymentData: vars.paymentData,
+    inventoryData: vars.inventoryData,
+    totalAmount: sum(payload.items map ($.quantity * $.unitPrice)),
+    currency: "USD"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Order Management System API -->
+        <http:request method="POST" 
+                      doc:name="Create Order in System" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/system/orders" 
+                      responseTimeout="25000">
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "Content-Type" : "application/json",
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Store Order Data -->
+        <ee:transform doc:name="Store Order Data">
+            <ee:variables>
+                <ee:set-variable variableName="orderData"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+    
+    <!-- Initiate Fulfillment Subflow -->
+    <sub-flow name="initiate-fulfillment-subflow">
+        <logger level="INFO" doc:name="Logger" message="Initiating fulfillment for order: #[payload.orderId]" />
+        
+        <!-- Call Shipping System API -->
+        <http:request method="POST" 
+                      doc:name="Initiate Shipping" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/system/shipping/initiate" 
+                      responseTimeout="15000">
+            <http:body><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    customerId: payload.customerId,
+    items: payload.items,
+    shippingAddress: payload.shippingAddress,
+    shippingMethod: "STANDARD",
+    correlationId: vars.correlationId
+}]]></http:body>
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "Content-Type" : "application/json",
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Merge Shipping Data with Order -->
+        <ee:transform doc:name="Merge Order and Shipping Data">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.orderData ++ {
+    shippingData: payload,
+    estimatedDelivery: payload.estimatedDelivery,
+    trackingNumber: payload.trackingNumber,
+    trackingUrl: "https://track.company.com/" ++ vars.orderData.orderId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+    
+</mule>

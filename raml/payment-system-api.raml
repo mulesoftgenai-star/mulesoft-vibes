@@ -1,0 +1,605 @@
+#%RAML 1.0
+title: Payment System API
+version: v1
+description: |
+  System layer API for payment processing and transaction management.
+  This API provides secure payment processing capabilities.
+mediaType: application/json
+baseUri: https://api.mulesoft-vibes.com/system/payment/{version}
+protocols: [HTTPS]
+
+types:
+  PaymentDataTypes: !include ../Fragment-Creation/data-types/payment-data-type.raml
+  SystemErrors: !include ../Fragment-Creation/error-responses/system-layer-errors.raml
+
+traits:
+  oauth2-secured: !include ../Fragment-Creation/security-traits/oauth2-security-trait.raml
+  secure:
+    headers:
+      X-API-Key:
+        type: string
+        required: true
+        description: API key for payment gateway authentication
+      X-Request-Signature:
+        type: string
+        required: false
+        description: HMAC signature for request verification
+  idempotent:
+    headers:
+      Idempotency-Key:
+        type: string
+        required: false
+        description: Unique key to prevent duplicate payments
+        example: "idem-pay-12345-abcde"
+
+securitySchemes:
+  oauth_2_0:
+    type: OAuth 2.0
+    description: OAuth 2.0 authentication
+    settings:
+      authorizationUri: https://auth.mulesoft-vibes.com/oauth/authorize
+      accessTokenUri: https://auth.mulesoft-vibes.com/oauth/token
+      authorizationGrants: [ client_credentials, authorization_code ]
+
+securedBy: [ oauth_2_0 ]
+
+/payments:
+  description: Payment processing operations
+  is: [secure, idempotent]
+  
+  /authorize:
+    post:
+      displayName: Authorize Payment
+      description: Authorize a payment without capturing funds
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: object
+          properties:
+            orderId:
+              type: string
+              required: true
+              example: "ORD-2024-001234"
+            customerId:
+              type: string
+              required: true
+              example: "CUST-12345678"
+            amount:
+              type: object
+              required: true
+              properties:
+                value:
+                  type: number
+                  minimum: 0.01
+                  example: 157.99
+                currency:
+                  type: string
+                  pattern: ^[A-Z]{3}$
+                  example: "USD"
+            paymentMethod:
+              type: object
+              required: true
+              properties:
+                type:
+                  type: string
+                  enum: [CREDIT_CARD, DEBIT_CARD, DIGITAL_WALLET, BANK_TRANSFER, GIFT_CARD]
+                  example: "CREDIT_CARD"
+                cardToken:
+                  type: string
+                  required: false
+                  example: "tok_1A2B3C4D5E6F7G8H"
+                cardholderName:
+                  type: string
+                  required: false
+                  example: "John Doe"
+                expiryMonth:
+                  type: integer
+                  required: false
+                  minimum: 1
+                  maximum: 12
+                  example: 12
+                expiryYear:
+                  type: integer
+                  required: false
+                  minimum: 2024
+                  example: 2025
+                cvv:
+                  type: string
+                  required: false
+                  pattern: ^[0-9]{3,4}$
+                  example: "123"
+            billingAddress:
+              type: object
+              required: false
+              properties:
+                street:
+                  type: string
+                  example: "456 Business Ave"
+                city:
+                  type: string
+                  example: "New York"
+                state:
+                  type: string
+                  example: "NY"
+                zipCode:
+                  type: string
+                  example: "10002"
+                country:
+                  type: string
+                  example: "US"
+          examples:
+            authorizePayment:
+              orderId: "ORD-2024-001234"
+              customerId: "CUST-12345678"
+              amount:
+                value: 157.99
+                currency: "USD"
+              paymentMethod:
+                type: "CREDIT_CARD"
+                cardToken: "tok_1A2B3C4D5E6F7G8H"
+                cardholderName: "John Doe"
+                expiryMonth: 12
+                expiryYear: 2025
+                cvv: "123"
+              billingAddress:
+                street: "456 Business Ave"
+                city: "New York"
+                state: "NY"
+                zipCode: "10002"
+                country: "US"
+      responses:
+        200:
+          description: Payment authorized successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                authorizationId:
+                  type: string
+                  example: "AUTH-987654321"
+                transactionId:
+                  type: string
+                  example: "TXN-ABC123DEF456"
+                status:
+                  type: string
+                  enum: [AUTHORIZED, DECLINED, ERROR, PENDING]
+                  example: "AUTHORIZED"
+                authorizedAmount:
+                  type: object
+                  properties:
+                    value:
+                      type: number
+                      example: 157.99
+                    currency:
+                      type: string
+                      example: "USD"
+                gatewayResponse:
+                  type: object
+                  properties:
+                    gatewayTransactionId:
+                      type: string
+                      example: "pi_1234567890ABCDEF"
+                    approvalCode:
+                      type: string
+                      example: "ABC123"
+                    avsResult:
+                      type: string
+                      enum: [MATCH, PARTIAL_MATCH, NO_MATCH, NOT_SUPPORTED, ERROR]
+                      example: "MATCH"
+                    cvvResult:
+                      type: string
+                      enum: [MATCH, NO_MATCH, NOT_PROCESSED, NOT_PROVIDED]
+                      example: "MATCH"
+                riskAssessment:
+                  type: object
+                  properties:
+                    riskScore:
+                      type: number
+                      minimum: 0
+                      maximum: 100
+                      example: 15.5
+                    riskLevel:
+                      type: string
+                      enum: [LOW, MEDIUM, HIGH]
+                      example: "LOW"
+                    decision:
+                      type: string
+                      enum: [APPROVE, REVIEW, DECLINE]
+                      example: "APPROVE"
+                expirationTime:
+                  type: datetime
+                  example: "2024-03-30T14:30:00Z"
+              examples:
+                authorizationSuccess:
+                  authorizationId: "AUTH-987654321"
+                  transactionId: "TXN-ABC123DEF456"
+                  status: "AUTHORIZED"
+                  authorizedAmount:
+                    value: 157.99
+                    currency: "USD"
+                  gatewayResponse:
+                    gatewayTransactionId: "pi_1234567890ABCDEF"
+                    approvalCode: "ABC123"
+                    avsResult: "MATCH"
+                    cvvResult: "MATCH"
+                  riskAssessment:
+                    riskScore: 15.5
+                    riskLevel: "LOW"
+                    decision: "APPROVE"
+                  expirationTime: "2024-03-30T14:30:00Z"
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        402:
+          description: Payment declined
+          body:
+            application/json:
+              type: object
+              properties:
+                error:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      example: "CARD_DECLINED"
+                    message:
+                      type: string
+                      example: "The card was declined by the issuing bank"
+                    declineCode:
+                      type: string
+                      example: "insufficient_funds"
+                    canRetry:
+                      type: boolean
+                      example: false
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+  /capture:
+    post:
+      displayName: Capture Payment
+      description: Capture a previously authorized payment
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: object
+          properties:
+            authorizationId:
+              type: string
+              required: true
+              example: "AUTH-987654321"
+            amount:
+              type: object
+              required: false
+              description: Capture amount (defaults to full authorized amount)
+              properties:
+                value:
+                  type: number
+                  minimum: 0.01
+                  example: 157.99
+                currency:
+                  type: string
+                  pattern: ^[A-Z]{3}$
+                  example: "USD"
+            orderId:
+              type: string
+              required: true
+              example: "ORD-2024-001234"
+          examples:
+            capturePayment:
+              authorizationId: "AUTH-987654321"
+              amount:
+                value: 157.99
+                currency: "USD"
+              orderId: "ORD-2024-001234"
+      responses:
+        200:
+          description: Payment captured successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                captureId:
+                  type: string
+                  example: "CAP-789123456"
+                authorizationId:
+                  type: string
+                  example: "AUTH-987654321"
+                transactionId:
+                  type: string
+                  example: "TXN-ABC123DEF456"
+                status:
+                  type: string
+                  enum: [CAPTURED, FAILED, PENDING]
+                  example: "CAPTURED"
+                capturedAmount:
+                  type: object
+                  properties:
+                    value:
+                      type: number
+                      example: 157.99
+                    currency:
+                      type: string
+                      example: "USD"
+                fees:
+                  type: object
+                  properties:
+                    processingFee:
+                      type: number
+                      example: 4.58
+                    transactionFee:
+                      type: number
+                      example: 0.30
+                    totalFees:
+                      type: number
+                      example: 4.88
+                netAmount:
+                  type: number
+                  example: 153.11
+                settledAt:
+                  type: datetime
+                  required: false
+                  example: "2024-03-24T02:00:00Z"
+              examples:
+                captureSuccess:
+                  captureId: "CAP-789123456"
+                  authorizationId: "AUTH-987654321"
+                  transactionId: "TXN-ABC123DEF456"
+                  status: "CAPTURED"
+                  capturedAmount:
+                    value: 157.99
+                    currency: "USD"
+                  fees:
+                    processingFee: 4.58
+                    transactionFee: 0.30
+                    totalFees: 4.88
+                  netAmount: 153.11
+                  settledAt: "2024-03-24T02:00:00Z"
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        409:
+          description: Authorization expired or already captured
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+  /refund:
+    post:
+      displayName: Process Refund
+      description: Process a refund for a captured payment
+      body:
+        application/json:
+          type: object
+          properties:
+            transactionId:
+              type: string
+              required: true
+              example: "TXN-ABC123DEF456"
+            amount:
+              type: object
+              required: false
+              description: Refund amount (defaults to full captured amount)
+              properties:
+                value:
+                  type: number
+                  minimum: 0.01
+                  example: 50.00
+                currency:
+                  type: string
+                  pattern: ^[A-Z]{3}$
+                  example: "USD"
+            reason:
+              type: string
+              required: true
+              enum: [CUSTOMER_REQUEST, ORDER_CANCELLED, PRODUCT_RETURN, DUPLICATE_PAYMENT, FRAUD]
+              example: "CUSTOMER_REQUEST"
+            notes:
+              type: string
+              required: false
+              maxLength: 500
+              example: "Customer requested partial refund for damaged item"
+            orderId:
+              type: string
+              required: true
+              example: "ORD-2024-001234"
+          examples:
+            processRefund:
+              transactionId: "TXN-ABC123DEF456"
+              amount:
+                value: 50.00
+                currency: "USD"
+              reason: "CUSTOMER_REQUEST"
+              notes: "Customer requested partial refund for damaged item"
+              orderId: "ORD-2024-001234"
+      responses:
+        200:
+          description: Refund processed successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                refundId:
+                  type: string
+                  example: "REF-456789123"
+                transactionId:
+                  type: string
+                  example: "TXN-ABC123DEF456"
+                status:
+                  type: string
+                  enum: [PROCESSED, FAILED, PENDING]
+                  example: "PROCESSED"
+                refundedAmount:
+                  type: object
+                  properties:
+                    value:
+                      type: number
+                      example: 50.00
+                    currency:
+                      type: string
+                      example: "USD"
+                reason:
+                  type: string
+                  example: "CUSTOMER_REQUEST"
+                processingTime:
+                  type: string
+                  example: "3-5 business days"
+                gatewayRefundId:
+                  type: string
+                  example: "re_1234567890FEDCBA"
+              examples:
+                refundSuccess:
+                  refundId: "REF-456789123"
+                  transactionId: "TXN-ABC123DEF456"
+                  status: "PROCESSED"
+                  refundedAmount:
+                    value: 50.00
+                    currency: "USD"
+                  reason: "CUSTOMER_REQUEST"
+                  processingTime: "3-5 business days"
+                  gatewayRefundId: "re_1234567890FEDCBA"
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        422:
+          description: Refund amount exceeds available balance
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+  /{transactionId}:
+    uriParameters:
+      transactionId:
+        type: string
+        pattern: ^TXN-[A-Z0-9]{12}$
+        example: "TXN-ABC123DEF456"
+        description: Unique transaction identifier
+    
+    get:
+      displayName: Get Payment Status
+      description: Retrieve payment transaction details and status
+      responses:
+        200:
+          description: Payment details retrieved successfully
+          body:
+            application/json:
+              type: PaymentDataTypes
+              examples:
+                paymentDetails:
+                  paymentId: "PAY-11998877"
+                  paymentNumber: "PAYMENT-2024-001234"
+                  orderId: "ORD-12345678"
+                  customerId: "CUST-87654321"
+                  paymentDate: "2024-03-23T13:42:27"
+                  paymentStatus: "CAPTURED"
+                  paymentType: "PAYMENT"
+                  paymentMethod:
+                    methodType: "CREDIT_CARD"
+                    cardDetails:
+                      cardType: "VISA"
+                      maskedCardNumber: "****-****-****-1234"
+                      cardToken: "tok_1A2B3C4D5E6F7G8H"
+                      expiryMonth: 12
+                      expiryYear: 2028
+                      cardholderName: "John Doe"
+                      billingAddressId: "ADDR-99887766"
+                  amounts:
+                    requestedAmount: 157.99
+                    authorizedAmount: 157.99
+                    capturedAmount: 157.99
+                    refundedAmount: 0.00
+                    currency: "USD"
+                  processingDetails:
+                    gatewayProvider: "STRIPE"
+                    gatewayTransactionId: "pi_1234567890ABCDEF"
+                    authorizationCode: "AUTH123456"
+                    processorResponseCode: "00"
+                    processorResponseMessage: "Transaction Approved"
+                    riskScore: 15.5
+                    riskDecision: "ACCEPT"
+                  timeline:
+                    initiatedAt: "2024-03-23T13:42:27"
+                    authorizedAt: "2024-03-23T13:42:30"
+                    capturedAt: "2024-03-23T13:45:00"
+                    settledAt: "2024-03-24T02:00:00"
+                    expiresAt: "2024-03-30T13:42:30"
+                  metadata:
+                    createdBy: "payment_service"
+                    createdDate: "2024-03-23T13:42:27"
+                    lastModifiedBy: "admin_user"
+                    lastModifiedDate: "2024-03-23T13:45:15"
+                    version: 2
+                    tags: ["high_value", "international", "recurring"]
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check payment system API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              version:
+                type: string
+              dependencies:
+                type: object
+                properties:
+                  database:
+                    type: string
+                    enum: [UP, DOWN]
+                  paymentGateway:
+                    type: string
+                    enum: [UP, DOWN]
+                  fraudService:
+                    type: string
+                    enum: [UP, DOWN]
+            example:
+              status: "UP"
+              timestamp: "2024-03-23T14:30:00Z"
+              version: "v1"
+              dependencies:
+                database: "UP"
+                paymentGateway: "UP"
+                fraudService: "UP"
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            type: SystemErrors

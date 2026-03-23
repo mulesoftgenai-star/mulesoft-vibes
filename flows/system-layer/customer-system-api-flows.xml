@@ -1,0 +1,461 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+                          http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+
+    <!-- Customer System API Main Flow -->
+    <flow name="customer-system-api-main" doc:name="Customer System API Main Flow">
+        <http:listener doc:name="HTTP Listener" path="/system/customers/*" config-ref="customer-system-httpListenerConfig">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <logger level="INFO" doc:name="Log Request" message='#["Customer System API Request: " ++ attributes.method ++ " " ++ attributes.requestPath]'/>
+        
+        <apikit:router config-ref="customer-system-api-config"/>
+        
+        <error-handler ref="customer-system-api-errorHandler"/>
+    </flow>
+
+    <!-- GET /customers/{customerId} - Get Customer -->
+    <flow name="get:\customers\(customerId):customer-system-api-config" doc:name="Get Customer">
+        <logger level="INFO" doc:name="Log Get Customer" message='#["Getting customer: " ++ attributes.uriParams.customerId]'/>
+        
+        <set-variable value='#[attributes.uriParams.customerId]' doc:name="Set Customer ID" variableName="customerId"/>
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Check cache first -->
+        <os:retrieve doc:name="Check Customer Cache" key="#[vars.customerId]" objectStore="customerCacheStore" target="cachedCustomer">
+            <os:default-value><![CDATA[#[null]]]></os:default-value>
+        </os:retrieve>
+        
+        <choice doc:name="Cache Hit?">
+            <when expression="#[vars.cachedCustomer != null]">
+                <logger level="INFO" doc:name="Cache Hit" message="Customer found in cache"/>
+                <set-payload value="#[vars.cachedCustomer]" doc:name="Set Cached Customer"/>
+            </when>
+            <otherwise>
+                <!-- Query Database -->
+                <db:select doc:name="Query Customer Database" config-ref="customerDatabaseConfig">
+                    <db:sql><![CDATA[
+                        SELECT 
+                            customer_id,
+                            customer_number,
+                            first_name,
+                            last_name,
+                            email,
+                            phone,
+                            date_of_birth,
+                            customer_type,
+                            status,
+                            credit_limit,
+                            loyalty_points,
+                            created_date,
+                            updated_date,
+                            last_login_date
+                        FROM customers 
+                        WHERE customer_id = :customerId 
+                        AND status != 'DELETED'
+                    ]]></db:sql>
+                    <db:input-parameters>
+                        <db:input-parameter key="customerId" value="#[vars.customerId]"/>
+                    </db:input-parameters>
+                </db:select>
+                
+                <!-- Transform Database Result -->
+                <choice doc:name="Customer Found?">
+                    <when expression="#[sizeOf(payload) > 0]">
+                        <ee:transform doc:name="Transform Customer Data" xsi:type="ee:MessageTransformer">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    customerId: payload[0].customer_id,
+    customerNumber: payload[0].customer_number,
+    personalInfo: {
+        firstName: payload[0].first_name,
+        lastName: payload[0].last_name,
+        email: payload[0].email,
+        phone: payload[0].phone,
+        dateOfBirth: payload[0].date_of_birth as String default null
+    },
+    customerType: payload[0].customer_type,
+    status: payload[0].status,
+    creditLimit: payload[0].credit_limit,
+    loyaltyPoints: payload[0].loyalty_points,
+    metadata: {
+        createdDate: payload[0].created_date as String,
+        updatedDate: payload[0].updated_date as String,
+        lastLoginDate: payload[0].last_login_date as String default null
+    },
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        
+                        <!-- Cache the result -->
+                        <os:store doc:name="Cache Customer" key="#[vars.customerId]" objectStore="customerCacheStore">
+                            <os:value><![CDATA[#[payload]]]></os:value>
+                        </os:store>
+                        
+                        <logger level="INFO" doc:name="Customer Found" message='#["Customer found: " ++ payload.customerId]'/>
+                    </when>
+                    <otherwise>
+                        <ee:transform doc:name="Customer Not Found" xsi:type="ee:MessageTransformer">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "CUSTOMER_NOT_FOUND",
+    message: "Customer not found",
+    customerId: vars.customerId,
+    correlationId: vars.correlationId,
+                                    timestamp: now() as String
+}]]></ee:set-payload>
+                            </ee:message>
+                            <ee:variables>
+                                <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                            </ee:variables>
+                        </ee:transform>
+                    </otherwise>
+                </choice>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Database Error">
+                <logger level="ERROR" doc:name="Log Database Error" message='#["Database error: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Database Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "DATABASE_ERROR",
+    message: "Database operation failed",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /customers - Create Customer -->
+    <flow name="post:\customers:application\json:customer-system-api-config" doc:name="Create Customer">
+        <logger level="INFO" doc:name="Log Create Customer" message='#["Creating customer: " ++ payload.personalInfo.email]'/>
+        
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#["CUST-" ++ now() as String {format: "yyyyMMddHHmmss"} ++ "-" ++ (randomInt(999) + 100) as String]' doc:name="Generate Customer ID" variableName="newCustomerId"/>
+        <set-variable value='#["CN-" ++ now() as String {format: "yyyyMMdd"} ++ "-" ++ (randomInt(9999) + 1000) as String]' doc:name="Generate Customer Number" variableName="customerNumber"/>
+        
+        <!-- Validate Email Uniqueness -->
+        <db:select doc:name="Check Email Uniqueness" config-ref="customerDatabaseConfig">
+            <db:sql><![CDATA[SELECT COUNT(*) as count FROM customers WHERE email = :email AND status != 'DELETED']]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="email" value="#[payload.personalInfo.email]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <choice doc:name="Email Unique?">
+            <when expression="#[payload[0].count == 0]">
+                <!-- Email is unique, proceed with creation -->
+                <set-payload value="#[vars.originalPayload]" doc:name="Restore Payload"/>
+                
+                <!-- Insert Customer -->
+                <db:insert doc:name="Insert Customer" config-ref="customerDatabaseConfig">
+                    <db:sql><![CDATA[
+                        INSERT INTO customers (
+                            customer_id,
+                            customer_number,
+                            first_name,
+                            last_name,
+                            email,
+                            phone,
+                            date_of_birth,
+                            customer_type,
+                            status,
+                            credit_limit,
+                            loyalty_points,
+                            created_date,
+                            updated_date
+                        ) VALUES (
+                            :customerId,
+                            :customerNumber,
+                            :firstName,
+                            :lastName,
+                            :email,
+                            :phone,
+                            :dateOfBirth,
+                            :customerType,
+                            'ACTIVE',
+                            :creditLimit,
+                            0,
+                            CURRENT_TIMESTAMP,
+                            CURRENT_TIMESTAMP
+                        )
+                    ]]></db:sql>
+                    <db:input-parameters>
+                        <db:input-parameter key="customerId" value="#[vars.newCustomerId]"/>
+                        <db:input-parameter key="customerNumber" value="#[vars.customerNumber]"/>
+                        <db:input-parameter key="firstName" value="#[payload.personalInfo.firstName]"/>
+                        <db:input-parameter key="lastName" value="#[payload.personalInfo.lastName]"/>
+                        <db:input-parameter key="email" value="#[payload.personalInfo.email]"/>
+                        <db:input-parameter key="phone" value="#[payload.personalInfo.phone default null]"/>
+                        <db:input-parameter key="dateOfBirth" value="#[payload.personalInfo.dateOfBirth default null]"/>
+                        <db:input-parameter key="customerType" value="#[payload.customerType default 'STANDARD']"/>
+                        <db:input-parameter key="creditLimit" value="#[payload.creditLimit default 5000]"/>
+                    </db:input-parameters>
+                </db:insert>
+                
+                <!-- Transform Create Response -->
+                <ee:transform doc:name="Transform Create Response" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    customerId: vars.newCustomerId,
+    customerNumber: vars.customerNumber,
+    personalInfo: payload.personalInfo,
+    customerType: payload.customerType default "STANDARD",
+    status: "ACTIVE",
+    creditLimit: payload.creditLimit default 5000,
+    loyaltyPoints: 0,
+    metadata: {
+        createdDate: now() as String,
+        updatedDate: now() as String
+    },
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">201</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                
+                <!-- Cache the new customer -->
+                <os:store doc:name="Cache New Customer" key="#[vars.newCustomerId]" objectStore="customerCacheStore">
+                    <os:value><![CDATA[#[payload]]]></os:value>
+                </os:store>
+                
+                <logger level="INFO" doc:name="Customer Created" message='#["Customer created successfully: " ++ vars.newCustomerId]'/>
+            </when>
+            <otherwise>
+                <!-- Email already exists -->
+                <ee:transform doc:name="Email Already Exists" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "EMAIL_ALREADY_EXISTS",
+    message: "Customer with this email already exists",
+    email: vars.originalPayload.personalInfo.email,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">409</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Create Error">
+                <logger level="ERROR" doc:name="Log Create Error" message='#["Customer creation failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Create Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "CUSTOMER_CREATION_FAILED",
+    message: "Failed to create customer",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- PUT /customers/{customerId} - Update Customer -->
+    <flow name="put:\customers\(customerId):application\json:customer-system-api-config" doc:name="Update Customer">
+        <logger level="INFO" doc:name="Log Update Customer" message='#["Updating customer: " ++ attributes.uriParams.customerId]'/>
+        
+        <set-variable value='#[attributes.uriParams.customerId]' doc:name="Set Customer ID" variableName="customerId"/>
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Update Customer -->
+        <db:update doc:name="Update Customer" config-ref="customerDatabaseConfig">
+            <db:sql><![CDATA[
+                UPDATE customers SET
+                    first_name = COALESCE(:firstName, first_name),
+                    last_name = COALESCE(:lastName, last_name),
+                    phone = COALESCE(:phone, phone),
+                    customer_type = COALESCE(:customerType, customer_type),
+                    status = COALESCE(:status, status),
+                    credit_limit = COALESCE(:creditLimit, credit_limit),
+                    updated_date = CURRENT_TIMESTAMP
+                WHERE customer_id = :customerId
+                AND status != 'DELETED'
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="customerId" value="#[vars.customerId]"/>
+                <db:input-parameter key="firstName" value="#[payload.personalInfo.firstName default null]"/>
+                <db:input-parameter key="lastName" value="#[payload.personalInfo.lastName default null]"/>
+                <db:input-parameter key="phone" value="#[payload.personalInfo.phone default null]"/>
+                <db:input-parameter key="customerType" value="#[payload.customerType default null]"/>
+                <db:input-parameter key="status" value="#[payload.status default null]"/>
+                <db:input-parameter key="creditLimit" value="#[payload.creditLimit default null]"/>
+            </db:input-parameters>
+        </db:update>
+        
+        <choice doc:name="Customer Updated?">
+            <when expression="#[payload.affectedRows > 0]">
+                <!-- Customer updated successfully -->
+                <logger level="INFO" doc:name="Customer Updated" message='#["Customer updated successfully: " ++ vars.customerId]'/>
+                
+                <!-- Invalidate cache -->
+                <os:remove doc:name="Invalidate Cache" key="#[vars.customerId]" objectStore="customerCacheStore"/>
+                
+                <!-- Return updated customer -->
+                <flow-ref doc:name="Get Updated Customer" name="get-customer-by-id-subflow"/>
+            </when>
+            <otherwise>
+                <!-- Customer not found -->
+                <ee:transform doc:name="Customer Not Found" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "CUSTOMER_NOT_FOUND",
+    message: "Customer not found or no changes made",
+    customerId: vars.customerId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Update Error">
+                <logger level="ERROR" doc:name="Log Update Error" message='#["Customer update failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Update Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "CUSTOMER_UPDATE_FAILED",
+    message: "Failed to update customer",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Helper Sub-flow to Get Customer by ID -->
+    <sub-flow name="get-customer-by-id-subflow" doc:name="Get Customer by ID">
+        <db:select doc:name="Query Customer" config-ref="customerDatabaseConfig">
+            <db:sql><![CDATA[
+                SELECT 
+                    customer_id,
+                    customer_number,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    date_of_birth,
+                    customer_type,
+                    status,
+                    credit_limit,
+                    loyalty_points,
+                    created_date,
+                    updated_date,
+                    last_login_date
+                FROM customers 
+                WHERE customer_id = :customerId
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="customerId" value="#[vars.customerId]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <ee:transform doc:name="Transform Customer Data" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    customerId: payload[0].customer_id,
+    customerNumber: payload[0].customer_number,
+    personalInfo: {
+        firstName: payload[0].first_name,
+        lastName: payload[0].last_name,
+        email: payload[0].email,
+        phone: payload[0].phone,
+        dateOfBirth: payload[0].date_of_birth as String default null
+    },
+    customerType: payload[0].customer_type,
+    status: payload[0].status,
+    creditLimit: payload[0].credit_limit,
+    loyaltyPoints: payload[0].loyalty_points,
+    metadata: {
+        createdDate: payload[0].created_date as String,
+        updatedDate: payload[0].updated_date as String,
+        lastLoginDate: payload[0].last_login_date as String default null
+    },
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </sub-flow>
+
+</mule>

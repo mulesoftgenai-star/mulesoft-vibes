@@ -1,0 +1,302 @@
+#%RAML 1.0 DataType
+
+displayName: Order
+description: |
+  Comprehensive Order data type for Order Management System.
+  Supports complete order lifecycle from creation to fulfillment.
+  
+type: object
+properties:
+  orderId:
+    type: string
+    pattern: ^ORD-[0-9]{8}$
+    example: "ORD-12345678"
+    description: Unique order identifier with ORD- prefix
+    required: true
+  orderNumber:
+    type: string
+    minLength: 1
+    maxLength: 50
+    example: "ORDER-2024-001234"
+    description: Business-friendly order number
+    required: true
+  customerId:
+    type: string
+    pattern: ^CUST-[0-9]{8}$
+    example: "CUST-87654321"
+    description: Reference to customer who placed the order
+    required: true
+  orderDate:
+    type: datetime-only
+    example: "2024-03-23T13:42:27"
+    description: Date and time when order was placed
+    required: true
+  orderStatus:
+    type: string
+    enum: [
+      "PENDING",
+      "CONFIRMED",
+      "PROCESSING",
+      "SHIPPED",
+      "DELIVERED", 
+      "CANCELLED",
+      "RETURNED",
+      "REFUNDED"
+    ]
+    example: "CONFIRMED"
+    description: Current status of the order
+    required: true
+  orderType:
+    type: string
+    enum: ["STANDARD", "EXPRESS", "BULK", "SUBSCRIPTION", "GIFT"]
+    example: "STANDARD"
+    description: Type classification of the order
+    required: true
+  priority:
+    type: string
+    enum: ["LOW", "NORMAL", "HIGH", "URGENT"]
+    example: "NORMAL"
+    description: Processing priority level
+    required: false
+  channel:
+    type: string
+    enum: ["WEB", "MOBILE", "PHONE", "EMAIL", "PARTNER", "STORE"]
+    example: "WEB"
+    description: Sales channel through which order was placed
+    required: true
+  currency:
+    type: string
+    pattern: ^[A-Z]{3}$
+    example: "USD"
+    description: ISO 4217 currency code
+    required: true
+  orderItems:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      properties:
+        lineItemId:
+          type: string
+          pattern: ^LI-[0-9]{8}$
+          example: "LI-11223344"
+          description: Unique line item identifier
+        productId:
+          type: string
+          pattern: ^PROD-[0-9]{8}$
+          example: "PROD-55667788"
+          description: Product identifier
+        productName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: "Premium Wireless Headphones"
+          description: Product name
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: "WH-PREM-001"
+          description: Stock keeping unit
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 999999
+          example: 2
+          description: Quantity ordered
+        unitPrice:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 199.99
+          description: Price per unit
+        totalPrice:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 399.98
+          description: Total price for this line item
+        discountAmount:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 20.00
+          description: Discount applied to this line item
+          required: false
+        taxAmount:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 32.00
+          description: Tax amount for this line item
+          required: false
+    description: List of items in the order
+    required: true
+  billing:
+    type: object
+    properties:
+      billingAddressId:
+        type: string
+        pattern: ^ADDR-[0-9]{8}$
+        example: "ADDR-99887766"
+        description: Reference to billing address
+      subtotal:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 399.98
+        description: Order subtotal before tax and shipping
+      taxAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 32.00
+        description: Total tax amount
+      shippingAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 9.99
+        description: Shipping charges
+      discountAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 20.00
+        description: Total discount applied
+        required: false
+      totalAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 421.97
+        description: Final order total
+    description: Billing and pricing information
+    required: true
+  shipping:
+    type: object
+    properties:
+      shippingAddressId:
+        type: string
+        pattern: ^ADDR-[0-9]{8}$
+        example: "ADDR-55443322"
+        description: Reference to shipping address
+      shippingMethod:
+        type: string
+        enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "PICKUP", "DIGITAL"]
+        example: "STANDARD"
+        description: Selected shipping method
+      estimatedDeliveryDate:
+        type: date-only
+        example: "2024-03-28"
+        description: Expected delivery date
+        required: false
+      trackingNumber:
+        type: string
+        example: "TRK123456789"
+        description: Shipping tracking number
+        required: false
+      carrierName:
+        type: string
+        example: "FedEx"
+        description: Shipping carrier
+        required: false
+      shippingStatus:
+        type: string
+        enum: ["PENDING", "PROCESSING", "SHIPPED", "IN_TRANSIT", "DELIVERED", "EXCEPTION"]
+        example: "PENDING"
+        description: Current shipping status
+        required: false
+    description: Shipping information and status
+    required: true
+  payment:
+    type: object
+    properties:
+      paymentId:
+        type: string
+        pattern: ^PAY-[0-9]{8}$
+        example: "PAY-11998877"
+        description: Reference to payment record
+      paymentStatus:
+        type: string
+        enum: ["PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "REFUNDED", "PARTIALLY_REFUNDED"]
+        example: "AUTHORIZED"
+        description: Current payment status
+      paymentMethod:
+        type: string
+        enum: ["CREDIT_CARD", "DEBIT_CARD", "PAYPAL", "BANK_TRANSFER", "CASH", "STORE_CREDIT", "GIFT_CARD"]
+        example: "CREDIT_CARD"
+        description: Payment method used
+      transactionId:
+        type: string
+        example: "TXN-ABC123DEF456"
+        description: Payment processor transaction ID
+        required: false
+    description: Payment information and status
+    required: true
+  notes:
+    type: array
+    items:
+      type: object
+      properties:
+        noteId:
+          type: string
+          pattern: ^NOTE-[0-9]{8}$
+        content:
+          type: string
+          maxLength: 1000
+        createdBy:
+          type: string
+        createdDate:
+          type: datetime-only
+        noteType:
+          type: string
+          enum: ["CUSTOMER", "INTERNAL", "SYSTEM"]
+    description: Order notes and comments
+    required: false
+  metadata:
+    type: object
+    properties:
+      createdBy:
+        type: string
+        example: "system"
+        description: User or system that created the order
+      createdDate:
+        type: datetime-only
+        example: "2024-03-23T13:42:27"
+        description: Order creation timestamp
+      lastModifiedBy:
+        type: string
+        example: "admin_user"
+        description: User who last modified the order
+        required: false
+      lastModifiedDate:
+        type: datetime-only
+        example: "2024-03-23T14:30:15"
+        description: Last modification timestamp
+        required: false
+      version:
+        type: integer
+        minimum: 1
+        example: 1
+        description: Record version for optimistic locking
+        required: false
+      externalReferences:
+        type: object
+        description: External system references
+        properties:
+          erpOrderId:
+            type: string
+            description: ERP system order ID
+            required: false
+          crmOpportunityId:
+            type: string
+            description: CRM opportunity ID
+            required: false
+          legacyOrderId:
+            type: string
+            description: Legacy system order ID
+            required: false
+        required: false
+    description: System metadata and audit information
+    required: true

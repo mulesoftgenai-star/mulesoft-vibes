@@ -1,0 +1,343 @@
+#%RAML 1.0 DataType
+
+displayName: Experience Layer Error Responses
+description: |
+  Standardized error response structures for Experience Layer APIs.
+  Consumer-facing APIs that provide user-friendly error messages and guidance.
+  
+type: object
+properties:
+  error:
+    type: object
+    properties:
+      code:
+        type: string
+        enum: [
+          "INVALID_REQUEST",
+          "VALIDATION_FAILED",
+          "RESOURCE_NOT_FOUND",
+          "DUPLICATE_RESOURCE",
+          "BUSINESS_RULE_VIOLATION",
+          "INSUFFICIENT_INVENTORY",
+          "PAYMENT_DECLINED",
+          "SERVICE_UNAVAILABLE",
+          "TIMEOUT_ERROR",
+          "RATE_LIMIT_EXCEEDED"
+        ]
+        description: Standardized error code for the Experience Layer
+        example: "VALIDATION_FAILED"
+        required: true
+      message:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: Human-readable error message suitable for display to end users
+        example: "The order information provided is incomplete or invalid"
+        required: true
+      userMessage:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: User-friendly message with guidance on how to resolve the issue
+        example: "Please check your order details and try again"
+        required: false
+      details:
+        type: string
+        maxLength: 1000
+        description: Additional technical details about the error
+        example: "Missing required field: customer email address"
+        required: false
+      timestamp:
+        type: datetime-only
+        description: When the error occurred
+        example: "2024-03-23T14:00:00"
+        required: true
+      path:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: API endpoint where the error occurred
+        example: "/api/v1/orders"
+        required: true
+      method:
+        type: string
+        enum: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        description: HTTP method used in the request
+        example: "POST"
+        required: false
+      requestId:
+        type: string
+        pattern: ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+        description: Unique request correlation ID for tracking and support
+        example: "550e8400-e29b-41d4-a716-446655440000"
+        required: false
+      supportReference:
+        type: string
+        pattern: ^SUP-[0-9]{10}$
+        description: Support reference number for customer service inquiries
+        example: "SUP-1234567890"
+        required: false
+    required: true
+    description: Core error information
+  validationErrors:
+    type: array
+    items:
+      type: object
+      properties:
+        field:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the field that failed validation
+          example: "orderItems[0].quantity"
+          required: true
+        code:
+          type: string
+          enum: [
+            "REQUIRED_FIELD",
+            "INVALID_FORMAT",
+            "INVALID_VALUE",
+            "OUT_OF_RANGE",
+            "PATTERN_MISMATCH",
+            "TYPE_MISMATCH",
+            "CONSTRAINT_VIOLATION"
+          ]
+          description: Specific validation error code
+          example: "REQUIRED_FIELD"
+          required: true
+        message:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-readable validation error message
+          example: "Quantity is required and must be greater than 0"
+          required: true
+        rejectedValue:
+          type: any
+          description: The value that was rejected
+          example: null
+          required: false
+        allowedValues:
+          type: array
+          items:
+            type: any
+          description: List of allowed values (for enum validation)
+          example: ["STANDARD", "EXPRESS", "OVERNIGHT"]
+          required: false
+    minItems: 0
+    description: Detailed validation error information
+    required: false
+  context:
+    type: object
+    properties:
+      userId:
+        type: string
+        description: ID of the authenticated user (if applicable)
+        example: "USER-12345678"
+        required: false
+      sessionId:
+        type: string
+        description: User session identifier
+        example: "session_abc123def456"
+        required: false
+      clientId:
+        type: string
+        description: Client application identifier
+        example: "order-management-web-app"
+        required: false
+      apiVersion:
+        type: string
+        enum: ["v1", "v2"]
+        description: API version used in the request
+        example: "v1"
+        required: false
+      correlationId:
+        type: string
+        description: End-to-end transaction correlation ID
+        example: "txn_789012345"
+        required: false
+    description: Additional context information for debugging
+    required: false
+  suggestions:
+    type: array
+    items:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [
+            "RETRY_REQUEST",
+            "CHECK_INPUT",
+            "CONTACT_SUPPORT",
+            "TRY_DIFFERENT_VALUE",
+            "WAIT_AND_RETRY"
+          ]
+          description: Suggested action to resolve the error
+          example: "CHECK_INPUT"
+          required: true
+        description:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Description of the suggested action
+          example: "Please verify all required fields are filled correctly"
+          required: true
+        link:
+          type: string
+          description: URL to documentation or help resource
+          example: "https://docs.company.com/api/orders/validation-rules"
+          required: false
+    minItems: 0
+    maxItems: 5
+    description: Helpful suggestions for resolving the error
+    required: false
+  metadata:
+    type: object
+    properties:
+      errorId:
+        type: string
+        pattern: ^ERR-[0-9]{10}$
+        description: Unique error instance identifier
+        example: "ERR-1234567890"
+        required: false
+      severity:
+        type: string
+        enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        description: Error severity level
+        example: "MEDIUM"
+        required: false
+      category:
+        type: string
+        enum: ["VALIDATION", "BUSINESS", "TECHNICAL", "SECURITY", "PERFORMANCE"]
+        description: Error category classification
+        example: "VALIDATION"
+        required: false
+      retryable:
+        type: boolean
+        description: Whether the request can be retried
+        example: false
+        required: false
+      retryAfter:
+        type: integer
+        minimum: 0
+        description: Seconds to wait before retrying (if retryable)
+        example: 300
+        required: false
+    description: Additional error metadata
+    required: false
+
+examples:
+  ValidationError: |
+    {
+      "error": {
+        "code": "VALIDATION_FAILED",
+        "message": "The order information provided is incomplete or invalid",
+        "userMessage": "Please check your order details and try again",
+        "details": "Multiple validation errors found in the order request",
+        "timestamp": "2024-03-23T14:00:00",
+        "path": "/api/v1/orders",
+        "method": "POST",
+        "requestId": "550e8400-e29b-41d4-a716-446655440000",
+        "supportReference": "SUP-1234567890"
+      },
+      "validationErrors": [
+        {
+          "field": "customerId",
+          "code": "REQUIRED_FIELD",
+          "message": "Customer ID is required"
+        },
+        {
+          "field": "orderItems[0].quantity",
+          "code": "INVALID_VALUE",
+          "message": "Quantity must be greater than 0",
+          "rejectedValue": 0
+        }
+      ],
+      "context": {
+        "userId": "USER-12345678",
+        "clientId": "order-management-web-app",
+        "apiVersion": "v1"
+      },
+      "suggestions": [
+        {
+          "action": "CHECK_INPUT",
+          "description": "Please verify all required fields are filled correctly",
+          "link": "https://docs.company.com/api/orders/required-fields"
+        }
+      ],
+      "metadata": {
+        "errorId": "ERR-1234567890",
+        "severity": "MEDIUM",
+        "category": "VALIDATION",
+        "retryable": false
+      }
+    }
+  
+  BusinessRuleError: |
+    {
+      "error": {
+        "code": "INSUFFICIENT_INVENTORY",
+        "message": "Not enough inventory available to fulfill this order",
+        "userMessage": "Some items in your cart are out of stock. Please adjust quantities or remove items.",
+        "details": "Product WH-PREM-001 has only 1 unit available, but 3 units were requested",
+        "timestamp": "2024-03-23T14:15:00",
+        "path": "/api/v1/orders",
+        "method": "POST",
+        "requestId": "550e8400-e29b-41d4-a716-446655440001"
+      },
+      "context": {
+        "userId": "USER-87654321",
+        "clientId": "mobile-app",
+        "apiVersion": "v1"
+      },
+      "suggestions": [
+        {
+          "action": "TRY_DIFFERENT_VALUE",
+          "description": "Reduce the quantity to 1 or choose a different product"
+        },
+        {
+          "action": "WAIT_AND_RETRY",
+          "description": "Check back later as inventory may be restocked"
+        }
+      ],
+      "metadata": {
+        "errorId": "ERR-2345678901",
+        "severity": "MEDIUM",
+        "category": "BUSINESS",
+        "retryable": true,
+        "retryAfter": 3600
+      }
+    }
+  
+  ServiceUnavailableError: |
+    {
+      "error": {
+        "code": "SERVICE_UNAVAILABLE",
+        "message": "The order service is temporarily unavailable",
+        "userMessage": "We're experiencing technical difficulties. Please try again in a few minutes.",
+        "details": "Payment service is not responding",
+        "timestamp": "2024-03-23T14:30:00",
+        "path": "/api/v1/orders",
+        "method": "POST",
+        "requestId": "550e8400-e29b-41d4-a716-446655440002",
+        "supportReference": "SUP-3456789012"
+      },
+      "suggestions": [
+        {
+          "action": "WAIT_AND_RETRY",
+          "description": "Please wait a few minutes and try your request again"
+        },
+        {
+          "action": "CONTACT_SUPPORT",
+          "description": "If the problem persists, please contact customer support",
+          "link": "https://support.company.com"
+        }
+      ],
+      "metadata": {
+        "errorId": "ERR-3456789012",
+        "severity": "HIGH",
+        "category": "TECHNICAL",
+        "retryable": true,
+        "retryAfter": 300
+      }
+    }

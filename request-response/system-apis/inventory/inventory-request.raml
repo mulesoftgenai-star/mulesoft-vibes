@@ -1,0 +1,191 @@
+#%RAML 1.0 DataType
+
+displayName: Inventory System API Request
+description: Request data type for Inventory System API operations
+
+type: object
+properties:
+  inventoryRequest:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        enum: ["CHECK_AVAILABILITY", "RESERVE", "RELEASE", "UPDATE_STOCK", "GET_PRODUCT", "SEARCH"]
+        description: Inventory operation to be performed
+        example: "CHECK_AVAILABILITY"
+      requestId:
+        type: string
+        required: true
+        description: Unique request identifier for tracking
+        example: "INV-REQ-789012"
+      productItems:
+        type: array
+        required: false
+        description: Product items to check/reserve/update (required for most operations)
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              required: true
+              description: Unique product identifier
+              example: "PROD-98765"
+            sku:
+              type: string
+              required: false
+              description: Stock keeping unit
+              example: "WH-PREM-001"
+            quantity:
+              type: integer
+              required: true
+              description: Quantity to check/reserve/update
+              minimum: 1
+              example: 2
+            warehouseId:
+              type: string
+              required: false
+              description: Specific warehouse identifier
+              example: "WH-NYC-001"
+            reservationId:
+              type: string
+              required: false
+              description: Existing reservation ID (for RELEASE operations)
+              example: "RSV-789123"
+      searchCriteria:
+        type: object
+        required: false
+        description: Search criteria for product lookup
+        properties:
+          productName:
+            type: string
+            required: false
+            description: Product name to search
+            example: "Premium Headphones"
+          category:
+            type: string
+            required: false
+            description: Product category
+            example: "Electronics"
+          brand:
+            type: string
+            required: false
+            description: Product brand
+            example: "AudioTech"
+          sku:
+            type: string
+            required: false
+            description: Stock keeping unit
+            example: "WH-PREM-001"
+          priceRange:
+            type: object
+            required: false
+            properties:
+              min:
+                type: number
+                required: false
+                description: Minimum price
+                example: 100.00
+              max:
+                type: number
+                required: false
+                description: Maximum price
+                example: 500.00
+          availability:
+            type: string
+            required: false
+            enum: ["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK", "BACKORDERED"]
+            description: Availability filter
+            example: "IN_STOCK"
+      updateData:
+        type: object
+        required: false
+        description: Data for stock update operations
+        properties:
+          adjustmentType:
+            type: string
+            required: true
+            enum: ["INCREASE", "DECREASE", "SET_ABSOLUTE"]
+            description: Type of stock adjustment
+            example: "INCREASE"
+          adjustmentReason:
+            type: string
+            required: true
+            enum: ["RESTOCK", "SALE", "DAMAGED", "RETURNED", "CORRECTION", "TRANSFER"]
+            description: Reason for adjustment
+            example: "RESTOCK"
+          warehouseId:
+            type: string
+            required: false
+            description: Warehouse for the adjustment
+            example: "WH-NYC-001"
+          notes:
+            type: string
+            required: false
+            description: Additional notes for the adjustment
+            example: "Weekly inventory replenishment"
+      reservationDetails:
+        type: object
+        required: false
+        description: Reservation specific details
+        properties:
+          reservationDuration:
+            type: integer
+            required: false
+            description: Reservation duration in minutes
+            default: 30
+            example: 30
+          orderId:
+            type: string
+            required: false
+            description: Associated order identifier
+            example: "ORD-2024-001234"
+          customerId:
+            type: string
+            required: false
+            description: Customer making the reservation
+            example: "CUST-12345"
+          priority:
+            type: string
+            required: false
+            enum: ["LOW", "NORMAL", "HIGH", "URGENT"]
+            description: Reservation priority
+            default: "NORMAL"
+            example: "NORMAL"
+      options:
+        type: object
+        required: false
+        description: Request options and preferences
+        properties:
+          includeAlternatives:
+            type: boolean
+            required: false
+            description: Include alternative products if requested item unavailable
+            default: false
+            example: true
+          includeBackorder:
+            type: boolean
+            required: false
+            description: Include backordered items in results
+            default: true
+            example: true
+          maxResults:
+            type: integer
+            required: false
+            description: Maximum number of results for search operations
+            default: 50
+            example: 20
+          sortBy:
+            type: string
+            required: false
+            enum: ["PRODUCT_NAME", "PRICE", "AVAILABILITY", "CATEGORY"]
+            description: Sort criteria for search results
+            default: "PRODUCT_NAME"
+            example: "PRICE"
+          sortOrder:
+            type: string
+            required: false
+            enum: ["ASC", "DESC"]
+            description: Sort order
+            default: "ASC"
+            example: "ASC"

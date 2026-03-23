@@ -1,0 +1,415 @@
+#%RAML 1.0 DataType
+
+displayName: System Layer Error Responses
+description: |
+  Standardized error response structures for System Layer APIs.
+  Low-level APIs that interface directly with backend systems and databases.
+  
+type: object
+properties:
+  error:
+    type: object
+    properties:
+      code:
+        type: string
+        enum: [
+          "SYSTEM_UNAVAILABLE",
+          "CONNECTION_TIMEOUT",
+          "DATABASE_ERROR",
+          "AUTHENTICATION_FAILED",
+          "AUTHORIZATION_DENIED",
+          "RESOURCE_NOT_FOUND",
+          "CONSTRAINT_VIOLATION",
+          "DATA_VALIDATION_ERROR",
+          "SYSTEM_OVERLOAD",
+          "CONFIGURATION_ERROR"
+        ]
+        description: System-level error code
+        example: "DATABASE_ERROR"
+        required: true
+      message:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: Technical error message for system integration diagnostics
+        example: "Database connection pool exhausted"
+        required: true
+      systemDetails:
+        type: string
+        maxLength: 1000
+        description: Low-level system error details and stack traces
+        example: "java.sql.SQLException: Connection pool is exhausted. Active connections: 50, Max pool size: 50"
+        required: false
+      timestamp:
+        type: datetime-only
+        description: When the system error occurred
+        example: "2024-03-23T14:00:00"
+        required: true
+      path:
+        type: string
+        minLength: 1
+        maxLength: 255
+        description: System API endpoint where the error occurred
+        example: "/system/v1/customers/validate"
+        required: true
+      method:
+        type: string
+        enum: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        description: HTTP method used in the request
+        example: "GET"
+        required: false
+      systemId:
+        type: string
+        pattern: ^SYS-[0-9]{8}$
+        description: Unique identifier for the backend system
+        example: "SYS-12345678"
+        required: false
+      operationId:
+        type: string
+        description: Specific system operation that failed
+        example: "customer-lookup-by-id"
+        required: false
+      requestId:
+        type: string
+        pattern: ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+        description: System request identifier for correlation
+        example: "550e8400-e29b-41d4-a716-446655440000"
+        required: false
+    required: true
+    description: Core system error information
+  systemContext:
+    type: object
+    properties:
+      connectionInfo:
+        type: object
+        properties:
+          host:
+            type: string
+            description: Host or endpoint of the backend system
+            example: "db-cluster.company.com"
+            required: false
+          port:
+            type: integer
+            minimum: 1
+            maximum: 65535
+            description: Port number of the backend system
+            example: 5432
+            required: false
+          protocol:
+            type: string
+            enum: ["HTTP", "HTTPS", "JDBC", "LDAP", "FTP", "SFTP", "TCP", "UDP"]
+            description: Communication protocol used
+            example: "JDBC"
+            required: false
+          connectionPool:
+            type: object
+            properties:
+              active:
+                type: integer
+                minimum: 0
+                description: Number of active connections
+                example: 50
+              idle:
+                type: integer
+                minimum: 0
+                description: Number of idle connections
+                example: 0
+              maximum:
+                type: integer
+                minimum: 1
+                description: Maximum pool size
+                example: 50
+            description: Connection pool statistics
+            required: false
+        description: Backend system connection information
+        required: false
+      resourceInfo:
+        type: object
+        properties:
+          resourceType:
+            type: string
+            enum: ["DATABASE", "FILE_SYSTEM", "MESSAGE_QUEUE", "CACHE", "LDAP", "WEB_SERVICE"]
+            description: Type of system resource
+            example: "DATABASE"
+            required: false
+          resourceId:
+            type: string
+            description: Identifier of the specific resource
+            example: "customer_database"
+            required: false
+          tableName:
+            type: string
+            description: Database table name (for database errors)
+            example: "customers"
+            required: false
+          queryType:
+            type: string
+            enum: ["SELECT", "INSERT", "UPDATE", "DELETE", "STORED_PROCEDURE"]
+            description: Type of database operation
+            example: "SELECT"
+            required: false
+        description: System resource context
+        required: false
+      performanceMetrics:
+        type: object
+        properties:
+          responseTime:
+            type: integer
+            minimum: 0
+            description: System response time in milliseconds
+            example: 30000
+            required: false
+          retryAttempts:
+            type: integer
+            minimum: 0
+            description: Number of retry attempts made
+            example: 3
+            required: false
+          timeout:
+            type: integer
+            minimum: 0
+            description: Configured timeout in milliseconds
+            example: 5000
+            required: false
+          cpuUsage:
+            type: number
+            minimum: 0
+            maximum: 100
+            description: System CPU usage percentage
+            example: 85.5
+            required: false
+          memoryUsage:
+            type: number
+            minimum: 0
+            maximum: 100
+            description: System memory usage percentage
+            example: 92.3
+            required: false
+        description: System performance metrics at time of error
+        required: false
+    description: System-specific context information
+    required: false
+  technicalDetails:
+    type: object
+    properties:
+      errorClass:
+        type: string
+        description: Exception class name
+        example: "java.sql.SQLTimeoutException"
+        required: false
+      stackTrace:
+        type: array
+        items:
+          type: string
+        description: Stack trace lines (limited for security)
+        example: [
+          "at com.example.dao.CustomerDao.findById(CustomerDao.java:45)",
+          "at com.example.service.CustomerService.validateCustomer(CustomerService.java:23)"
+        ]
+        required: false
+      sqlState:
+        type: string
+        pattern: ^[A-Z0-9]{5}$
+        description: SQL state code (for database errors)
+        example: "08001"
+        required: false
+      errorCode:
+        type: integer
+        description: Vendor-specific error code
+        example: 1205
+        required: false
+      configurationKeys:
+        type: array
+        items:
+          type: string
+        description: Configuration keys that may be related to the error
+        example: ["database.pool.maxSize", "database.timeout"]
+        required: false
+    description: Technical diagnostic information
+    required: false
+  recoverability:
+    type: object
+    properties:
+      isRetryable:
+        type: boolean
+        description: Whether the operation can be retried
+        example: true
+        required: true
+      retryStrategy:
+        type: object
+        properties:
+          maxAttempts:
+            type: integer
+            minimum: 1
+            description: Maximum retry attempts recommended
+            example: 3
+          backoffStrategy:
+            type: string
+            enum: ["LINEAR", "EXPONENTIAL", "FIXED"]
+            description: Recommended backoff strategy
+            example: "EXPONENTIAL"
+          initialDelay:
+            type: integer
+            minimum: 0
+            description: Initial delay in milliseconds
+            example: 1000
+          maxDelay:
+            type: integer
+            minimum: 0
+            description: Maximum delay in milliseconds
+            example: 30000
+        description: Recommended retry strategy
+        required: false
+      circuitBreakerTripped:
+        type: boolean
+        description: Whether circuit breaker is open
+        example: false
+        required: false
+      estimatedRecoveryTime:
+        type: integer
+        minimum: 0
+        description: Estimated recovery time in seconds
+        example: 300
+        required: false
+    description: Error recoverability information
+    required: false
+
+examples:
+  DatabaseError: |
+    {
+      "error": {
+        "code": "DATABASE_ERROR",
+        "message": "Database connection pool exhausted",
+        "systemDetails": "java.sql.SQLException: Connection pool is exhausted. Active connections: 50, Max pool size: 50",
+        "timestamp": "2024-03-23T14:00:00",
+        "path": "/system/v1/customers/validate",
+        "method": "GET",
+        "systemId": "SYS-12345678",
+        "operationId": "customer-lookup-by-id",
+        "requestId": "550e8400-e29b-41d4-a716-446655440000"
+      },
+      "systemContext": {
+        "connectionInfo": {
+          "host": "db-cluster.company.com",
+          "port": 5432,
+          "protocol": "JDBC",
+          "connectionPool": {
+            "active": 50,
+            "idle": 0,
+            "maximum": 50
+          }
+        },
+        "resourceInfo": {
+          "resourceType": "DATABASE",
+          "resourceId": "customer_database",
+          "tableName": "customers",
+          "queryType": "SELECT"
+        },
+        "performanceMetrics": {
+          "responseTime": 30000,
+          "retryAttempts": 3,
+          "timeout": 5000,
+          "cpuUsage": 85.5,
+          "memoryUsage": 92.3
+        }
+      },
+      "technicalDetails": {
+        "errorClass": "java.sql.SQLException",
+        "stackTrace": [
+          "at com.example.dao.CustomerDao.findById(CustomerDao.java:45)",
+          "at com.example.service.CustomerService.validateCustomer(CustomerService.java:23)"
+        ],
+        "configurationKeys": ["database.pool.maxSize", "database.timeout"]
+      },
+      "recoverability": {
+        "isRetryable": false,
+        "circuitBreakerTripped": true,
+        "estimatedRecoveryTime": 300
+      }
+    }
+  
+  ConnectionTimeout: |
+    {
+      "error": {
+        "code": "CONNECTION_TIMEOUT",
+        "message": "Connection timeout while connecting to payment gateway",
+        "systemDetails": "java.net.SocketTimeoutException: connect timed out",
+        "timestamp": "2024-03-23T14:15:00",
+        "path": "/system/v1/payments/authorize",
+        "method": "POST",
+        "systemId": "SYS-87654321",
+        "operationId": "payment-authorization",
+        "requestId": "550e8400-e29b-41d4-a716-446655440001"
+      },
+      "systemContext": {
+        "connectionInfo": {
+          "host": "payment-gateway.provider.com",
+          "port": 443,
+          "protocol": "HTTPS"
+        },
+        "resourceInfo": {
+          "resourceType": "WEB_SERVICE",
+          "resourceId": "payment-gateway-api"
+        },
+        "performanceMetrics": {
+          "responseTime": 30000,
+          "retryAttempts": 2,
+          "timeout": 30000
+        }
+      },
+      "technicalDetails": {
+        "errorClass": "java.net.SocketTimeoutException",
+        "configurationKeys": ["payment.gateway.timeout", "payment.gateway.retries"]
+      },
+      "recoverability": {
+        "isRetryable": true,
+        "retryStrategy": {
+          "maxAttempts": 3,
+          "backoffStrategy": "EXPONENTIAL",
+          "initialDelay": 1000,
+          "maxDelay": 10000
+        },
+        "circuitBreakerTripped": false,
+        "estimatedRecoveryTime": 60
+      }
+    }
+  
+  ResourceNotFound: |
+    {
+      "error": {
+        "code": "RESOURCE_NOT_FOUND",
+        "message": "Customer record not found in database",
+        "systemDetails": "No customer found with ID: CUST-12345678",
+        "timestamp": "2024-03-23T14:30:00",
+        "path": "/system/v1/customers/CUST-12345678",
+        "method": "GET",
+        "systemId": "SYS-11223344",
+        "operationId": "customer-retrieval",
+        "requestId": "550e8400-e29b-41d4-a716-446655440002"
+      },
+      "systemContext": {
+        "connectionInfo": {
+          "host": "customer-db.company.com",
+          "port": 3306,
+          "protocol": "JDBC"
+        },
+        "resourceInfo": {
+          "resourceType": "DATABASE",
+          "resourceId": "customer_database",
+          "tableName": "customers",
+          "queryType": "SELECT"
+        },
+        "performanceMetrics": {
+          "responseTime": 150,
+          "retryAttempts": 0,
+          "timeout": 5000
+        }
+      },
+      "technicalDetails": {
+        "errorClass": "com.example.exception.CustomerNotFoundException"
+      },
+      "recoverability": {
+        "isRetryable": false,
+        "circuitBreakerTripped": false
+      }
+    }

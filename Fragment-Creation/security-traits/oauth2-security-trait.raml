@@ -1,0 +1,284 @@
+#%RAML 1.0 Trait
+
+displayName: OAuth 2.0 Security
+description: |
+  Comprehensive OAuth 2.0 security trait for Order Management APIs.
+  Provides standardized authentication and authorization across all API layers.
+
+usage: |
+  Apply this trait to secure endpoints that require OAuth 2.0 authentication.
+  
+  Example usage in API specification:
+  ```yaml
+  /orders:
+    get:
+      is: [oauth2-secured]
+  ```
+
+headers:
+  Authorization:
+    displayName: Authorization Header
+    type: string
+    pattern: ^Bearer\s[A-Za-z0-9\-\._~\+\/]+=*$
+    description: |
+      OAuth 2.0 Bearer token for API authentication.
+      Format: "Bearer {access_token}"
+    example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+    required: true
+  X-Client-ID?:
+    displayName: Client Application ID
+    type: string
+    pattern: ^[a-zA-Z0-9\-]{8,64}$
+    description: |
+      Unique identifier for the client application making the request.
+      Used for analytics, rate limiting, and audit purposes.
+    example: "order-management-web-app"
+    required: false
+  X-Request-ID?:
+    displayName: Request Correlation ID
+    type: string
+    pattern: ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+    description: |
+      Unique identifier for request tracing and correlation across services.
+      Should be a UUID v4 format.
+    example: "550e8400-e29b-41d4-a716-446655440000"
+    required: false
+  X-API-Version?:
+    displayName: API Version
+    type: string
+    enum: ["v1", "v2"]
+    description: |
+      Specifies the API version to use for the request.
+      Defaults to latest version if not provided.
+    example: "v1"
+    default: "v1"
+    required: false
+
+responses:
+  401:
+    description: |
+      Unauthorized - Invalid or missing authentication token.
+      
+      Common scenarios:
+      - Missing Authorization header
+      - Invalid Bearer token format
+      - Expired access token
+      - Revoked access token
+      - Invalid token signature
+    body:
+      application/json:
+        type: object
+        properties:
+          error:
+            type: object
+            properties:
+              code:
+                type: string
+                required: true
+                enum: [
+                  "UNAUTHORIZED",
+                  "INVALID_TOKEN", 
+                  "EXPIRED_TOKEN",
+                  "REVOKED_TOKEN",
+                  "MALFORMED_TOKEN"
+                ]
+                description: Specific error code for the authentication failure
+              message:
+                type: string
+                required: true
+                description: Human-readable error message
+                example: "Access token has expired"
+              details:
+                type: string
+                description: Additional technical details about the error
+                example: "Token expired at 2024-03-23T13:45:00"
+                required: false
+              timestamp:
+                type: datetime-only
+                required: true
+                description: When the error occurred
+                example: "2024-03-23T14:00:00"
+              path:
+                type: string
+                required: true
+                description: API endpoint where the error occurred
+                example: "/api/v1/orders"
+              requestId:
+                type: string
+                description: Request correlation ID for tracking
+                example: "550e8400-e29b-41d4-a716-446655440000"
+                required: false
+        example: |
+          {
+            "error": {
+              "code": "EXPIRED_TOKEN",
+              "message": "Access token has expired",
+              "details": "Token expired at 2024-03-23T13:45:00",
+              "timestamp": "2024-03-23T14:00:00",
+              "path": "/api/v1/orders",
+              "requestId": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+    headers:
+      WWW-Authenticate:
+        type: string
+        description: Authentication challenge with error information
+        example: 'Bearer error="invalid_token", error_description="The access token expired"'
+        required: false
+      X-Rate-Limit-Remaining?:
+        type: integer
+        description: Number of requests remaining in current rate limit window
+        example: 999
+        required: false
+      X-Rate-Limit-Reset?:
+        type: integer
+        description: Unix timestamp when rate limit resets
+        example: 1711201200
+        required: false
+
+  403:
+    description: |
+      Forbidden - Valid authentication but insufficient permissions.
+      
+      The request was authenticated successfully but the client does not have
+      permission to access the requested resource or perform the requested action.
+    body:
+      application/json:
+        type: object
+        properties:
+          error:
+            type: object
+            properties:
+              code:
+                type: string
+                required: true
+                enum: [
+                  "FORBIDDEN",
+                  "INSUFFICIENT_SCOPE",
+                  "ACCESS_DENIED",
+                  "RESOURCE_FORBIDDEN"
+                ]
+                description: Specific error code for the authorization failure
+              message:
+                type: string
+                required: true
+                description: Human-readable error message
+                example: "Insufficient permissions to access this resource"
+              details:
+                type: string
+                description: Additional details about required permissions
+                example: "Required scope: orders:write. Current scopes: orders:read"
+                required: false
+              timestamp:
+                type: datetime-only
+                required: true
+                description: When the error occurred
+                example: "2024-03-23T14:00:00"
+              path:
+                type: string
+                required: true
+                description: API endpoint where the error occurred
+                example: "/api/v1/orders"
+              requestId:
+                type: string
+                description: Request correlation ID for tracking
+                example: "550e8400-e29b-41d4-a716-446655440000"
+                required: false
+        example: |
+          {
+            "error": {
+              "code": "INSUFFICIENT_SCOPE",
+              "message": "Insufficient permissions to access this resource",
+              "details": "Required scope: orders:write. Current scopes: orders:read",
+              "timestamp": "2024-03-23T14:00:00",
+              "path": "/api/v1/orders",
+              "requestId": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+
+  429:
+    description: |
+      Too Many Requests - Rate limit exceeded.
+      
+      The client has sent too many requests in a given amount of time and should
+      retry the request after the rate limit resets.
+    body:
+      application/json:
+        type: object
+        properties:
+          error:
+            type: object
+            properties:
+              code:
+                type: string
+                required: true
+                enum: ["RATE_LIMIT_EXCEEDED", "QUOTA_EXCEEDED"]
+                description: Specific error code for rate limiting
+              message:
+                type: string
+                required: true
+                description: Human-readable error message
+                example: "Rate limit exceeded. Too many requests."
+              details:
+                type: string
+                description: Additional details about rate limits
+                example: "Limit: 1000 requests per hour. Try again in 3600 seconds."
+                required: false
+              timestamp:
+                type: datetime-only
+                required: true
+                description: When the error occurred
+                example: "2024-03-23T14:00:00"
+              path:
+                type: string
+                required: true
+                description: API endpoint where the error occurred
+                example: "/api/v1/orders"
+              requestId:
+                type: string
+                description: Request correlation ID for tracking
+                example: "550e8400-e29b-41d4-a716-446655440000"
+                required: false
+        example: |
+          {
+            "error": {
+              "code": "RATE_LIMIT_EXCEEDED",
+              "message": "Rate limit exceeded. Too many requests.",
+              "details": "Limit: 1000 requests per hour. Try again in 3600 seconds.",
+              "timestamp": "2024-03-23T14:00:00",
+              "path": "/api/v1/orders",
+              "requestId": "550e8400-e29b-41d4-a716-446655440000"
+            }
+          }
+    headers:
+      X-Rate-Limit-Limit:
+        type: integer
+        description: Maximum number of requests allowed per time window
+        example: 1000
+        required: true
+      X-Rate-Limit-Remaining:
+        type: integer
+        description: Number of requests remaining in current window
+        example: 0
+        required: true
+      X-Rate-Limit-Reset:
+        type: integer
+        description: Unix timestamp when rate limit resets
+        example: 1711201200
+        required: true
+      Retry-After:
+        type: integer
+        description: Seconds to wait before making another request
+        example: 3600
+        required: false
+
+queryParameters:
+  access_token?:
+    displayName: Access Token (Query Parameter)
+    type: string
+    description: |
+      Alternative method to provide OAuth 2.0 access token via query parameter.
+      NOT RECOMMENDED for production use due to security concerns.
+      Use Authorization header instead.
+    example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+    required: false

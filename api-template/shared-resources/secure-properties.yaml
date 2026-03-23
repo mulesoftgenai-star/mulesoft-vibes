@@ -1,0 +1,62 @@
+# Secure Properties Template
+# These values should be encrypted in production environments
+
+# Database Credentials
+db:
+  host: "ENC(encrypted_db_host)"
+  port: "ENC(encrypted_db_port)"
+  name: "ENC(encrypted_db_name)"
+  username: "ENC(encrypted_db_username)"
+  password: "ENC(encrypted_db_password)"
+
+# TLS Configuration
+tls:
+  keystore:
+    password: "ENC(encrypted_keystore_password)"
+    key:
+      password: "ENC(encrypted_key_password)"
+
+# External System Credentials
+customer:
+  system:
+    host: "ENC(encrypted_customer_host)"
+    port: "ENC(encrypted_customer_port)"
+    username: "ENC(encrypted_customer_username)"
+    password: "ENC(encrypted_customer_password)"
+
+inventory:
+  system:
+    host: "ENC(encrypted_inventory_host)"
+    port: "ENC(encrypted_inventory_port)"
+    username: "ENC(encrypted_inventory_username)"
+    password: "ENC(encrypted_inventory_password)"
+
+payment:
+  system:
+    host: "ENC(encrypted_payment_host)"
+    port: "ENC(encrypted_payment_port)"
+    username: "ENC(encrypted_payment_username)"
+    password: "ENC(encrypted_payment_password)"
+
+shipping:
+  system:
+    host: "ENC(encrypted_shipping_host)"
+    port: "ENC(encrypted_shipping_port)"
+    username: "ENC(encrypted_shipping_username)"
+    password: "ENC(encrypted_shipping_password)"
+
+# OAuth2 Configuration
+oauth2:
+  client:
+    id: "ENC(encrypted_oauth2_client_id)"
+    secret: "ENC(encrypted_oauth2_client_secret)"
+  token:
+    url: "ENC(encrypted_oauth2_token_url)"
+
+# API Security
+api:
+  key: "ENC(encrypted_api_key)"
+
+# Encryption Key (should be externalized)
+encryption:
+  key: "ENC(encrypted_master_key)"

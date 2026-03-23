@@ -1,0 +1,496 @@
+#%RAML 1.0 DataType
+
+displayName: Shipment
+description: |
+  Comprehensive Shipment data type for Order Management System.
+  Supports multiple carriers and complete shipment lifecycle tracking.
+  
+type: object
+properties:
+  shipmentId:
+    type: string
+    pattern: ^SHIP-[0-9]{8}$
+    example: "SHIP-11998877"
+    description: Unique shipment identifier with SHIP- prefix
+    required: true
+  shipmentNumber:
+    type: string
+    minLength: 1
+    maxLength: 50
+    example: "SHIPMENT-2024-001234"
+    description: Business-friendly shipment number
+    required: true
+  orderId:
+    type: string
+    pattern: ^ORD-[0-9]{8}$
+    example: "ORD-12345678"
+    description: Reference to the associated order
+    required: true
+  customerId:
+    type: string
+    pattern: ^CUST-[0-9]{8}$
+    example: "CUST-87654321"
+    description: Reference to the customer receiving the shipment
+    required: true
+  shipmentDate:
+    type: datetime-only
+    example: "2024-03-24T10:00:00"
+    description: Date and time when shipment was created
+    required: true
+  shipmentStatus:
+    type: string
+    enum: [
+      "PENDING",
+      "PROCESSING",
+      "READY_FOR_PICKUP",
+      "PICKED_UP",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "DELIVERED",
+      "DELIVERY_ATTEMPTED",
+      "RETURNED_TO_SENDER",
+      "LOST",
+      "DAMAGED",
+      "CANCELLED"
+    ]
+    example: "IN_TRANSIT"
+    description: Current status of the shipment
+    required: true
+  shipmentType:
+    type: string
+    enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "TWO_DAY", "GROUND", "INTERNATIONAL", "FREIGHT"]
+    example: "STANDARD"
+    description: Type of shipment service
+    required: true
+  priority:
+    type: string
+    enum: ["LOW", "NORMAL", "HIGH", "URGENT"]
+    example: "NORMAL"
+    description: Shipment priority level
+    required: false
+  carrier:
+    type: object
+    properties:
+      carrierId:
+        type: string
+        pattern: ^CARR-[0-9]{8}$
+        example: "CARR-12345678"
+        description: Unique carrier identifier
+        required: true
+      carrierName:
+        type: string
+        enum: ["FEDEX", "UPS", "USPS", "DHL", "AMAZON", "LOCAL_DELIVERY", "CUSTOM_CARRIER"]
+        example: "FEDEX"
+        description: Shipping carrier name
+        required: true
+      carrierCode:
+        type: string
+        minLength: 2
+        maxLength: 10
+        example: "FDXG"
+        description: Carrier-specific code
+        required: true
+      serviceType:
+        type: string
+        example: "FedEx Ground"
+        description: Specific carrier service type
+        required: true
+      serviceCode:
+        type: string
+        example: "FEDEX_GROUND"
+        description: Carrier service code
+        required: true
+      accountNumber:
+        type: string
+        example: "123456789"
+        description: Carrier account number
+        required: false
+    description: Carrier information
+    required: true
+  tracking:
+    type: object
+    properties:
+      trackingNumber:
+        type: string
+        minLength: 1
+        maxLength: 50
+        example: "1Z999AA1234567890"
+        description: Carrier tracking number
+        required: false
+      trackingUrl:
+        type: string
+        example: "https://www.fedex.com/track?number=1Z999AA1234567890"
+        description: URL for tracking the shipment
+        required: false
+      estimatedDeliveryDate:
+        type: date-only
+        example: "2024-03-28"
+        description: Estimated delivery date
+        required: false
+      actualDeliveryDate:
+        type: date-only
+        example: "2024-03-27"
+        description: Actual delivery date
+        required: false
+      deliveryInstructions:
+        type: string
+        maxLength: 500
+        example: "Leave at front door"
+        description: Special delivery instructions
+        required: false
+      signatureRequired:
+        type: boolean
+        example: false
+        description: Whether signature is required for delivery
+        required: false
+    description: Tracking and delivery information
+    required: false
+  addresses:
+    type: object
+    properties:
+      originAddress:
+        type: object
+        properties:
+          addressId:
+            type: string
+            pattern: ^ADDR-[0-9]{8}$
+            example: "ADDR-11223344"
+            description: Origin address identifier
+          companyName:
+            type: string
+            example: "Acme Warehouse"
+            description: Company name at origin
+            required: false
+          addressLine1:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: "1000 Industrial Blvd"
+            description: First line of origin address
+          addressLine2:
+            type: string
+            maxLength: 255
+            example: "Suite 100"
+            description: Second line of origin address
+            required: false
+          city:
+            type: string
+            minLength: 1
+            maxLength: 100
+            example: "Atlanta"
+            description: Origin city
+          state:
+            type: string
+            minLength: 2
+            maxLength: 100
+            example: "GA"
+            description: Origin state/province
+          postalCode:
+            type: string
+            pattern: ^[0-9]{5}(-[0-9]{4})?$
+            example: "30309"
+            description: Origin postal code
+          country:
+            type: string
+            pattern: ^[A-Z]{2}$
+            example: "US"
+            description: Origin country code
+        description: Shipment origin address
+        required: true
+      destinationAddress:
+        type: object
+        properties:
+          addressId:
+            type: string
+            pattern: ^ADDR-[0-9]{8}$
+            example: "ADDR-55667788"
+            description: Destination address identifier
+          recipientName:
+            type: string
+            minLength: 1
+            maxLength: 100
+            example: "John Doe"
+            description: Recipient name
+          companyName:
+            type: string
+            example: "Acme Corp"
+            description: Company name at destination
+            required: false
+          addressLine1:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: "123 Main Street"
+            description: First line of destination address
+          addressLine2:
+            type: string
+            maxLength: 255
+            example: "Apt 4B"
+            description: Second line of destination address
+            required: false
+          city:
+            type: string
+            minLength: 1
+            maxLength: 100
+            example: "New York"
+            description: Destination city
+          state:
+            type: string
+            minLength: 2
+            maxLength: 100
+            example: "NY"
+            description: Destination state/province
+          postalCode:
+            type: string
+            pattern: ^[0-9]{5}(-[0-9]{4})?$
+            example: "10001"
+            description: Destination postal code
+          country:
+            type: string
+            pattern: ^[A-Z]{2}$
+            example: "US"
+            description: Destination country code
+        description: Shipment destination address
+        required: true
+    description: Origin and destination addresses
+    required: true
+  items:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      properties:
+        shipmentItemId:
+          type: string
+          pattern: ^SI-[0-9]{8}$
+          example: "SI-11223344"
+          description: Unique shipment item identifier
+        lineItemId:
+          type: string
+          pattern: ^LI-[0-9]{8}$
+          example: "LI-55667788"
+          description: Reference to order line item
+        productId:
+          type: string
+          pattern: ^PROD-[0-9]{8}$
+          example: "PROD-99887766"
+          description: Product identifier
+        productName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: "Premium Wireless Headphones"
+          description: Product name
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: "WH-PREM-001"
+          description: Stock keeping unit
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+          description: Quantity being shipped
+        weight:
+          type: number
+          minimum: 0
+          example: 1.5
+          description: Weight in pounds
+          required: false
+        dimensions:
+          type: object
+          properties:
+            length:
+              type: number
+              minimum: 0
+              example: 10.5
+              description: Length in inches
+            width:
+              type: number
+              minimum: 0
+              example: 8.0
+              description: Width in inches
+            height:
+              type: number
+              minimum: 0
+              example: 6.0
+              description: Height in inches
+          description: Package dimensions
+          required: false
+        packageType:
+          type: string
+          enum: ["BOX", "ENVELOPE", "TUBE", "PAK", "CUSTOM"]
+          example: "BOX"
+          description: Type of packaging
+          required: false
+        specialHandling:
+          type: array
+          items:
+            type: string
+            enum: ["FRAGILE", "HAZARDOUS", "REFRIGERATED", "OVERSIZED", "SIGNATURE_REQUIRED"]
+          example: ["FRAGILE"]
+          description: Special handling requirements
+          required: false
+    description: Items included in the shipment
+    required: true
+  costs:
+    type: object
+    properties:
+      shippingCost:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 9.99
+        description: Base shipping cost
+        required: true
+      insuranceCost:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 2.50
+        description: Insurance cost
+        required: false
+      fuelSurcharge:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 1.25
+        description: Fuel surcharge
+        required: false
+      additionalFees:
+        type: array
+        items:
+          type: object
+          properties:
+            feeType:
+              type: string
+              example: "RESIDENTIAL_DELIVERY"
+              description: Type of additional fee
+            amount:
+              type: number
+              minimum: 0
+              multipleOf: 0.01
+              example: 3.50
+              description: Fee amount
+        description: Additional fees and surcharges
+        required: false
+      totalCost:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 13.74
+        description: Total shipping cost including all fees
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        description: Currency code for costs
+        required: true
+    description: Shipping costs and fees
+    required: true
+  events:
+    type: array
+    items:
+      type: object
+      properties:
+        eventId:
+          type: string
+          pattern: ^EVT-[0-9]{8}$
+          example: "EVT-11223344"
+          description: Unique event identifier
+        eventType:
+          type: string
+          enum: [
+            "CREATED",
+            "LABEL_PRINTED", 
+            "PICKED_UP",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "DELIVERY_ATTEMPTED",
+            "EXCEPTION",
+            "DELAYED",
+            "LOST",
+            "DAMAGED"
+          ]
+          example: "IN_TRANSIT"
+          description: Type of shipment event
+        eventDate:
+          type: datetime-only
+          example: "2024-03-25T14:30:00"
+          description: When the event occurred
+        location:
+          type: string
+          example: "Atlanta, GA"
+          description: Location where event occurred
+          required: false
+        description:
+          type: string
+          maxLength: 500
+          example: "Package has left the Atlanta distribution center"
+          description: Event description
+          required: false
+        carrierEventCode:
+          type: string
+          example: "DP"
+          description: Carrier-specific event code
+          required: false
+    description: Shipment tracking events
+    required: false
+  metadata:
+    type: object
+    properties:
+      createdBy:
+        type: string
+        example: "shipping_service"
+        description: User or system that created the shipment
+        required: true
+      createdDate:
+        type: datetime-only
+        example: "2024-03-24T10:00:00"
+        description: Shipment creation timestamp
+        required: true
+      lastModifiedBy:
+        type: string
+        example: "carrier_webhook"
+        description: User or system that last modified the shipment
+        required: false
+      lastModifiedDate:
+        type: datetime-only
+        example: "2024-03-25T14:30:00"
+        description: Last modification timestamp
+        required: false
+      version:
+        type: integer
+        minimum: 1
+        example: 3
+        description: Record version for optimistic locking
+        required: false
+      tags:
+        type: array
+        items:
+          type: string
+        example: ["express", "international", "high_value"]
+        description: Classification tags for the shipment
+        required: false
+      externalReferences:
+        type: object
+        description: External system references
+        properties:
+          warehouseShipmentId:
+            type: string
+            description: Warehouse management system shipment ID
+            required: false
+          carrierJobId:
+            type: string
+            description: Carrier job/manifest ID
+            required: false
+          legacyShipmentId:
+            type: string
+            description: Legacy system shipment ID
+            required: false
+        required: false
+    description: System metadata and audit information
+    required: true

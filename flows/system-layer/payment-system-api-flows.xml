@@ -1,0 +1,869 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+      xmlns:crypto="http://www.mulesoft.org/schema/mule/crypto"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+                          http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+                          http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+                          http://www.mulesoft.org/schema/mule/crypto http://www.mulesoft.org/schema/mule/crypto/current/mule-crypto.xsd">
+
+    <!-- Payment System API Main Flow -->
+    <flow name="payment-system-api-main" doc:name="Payment System API Main Flow">
+        <http:listener doc:name="HTTP Listener" path="/system/payments/*" config-ref="payment-system-httpListenerConfig">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <logger level="INFO" doc:name="Log Request" message='#["Payment System API Request: " ++ attributes.method ++ " " ++ attributes.requestPath]'/>
+        
+        <apikit:router config-ref="payment-system-api-config"/>
+        
+        <error-handler ref="payment-system-api-errorHandler"/>
+    </flow>
+
+    <!-- POST /payments/authorize - Authorize Payment -->
+    <flow name="post:\payments\authorize:application\json:payment-system-api-config" doc:name="Authorize Payment">
+        <logger level="INFO" doc:name="Log Payment Authorization" message='#["Authorizing payment for customer: " ++ payload.customerId ++ ", amount: " ++ payload.amount]'/>
+        
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#["TXN-" ++ now() as String {format: "yyyyMMddHHmmss"} ++ "-" ++ (randomInt(999999) + 100000) as String]' doc:name="Generate Transaction ID" variableName="transactionId"/>
+        
+        <!-- Validate Payment Request -->
+        <flow-ref doc:name="Validate Payment Request" name="validate-payment-request-subflow"/>
+        
+        <!-- Mask sensitive payment data for logging -->
+        <ee:transform doc:name="Mask Sensitive Data" xsi:type="ee:MessageTransformer">
+            <ee:variables>
+                <ee:set-variable variableName="maskedPayload"><![CDATA[%dw 2.0
+output application/json
+---
+payload update {
+    case paymentDetails at .paymentDetails -> paymentDetails update {
+        case cardNumber at .cardNumber -> "****-****-****-" ++ cardNumber[-4 to -1]
+        case cvv at .cvv -> "***"
+    }
+}]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Call External Payment Gateway -->
+        <choice doc:name="Route by Payment Method">
+            <when expression='#[payload.paymentDetails.type == "CREDIT_CARD" or payload.paymentDetails.type == "DEBIT_CARD"]'>
+                <flow-ref doc:name="Process Card Payment" name="process-card-payment-subflow"/>
+            </when>
+            <when expression='#[payload.paymentDetails.type == "PAYPAL"]'>
+                <flow-ref doc:name="Process PayPal Payment" name="process-paypal-payment-subflow"/>
+            </when>
+            <when expression='#[payload.paymentDetails.type == "BANK_TRANSFER"]'>
+                <flow-ref doc:name="Process Bank Transfer" name="process-bank-transfer-subflow"/>
+            </when>
+            <otherwise>
+                <raise-error type="PAYMENT:UNSUPPORTED_METHOD" description="Unsupported payment method"/>
+            </otherwise>
+        </choice>
+        
+        <!-- Store Payment Transaction -->
+        <db:insert doc:name="Store Payment Transaction" config-ref="paymentDatabaseConfig">
+            <db:sql><![CDATA[
+                INSERT INTO payment_transactions (
+                    transaction_id,
+                    customer_id,
+                    amount,
+                    currency,
+                    payment_method,
+                    gateway_transaction_id,
+                    status,
+                    correlation_id,
+                    order_reference,
+                    created_date
+                ) VALUES (
+                    :transactionId,
+                    :customerId,
+                    :amount,
+                    :currency,
+                    :paymentMethod,
+                    :gatewayTransactionId,
+                    :status,
+                    :correlationId,
+                    :orderReference,
+                    CURRENT_TIMESTAMP
+                )
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="transactionId" value="#[vars.transactionId]"/>
+                <db:input-parameter key="customerId" value="#[payload.customerId]"/>
+                <db:input-parameter key="amount" value="#[payload.amount]"/>
+                <db:input-parameter key="currency" value="#[payload.currency]"/>
+                <db:input-parameter key="paymentMethod" value="#[payload.paymentDetails.type]"/>
+                <db:input-parameter key="gatewayTransactionId" value="#[vars.gatewayResponse.transactionId]"/>
+                <db:input-parameter key="status" value="#[vars.gatewayResponse.status]"/>
+                <db:input-parameter key="correlationId" value="#[vars.correlationId]"/>
+                <db:input-parameter key="orderReference" value="#[payload.orderReference default null]"/>
+            </db:input-parameters>
+        </db:insert>
+        
+        <!-- Transform Authorization Response -->
+        <ee:transform doc:name="Transform Authorization Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    transactionId: vars.transactionId,
+    gatewayTransactionId: vars.gatewayResponse.transactionId,
+    status: vars.gatewayResponse.status,
+    amount: payload.amount,
+    currency: payload.currency,
+    authorizationCode: vars.gatewayResponse.authorizationCode,
+    expiresAt: (now() + |PT1H|) as String,
+    fees: {
+        processingFee: vars.gatewayResponse.processingFee default 0,
+        transactionFee: vars.gatewayResponse.transactionFee default 0
+    },
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Publish Payment Event -->
+        <vm:publish queueName="payment.events" doc:name="Publish Payment Event">
+            <vm:content><![CDATA[#[{
+                eventType: "PAYMENT_AUTHORIZED",
+                transactionId: vars.transactionId,
+                customerId: payload.customerId,
+                amount: payload.amount,
+                correlationId: vars.correlationId,
+                timestamp: now() as String
+            }]]]></vm:content>
+        </vm:publish>
+        
+        <logger level="INFO" doc:name="Log Authorization Success" message='#["Payment authorized successfully: " ++ vars.transactionId]'/>
+        
+        <error-handler>
+            <on-error-propagate type="PAYMENT:AUTHORIZATION_FAILED" doc:name="Handle Authorization Failed">
+                <logger level="WARN" doc:name="Log Authorization Failed" message='#["Payment authorization failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Authorization Failed" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_AUTHORIZATION_FAILED",
+    message: "Payment authorization failed",
+    details: error.description,
+    transactionId: vars.transactionId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">402</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="ANY" doc:name="Handle Payment Error">
+                <logger level="ERROR" doc:name="Log Payment Error" message='#["Payment processing failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Payment Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_PROCESSING_FAILED",
+    message: "Payment processing failed",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /payments/capture - Capture Authorized Payment -->
+    <flow name="post:\payments\capture:application\json:payment-system-api-config" doc:name="Capture Payment">
+        <logger level="INFO" doc:name="Log Payment Capture" message='#["Capturing payment: " ++ payload.transactionId]'/>
+        
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[payload.transactionId]' doc:name="Store Transaction ID" variableName="transactionId"/>
+        
+        <!-- Get Payment Transaction -->
+        <db:select doc:name="Get Payment Transaction" config-ref="paymentDatabaseConfig">
+            <db:sql><![CDATA[
+                SELECT 
+                    transaction_id,
+                    gateway_transaction_id,
+                    amount,
+                    currency,
+                    payment_method,
+                    status
+                FROM payment_transactions 
+                WHERE transaction_id = :transactionId
+                AND status = 'AUTHORIZED'
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="transactionId" value="#[vars.transactionId]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <choice doc:name="Transaction Found?">
+            <when expression="#[sizeOf(payload) > 0]">
+                <set-variable value="#[payload[0]]" doc:name="Store Transaction Data" variableName="transactionData"/>
+                
+                <!-- Call Payment Gateway for Capture -->
+                <http:request method="POST" doc:name="Capture at Gateway" config-ref="payment-gateway-config" path="/capture">
+                    <http:body><![CDATA[#[{
+                        transactionId: vars.transactionData.gateway_transaction_id,
+                        amount: vars.transactionData.amount,
+                        currency: vars.transactionData.currency
+                    }]]]></http:body>
+                    <http:headers><![CDATA[#[{
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " ++ vars.gatewayApiKey,
+                        "X-Correlation-ID": vars.correlationId
+                    }]]]></http:headers>
+                </http:request>
+                
+                <!-- Parse Gateway Response -->
+                <set-variable value="#[payload]" doc:name="Store Gateway Response" variableName="captureResponse"/>
+                
+                <choice doc:name="Capture Successful?">
+                    <when expression='#[vars.captureResponse.status == "CAPTURED"]'>
+                        <!-- Update Transaction Status -->
+                        <db:update doc:name="Update Transaction Status" config-ref="paymentDatabaseConfig">
+                            <db:sql><![CDATA[
+                                UPDATE payment_transactions 
+                                SET 
+                                    status = 'CAPTURED',
+                                    captured_date = CURRENT_TIMESTAMP,
+                                    captured_amount = :amount
+                                WHERE transaction_id = :transactionId
+                            ]]></db:sql>
+                            <db:input-parameters>
+                                <db:input-parameter key="transactionId" value="#[vars.transactionId]"/>
+                                <db:input-parameter key="amount" value="#[vars.transactionData.amount]"/>
+                            </db:input-parameters>
+                        </db:update>
+                        
+                        <!-- Transform Capture Success Response -->
+                        <ee:transform doc:name="Transform Capture Response" xsi:type="ee:MessageTransformer">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    transactionId: vars.transactionId,
+    gatewayTransactionId: vars.transactionData.gateway_transaction_id,
+    status: "CAPTURED",
+    capturedAmount: vars.transactionData.amount,
+    currency: vars.transactionData.currency,
+    capturedAt: now() as String,
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        
+                        <!-- Publish Capture Event -->
+                        <vm:publish queueName="payment.events" doc:name="Publish Capture Event">
+                            <vm:content><![CDATA[#[{
+                                eventType: "PAYMENT_CAPTURED",
+                                transactionId: vars.transactionId,
+                                amount: vars.transactionData.amount,
+                                correlationId: vars.correlationId,
+                                timestamp: now() as String
+                            }]]]></vm:content>
+                        </vm:publish>
+                        
+                        <logger level="INFO" doc:name="Log Capture Success" message='#["Payment captured successfully: " ++ vars.transactionId]'/>
+                    </when>
+                    <otherwise>
+                        <raise-error type="PAYMENT:CAPTURE_FAILED" description="Payment capture failed at gateway"/>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <raise-error type="PAYMENT:TRANSACTION_NOT_FOUND" description="Transaction not found or not in authorized state"/>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="PAYMENT:CAPTURE_FAILED" doc:name="Handle Capture Failed">
+                <logger level="WARN" doc:name="Log Capture Failed" message='#["Payment capture failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Capture Failed" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_CAPTURE_FAILED",
+    message: "Payment capture failed",
+    details: error.description,
+    transactionId: vars.transactionId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="PAYMENT:TRANSACTION_NOT_FOUND" doc:name="Handle Transaction Not Found">
+                <ee:transform doc:name="Transform Transaction Not Found" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "TRANSACTION_NOT_FOUND",
+    message: "Transaction not found or not eligible for capture",
+    transactionId: vars.transactionId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="ANY" doc:name="Handle Capture Error">
+                <logger level="ERROR" doc:name="Log Capture Error" message='#["Payment capture failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Capture Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_CAPTURE_ERROR",
+    message: "Payment capture processing failed",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /payments/reverse - Reverse Payment -->
+    <flow name="post:\payments\reverse:application\json:payment-system-api-config" doc:name="Reverse Payment">
+        <logger level="INFO" doc:name="Log Payment Reverse" message='#["Reversing payment: " ++ payload.transactionId]'/>
+        
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[payload.transactionId]' doc:name="Store Transaction ID" variableName="transactionId"/>
+        
+        <!-- Get Payment Transaction -->
+        <db:select doc:name="Get Payment Transaction" config-ref="paymentDatabaseConfig">
+            <db:sql><![CDATA[
+                SELECT 
+                    transaction_id,
+                    gateway_transaction_id,
+                    amount,
+                    currency,
+                    payment_method,
+                    status
+                FROM payment_transactions 
+                WHERE transaction_id = :transactionId
+                AND status IN ('AUTHORIZED', 'CAPTURED')
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="transactionId" value="#[vars.transactionId]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <choice doc:name="Transaction Found?">
+            <when expression="#[sizeOf(payload) > 0]">
+                <set-variable value="#[payload[0]]" doc:name="Store Transaction Data" variableName="transactionData"/>
+                
+                <!-- Call Payment Gateway for Reversal -->
+                <http:request method="POST" doc:name="Reverse at Gateway" config-ref="payment-gateway-config" path="/reverse">
+                    <http:body><![CDATA[#[{
+                        transactionId: vars.transactionData.gateway_transaction_id,
+                        amount: payload.amount default vars.transactionData.amount,
+                        currency: vars.transactionData.currency,
+                        reason: payload.reason default "CUSTOMER_REQUEST"
+                    }]]]></http:body>
+                    <http:headers><![CDATA[#[{
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " ++ vars.gatewayApiKey,
+                        "X-Correlation-ID": vars.correlationId
+                    }]]]></http:headers>
+                </http:request>
+                
+                <!-- Parse Gateway Response -->
+                <set-variable value="#[payload]" doc:name="Store Gateway Response" variableName="reverseResponse"/>
+                
+                <choice doc:name="Reverse Successful?">
+                    <when expression='#[vars.reverseResponse.status == "REVERSED"]'>
+                        <!-- Update Transaction Status -->
+                        <db:update doc:name="Update Transaction Status" config-ref="paymentDatabaseConfig">
+                            <db:sql><![CDATA[
+                                UPDATE payment_transactions 
+                                SET 
+                                    status = 'REVERSED',
+                                    reversed_date = CURRENT_TIMESTAMP,
+                                    reversed_amount = :amount,
+                                    reversal_reason = :reason
+                                WHERE transaction_id = :transactionId
+                            ]]></db:sql>
+                            <db:input-parameters>
+                                <db:input-parameter key="transactionId" value="#[vars.transactionId]"/>
+                                <db:input-parameter key="amount" value="#[payload.amount default vars.transactionData.amount]"/>
+                                <db:input-parameter key="reason" value="#[payload.reason default 'CUSTOMER_REQUEST']"/>
+                            </db:input-parameters>
+                        </db:update>
+                        
+                        <!-- Transform Reverse Success Response -->
+                        <ee:transform doc:name="Transform Reverse Response" xsi:type="ee:MessageTransformer">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    transactionId: vars.transactionId,
+    gatewayTransactionId: vars.transactionData.gateway_transaction_id,
+    status: "REVERSED",
+    reversedAmount: payload.amount default vars.transactionData.amount,
+    currency: vars.transactionData.currency,
+    reversedAt: now() as String,
+    reason: payload.reason default "CUSTOMER_REQUEST",
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        
+                        <!-- Publish Reverse Event -->
+                        <vm:publish queueName="payment.events" doc:name="Publish Reverse Event">
+                            <vm:content><![CDATA[#[{
+                                eventType: "PAYMENT_REVERSED",
+                                transactionId: vars.transactionId,
+                                amount: payload.reversedAmount,
+                                correlationId: vars.correlationId,
+                                timestamp: now() as String
+                            }]]]></vm:content>
+                        </vm:publish>
+                        
+                        <logger level="INFO" doc:name="Log Reverse Success" message='#["Payment reversed successfully: " ++ vars.transactionId]'/>
+                    </when>
+                    <otherwise>
+                        <raise-error type="PAYMENT:REVERSE_FAILED" description="Payment reversal failed at gateway"/>
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <raise-error type="PAYMENT:TRANSACTION_NOT_FOUND" description="Transaction not found or not eligible for reversal"/>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="PAYMENT:REVERSE_FAILED" doc:name="Handle Reverse Failed">
+                <logger level="WARN" doc:name="Log Reverse Failed" message='#["Payment reversal failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Reverse Failed" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_REVERSE_FAILED",
+    message: "Payment reversal failed",
+    details: error.description,
+    transactionId: vars.transactionId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="PAYMENT:TRANSACTION_NOT_FOUND" doc:name="Handle Transaction Not Found">
+                <ee:transform doc:name="Transform Transaction Not Found" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "TRANSACTION_NOT_FOUND",
+    message: "Transaction not found or not eligible for reversal",
+    transactionId: vars.transactionId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET /payments/{transactionId} - Get Payment Status -->
+    <flow name="get:\payments\(transactionId):payment-system-api-config" doc:name="Get Payment Status">
+        <logger level="INFO" doc:name="Log Get Payment Status" message='#["Getting payment status for: " ++ attributes.uriParams.transactionId]'/>
+        
+        <set-variable value='#[attributes.uriParams.transactionId]' doc:name="Set Transaction ID" variableName="transactionId"/>
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Get Payment Transaction -->
+        <db:select doc:name="Query Payment Transaction" config-ref="paymentDatabaseConfig">
+            <db:sql><![CDATA[
+                SELECT 
+                    transaction_id,
+                    customer_id,
+                    amount,
+                    currency,
+                    payment_method,
+                    gateway_transaction_id,
+                    status,
+                    correlation_id,
+                    order_reference,
+                    created_date,
+                    captured_date,
+                    captured_amount,
+                    reversed_date,
+                    reversed_amount,
+                    reversal_reason
+                FROM payment_transactions 
+                WHERE transaction_id = :transactionId
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="transactionId" value="#[vars.transactionId]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <choice doc:name="Transaction Found?">
+            <when expression="#[sizeOf(payload) > 0]">
+                <!-- Transform Payment Status Response -->
+                <ee:transform doc:name="Transform Payment Status" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var txn = payload[0]
+---
+{
+    transactionId: txn.transaction_id,
+    gatewayTransactionId: txn.gateway_transaction_id,
+    customerId: txn.customer_id,
+    amount: txn.amount,
+    currency: txn.currency,
+    paymentMethod: txn.payment_method,
+    status: txn.status,
+    orderReference: txn.order_reference,
+    createdAt: txn.created_date as String,
+    capturedAt: txn.captured_date as String default null,
+    capturedAmount: txn.captured_amount default null,
+    reversedAt: txn.reversed_date as String default null,
+    reversedAmount: txn.reversed_amount default null,
+    reversalReason: txn.reversal_reason default null,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                
+                <logger level="INFO" doc:name="Log Payment Found" message='#["Payment status retrieved: " ++ payload.status]'/>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="Payment Not Found" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_NOT_FOUND",
+    message: "Payment transaction not found",
+    transactionId: vars.transactionId,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Get Payment Error">
+                <logger level="ERROR" doc:name="Log Get Payment Error" message='#["Get payment status failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Get Payment Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "PAYMENT_STATUS_ERROR",
+    message: "Failed to retrieve payment status",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Validation Sub-flow -->
+    <sub-flow name="validate-payment-request-subflow" doc:name="Validate Payment Request">
+        <logger level="INFO" doc:name="Log Payment Validation" message="Validating payment request"/>
+        
+        <!-- Store original payload -->
+        <set-variable value="#[payload]" doc:name="Store Original Payload" variableName="originalPayload"/>
+        
+        <!-- Validate Required Fields -->
+        <validation:all doc:name="Validate Payment Fields">
+            <validation:validations>
+                <validation:is-not-null value="#[payload.customerId]" message="Customer ID is required"/>
+                <validation:is-not-null value="#[payload.amount]" message="Amount is required"/>
+                <validation:is-not-null value="#[payload.currency]" message="Currency is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails]" message="Payment details are required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.type]" message="Payment type is required"/>
+            </validation:validations>
+        </validation:all>
+        
+        <!-- Validate Amount -->
+        <choice doc:name="Validate Amount Range">
+            <when expression="#[payload.amount <= 0]">
+                <raise-error type="PAYMENT:INVALID_AMOUNT" description="Amount must be greater than zero"/>
+            </when>
+            <when expression="#[payload.amount > 50000]">
+                <raise-error type="PAYMENT:AMOUNT_LIMIT_EXCEEDED" description="Amount exceeds maximum limit of $50,000"/>
+            </when>
+        </choice>
+        
+        <!-- Validate Currency -->
+        <choice doc:name="Validate Currency">
+            <when expression='#[!["USD", "EUR", "GBP", "CAD"] contains payload.currency]'>
+                <raise-error type="PAYMENT:UNSUPPORTED_CURRENCY" description="Unsupported currency"/>
+            </when>
+        </choice>
+        
+        <!-- Validate Payment Details by Type -->
+        <choice doc:name="Validate Payment Details">
+            <when expression='#[payload.paymentDetails.type == "CREDIT_CARD" or payload.paymentDetails.type == "DEBIT_CARD"]'>
+                <flow-ref doc:name="Validate Card Details" name="validate-card-details-subflow"/>
+            </when>
+            <when expression='#[payload.paymentDetails.type == "PAYPAL"]'>
+                <flow-ref doc:name="Validate PayPal Details" name="validate-paypal-details-subflow"/>
+            </when>
+            <when expression='#[payload.paymentDetails.type == "BANK_TRANSFER"]'>
+                <flow-ref doc:name="Validate Bank Transfer Details" name="validate-bank-transfer-details-subflow"/>
+            </when>
+        </choice>
+        
+        <logger level="INFO" doc:name="Log Validation Success" message="Payment request validation completed successfully"/>
+    </sub-flow>
+
+    <!-- Card Details Validation Sub-flow -->
+    <sub-flow name="validate-card-details-subflow" doc:name="Validate Card Details">
+        <validation:all doc:name="Validate Card Fields">
+            <validation:validations>
+                <validation:is-not-null value="#[payload.paymentDetails.cardNumber]" message="Card number is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.expiryMonth]" message="Expiry month is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.expiryYear]" message="Expiry year is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.cvv]" message="CVV is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.cardholderName]" message="Cardholder name is required"/>
+            </validation:validations>
+        </validation:all>
+        
+        <!-- Validate Card Number Format -->
+        <choice doc:name="Validate Card Number">
+            <when expression='#[!matches(payload.paymentDetails.cardNumber, "^[0-9]{13,19}$")]'>
+                <raise-error type="PAYMENT:INVALID_CARD_NUMBER" description="Invalid card number format"/>
+            </when>
+        </choice>
+        
+        <!-- Validate Expiry Date -->
+        <choice doc:name="Validate Expiry Date">
+            <when expression="#[payload.paymentDetails.expiryMonth < 1 or payload.paymentDetails.expiryMonth > 12]">
+                <raise-error type="PAYMENT:INVALID_EXPIRY_DATE" description="Invalid expiry month"/>
+            </when>
+            <when expression="#[payload.paymentDetails.expiryYear < (now().year)]">
+                <raise-error type="PAYMENT:CARD_EXPIRED" description="Card has expired"/>
+            </when>
+        </choice>
+        
+        <!-- Validate CVV -->
+        <choice doc:name="Validate CVV">
+            <when expression='#[!matches(payload.paymentDetails.cvv, "^[0-9]{3,4}$")]'>
+                <raise-error type="PAYMENT:INVALID_CVV" description="Invalid CVV format"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <!-- PayPal Details Validation Sub-flow -->
+    <sub-flow name="validate-paypal-details-subflow" doc:name="Validate PayPal Details">
+        <validation:all doc:name="Validate PayPal Fields">
+            <validation:validations>
+                <validation:is-not-null value="#[payload.paymentDetails.email]" message="PayPal email is required"/>
+            </validation:validations>
+        </validation:all>
+        
+        <!-- Validate Email Format -->
+        <choice doc:name="Validate PayPal Email">
+            <when expression='#[!matches(payload.paymentDetails.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")]'>
+                <raise-error type="PAYMENT:INVALID_EMAIL" description="Invalid PayPal email format"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <!-- Bank Transfer Details Validation Sub-flow -->
+    <sub-flow name="validate-bank-transfer-details-subflow" doc:name="Validate Bank Transfer Details">
+        <validation:all doc:name="Validate Bank Transfer Fields">
+            <validation:validations>
+                <validation:is-not-null value="#[payload.paymentDetails.accountNumber]" message="Account number is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.routingNumber]" message="Routing number is required"/>
+                <validation:is-not-null value="#[payload.paymentDetails.accountType]" message="Account type is required"/>
+            </validation:validations>
+        </validation:all>
+        
+        <!-- Validate Account Number -->
+        <choice doc:name="Validate Account Number">
+            <when expression='#[!matches(payload.paymentDetails.accountNumber, "^[0-9]{8,17}$")]'>
+                <raise-error type="PAYMENT:INVALID_ACCOUNT_NUMBER" description="Invalid account number format"/>
+            </when>
+        </choice>
+        
+        <!-- Validate Routing Number -->
+        <choice doc:name="Validate Routing Number">
+            <when expression='#[!matches(payload.paymentDetails.routingNumber, "^[0-9]{9}$")]'>
+                <raise-error type="PAYMENT:INVALID_ROUTING_NUMBER" description="Invalid routing number format"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <!-- Process Card Payment Sub-flow -->
+    <sub-flow name="process-card-payment-subflow" doc:name="Process Card Payment">
+        <logger level="INFO" doc:name="Log Card Processing" message="Processing card payment"/>
+        
+        <!-- Call Payment Gateway for Card Authorization -->
+        <http:request method="POST" doc:name="Authorize Card Payment" config-ref="payment-gateway-config" path="/authorize/card">
+            <http:body><![CDATA[#[{
+                amount: payload.amount,
+                currency: payload.currency,
+                cardNumber: payload.paymentDetails.cardNumber,
+                expiryMonth: payload.paymentDetails.expiryMonth,
+                expiryYear: payload.paymentDetails.expiryYear,
+                cvv: payload.paymentDetails.cvv,
+                cardholderName: payload.paymentDetails.cardholderName,
+                billingAddress: payload.paymentDetails.billingAddress default {}
+            }]]]></http:body>
+            <http:headers><![CDATA[#[{
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " ++ vars.gatewayApiKey,
+                "X-Correlation-ID": vars.correlationId
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Parse and validate gateway response -->
+        <set-variable value="#[payload]" doc:name="Store Gateway Response" variableName="gatewayResponse"/>
+        
+        <choice doc:name="Check Authorization Result">
+            <when expression='#[vars.gatewayResponse.status != "AUTHORIZED"]'>
+                <raise-error type="PAYMENT:AUTHORIZATION_FAILED" description='#["Card authorization failed: " ++ vars.gatewayResponse.message]'/>
+            </when>
+        </choice>
+        
+        <logger level="INFO" doc:name="Log Card Authorization Success" message='#["Card payment authorized: " ++ vars.gatewayResponse.transactionId]'/>
+    </sub-flow>
+
+    <!-- Process PayPal Payment Sub-flow -->
+    <sub-flow name="process-paypal-payment-subflow" doc:name="Process PayPal Payment">
+        <logger level="INFO" doc:name="Log PayPal Processing" message="Processing PayPal payment"/>
+        
+        <!-- Call PayPal Gateway -->
+        <http:request method="POST" doc:name="Authorize PayPal Payment" config-ref="paypal-gateway-config" path="/authorize">
+            <http:body><![CDATA[#[{
+                amount: payload.amount,
+                currency: payload.currency,
+                email: payload.paymentDetails.email,
+                returnUrl: payload.paymentDetails.returnUrl default "https://api.example.com/payment/return",
+                cancelUrl: payload.paymentDetails.cancelUrl default "https://api.example.com/payment/cancel"
+            }]]]></http:body>
+            <http:headers><![CDATA[#[{
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " ++ vars.paypalApiKey,
+                "X-Correlation-ID": vars.correlationId
+            }]]]></http:headers>
+        </http:request>
+        
+        <set-variable value="#[payload]" doc:name="Store Gateway Response" variableName="gatewayResponse"/>
+        
+        <choice doc:name="Check PayPal Authorization">
+            <when expression='#[vars.gatewayResponse.status != "AUTHORIZED"]'>
+                <raise-error type="PAYMENT:AUTHORIZATION_FAILED" description='#["PayPal authorization failed: " ++ vars.gatewayResponse.message]'/>
+            </when>
+        </choice>
+        
+        <logger level="INFO" doc:name="Log PayPal Authorization Success" message='#["PayPal payment authorized: " ++ vars.gatewayResponse.transactionId]'/>
+    </sub-flow>
+
+    <!-- Process Bank Transfer Payment Sub-flow -->
+    <sub-flow name="process-bank-transfer-subflow" doc:name="Process Bank Transfer Payment">
+        <logger level="INFO" doc:name="Log Bank Transfer Processing" message="Processing bank transfer payment"/>
+        
+        <!-- Call Bank Transfer Gateway -->
+        <http:request method="POST" doc:name="Authorize Bank Transfer" config-ref="bank-transfer-gateway-config" path="/authorize">
+            <http:body><![CDATA[#[{
+                amount: payload.amount,
+                currency: payload.currency,
+                accountNumber: payload.paymentDetails.accountNumber,
+                routingNumber: payload.paymentDetails.routingNumber,
+                accountType: payload.paymentDetails.accountType,
+                accountHolderName: payload.paymentDetails.accountHolderName
+            }]]]></http:body>
+            <http:headers><![CDATA[#[{
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " ++ vars.bankTransferApiKey,
+                "X-Correlation-ID": vars.correlationId
+            }]]]></http:headers>
+        </http:request>
+        
+        <set-variable value="#[payload]" doc:name="Store Gateway Response" variableName="gatewayResponse"/>
+        
+        <choice doc:name="Check Bank Transfer Authorization">
+            <when expression='#[vars.gatewayResponse.status != "AUTHORIZED"]'>
+                <raise-error type="PAYMENT:AUTHORIZATION_FAILED" description='#["Bank transfer authorization failed: " ++ vars.gatewayResponse.message]'/>
+            </when>
+        </choice>
+        
+        <logger level="INFO" doc:name="Log Bank Transfer Authorization Success" message='#["Bank transfer authorized: " ++ vars.gatewayResponse.transactionId]'/>
+    </sub-flow>
+
+</mule>
+

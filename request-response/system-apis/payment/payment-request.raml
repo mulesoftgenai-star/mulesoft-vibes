@@ -1,0 +1,273 @@
+#%RAML 1.0 DataType
+
+displayName: Payment System API Request
+description: Request data type for Payment System API operations
+
+type: object
+properties:
+  paymentRequest:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        enum: ["AUTHORIZE", "CAPTURE", "REFUND", "VOID", "GET_STATUS", "VALIDATE_PAYMENT_METHOD"]
+        description: Payment operation to be performed
+        example: "AUTHORIZE"
+      transactionId:
+        type: string
+        required: false
+        description: Existing transaction ID (required for CAPTURE, REFUND, VOID, GET_STATUS)
+        example: "TXN_789456123"
+      orderId:
+        type: string
+        required: true
+        description: Associated order identifier
+        example: "ORD-2024-001234"
+      customerId:
+        type: string
+        required: true
+        description: Customer making the payment
+        example: "CUST-12345"
+      paymentAmount:
+        type: object
+        required: true
+        description: Payment amount details
+        properties:
+          amount:
+            type: number
+            required: true
+            description: Payment amount
+            minimum: 0.01
+            example: 657.95
+          currency:
+            type: string
+            required: true
+            description: Payment currency code
+            pattern: "^[A-Z]{3}$"
+            example: "USD"
+          breakdown:
+            type: object
+            required: false
+            description: Amount breakdown
+            properties:
+              subtotal:
+                type: number
+                required: false
+                description: Subtotal amount
+                example: 599.97
+              tax:
+                type: number
+                required: false
+                description: Tax amount
+                example: 47.99
+              shipping:
+                type: number
+                required: false
+                description: Shipping amount
+                example: 9.99
+              discount:
+                type: number
+                required: false
+                description: Discount amount
+                example: 0.00
+      paymentMethod:
+        type: object
+        required: true
+        description: Payment method information
+        properties:
+          type:
+            type: string
+            required: true
+            enum: ["CREDIT_CARD", "DEBIT_CARD", "DIGITAL_WALLET", "BANK_TRANSFER", "GIFT_CARD"]
+            description: Payment method type
+            example: "CREDIT_CARD"
+          cardDetails:
+            type: object
+            required: false
+            description: Credit/Debit card details
+            properties:
+              cardToken:
+                type: string
+                required: true
+                description: Tokenized card reference
+                example: "tok_1A2B3C4D5E6F7G8H"
+              cardholderName:
+                type: string
+                required: true
+                description: Name on the card
+                example: "John Doe"
+                maxLength: 100
+              expiryMonth:
+                type: integer
+                required: true
+                description: Card expiry month
+                minimum: 1
+                maximum: 12
+                example: 12
+              expiryYear:
+                type: integer
+                required: true
+                description: Card expiry year
+                minimum: 2024
+                example: 2025
+              cvv:
+                type: string
+                required: false
+                description: Card security code (for authorization)
+                pattern: "^[0-9]{3,4}$"
+                example: "123"
+              billingAddress:
+                type: object
+                required: false
+                properties:
+                  street:
+                    type: string
+                    required: true
+                    description: Billing street address
+                    example: "456 Business Ave"
+                  city:
+                    type: string
+                    required: true
+                    description: Billing city
+                    example: "New York"
+                  state:
+                    type: string
+                    required: true
+                    description: Billing state
+                    example: "NY"
+                  zipCode:
+                    type: string
+                    required: true
+                    description: Billing postal code
+                    example: "10002"
+                  country:
+                    type: string
+                    required: true
+                    description: Billing country code
+                    example: "US"
+          walletDetails:
+            type: object
+            required: false
+            description: Digital wallet details
+            properties:
+              walletType:
+                type: string
+                required: true
+                enum: ["PAYPAL", "APPLE_PAY", "GOOGLE_PAY", "AMAZON_PAY"]
+                description: Wallet provider
+                example: "PAYPAL"
+              walletToken:
+                type: string
+                required: true
+                description: Wallet payment token
+                example: "wallet_tok_9876543210"
+              walletEmail:
+                type: string
+                required: false
+                description: Associated wallet email
+                example: "john.doe@example.com"
+          bankDetails:
+            type: object
+            required: false
+            description: Bank transfer details
+            properties:
+              accountToken:
+                type: string
+                required: true
+                description: Tokenized bank account reference
+                example: "bank_tok_ABCDEF123456"
+              bankName:
+                type: string
+                required: false
+                description: Bank name
+                example: "Chase Bank"
+              accountType:
+                type: string
+                required: false
+                enum: ["CHECKING", "SAVINGS"]
+                description: Account type
+                example: "CHECKING"
+      refundDetails:
+        type: object
+        required: false
+        description: Details for refund operations
+        properties:
+          refundAmount:
+            type: number
+            required: true
+            description: Amount to refund
+            minimum: 0.01
+            example: 100.00
+          refundReason:
+            type: string
+            required: true
+            enum: ["CUSTOMER_REQUEST", "ORDER_CANCELLED", "PRODUCT_RETURN", "DUPLICATE_PAYMENT", "FRAUD"]
+            description: Reason for refund
+            example: "CUSTOMER_REQUEST"
+          notes:
+            type: string
+            required: false
+            description: Additional refund notes
+            maxLength: 500
+            example: "Customer requested partial refund for damaged item"
+      fraudCheck:
+        type: object
+        required: false
+        description: Fraud prevention settings
+        properties:
+          performFraudCheck:
+            type: boolean
+            required: false
+            description: Whether to perform fraud screening
+            default: true
+            example: true
+          riskThreshold:
+            type: string
+            required: false
+            enum: ["LOW", "MEDIUM", "HIGH"]
+            description: Risk tolerance level
+            default: "MEDIUM"
+            example: "MEDIUM"
+          customerIPAddress:
+            type: string
+            required: false
+            description: Customer IP address for fraud analysis
+            example: "192.168.1.100"
+          deviceFingerprint:
+            type: string
+            required: false
+            description: Device fingerprint for fraud detection
+            example: "fp_1234567890ABCDEF"
+      processingOptions:
+        type: object
+        required: false
+        description: Payment processing options
+        properties:
+          captureMethod:
+            type: string
+            required: false
+            enum: ["AUTOMATIC", "MANUAL"]
+            description: When to capture the payment
+            default: "MANUAL"
+            example: "MANUAL"
+          timeout:
+            type: integer
+            required: false
+            description: Processing timeout in seconds
+            minimum: 10
+            maximum: 300
+            default: 60
+            example: 60
+          retryOnFailure:
+            type: boolean
+            required: false
+            description: Whether to retry failed payments automatically
+            default: false
+            example: false
+          savePaymentMethod:
+            type: boolean
+            required: false
+            description: Whether to save payment method for future use
+            default: false
+            example: true

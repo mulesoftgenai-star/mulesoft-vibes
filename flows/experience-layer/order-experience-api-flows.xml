@@ -1,0 +1,399 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:oauth="http://www.mulesoft.org/schema/mule/oauth"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                          http://www.mulesoft.org/schema/mule/oauth http://www.mulesoft.org/schema/mule/oauth/current/mule-oauth.xsd">
+
+    <!-- Order Experience API Main Flow -->
+    <flow name="api-main" doc:name="API Main Flow">
+        <http:listener doc:name="HTTP Listener" path="/api/*" config-ref="order-experience-httpListenerConfig">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <logger level="INFO" doc:name="Log Request" message='#["Request received: " ++ attributes.method ++ " " ++ attributes.requestPath]'/>
+        
+        <!-- OAuth2 Security Validation -->
+        <oauth:validate-token doc:name="Validate OAuth Token" config-ref="oauth-provider-config"/>
+        
+        <apikit:router config-ref="order-experience-api-config"/>
+        
+        <error-handler ref="order-experience-api-errorHandler"/>
+    </flow>
+
+    <!-- POST /orders - Create New Order -->
+    <flow name="post:\orders:application\json:order-experience-api-config" doc:name="Create Order">
+        <logger level="INFO" doc:name="Log Create Order Request" message='#["Creating new order for customer: " ++ payload.customerId]'/>
+        
+        <!-- Input Validation -->
+        <flow-ref doc:name="Validate Order Request" name="validate-order-request-subflow"/>
+        
+        <!-- Set Correlation ID for tracking -->
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Transform Experience Layer request to Process Layer request -->
+        <ee:transform doc:name="Transform to Process API Request" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    customerId: payload.customerId,
+    orderDate: now(),
+    items: payload.items map {
+        productId: $.productId,
+        quantity: $.quantity,
+        price: $.unitPrice
+    },
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress,
+    paymentDetails: payload.paymentDetails,
+    priority: payload.priority default "NORMAL"
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="originalRequest"><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Call Order Process API -->
+        <http:request method="POST" doc:name="Call Order Process API" config-ref="order-process-api-config" path="/orders">
+            <http:headers><![CDATA[#[{"correlation-id": vars.correlationId, "Content-Type": "application/json"}]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform Process API response to Experience API response -->
+        <ee:transform doc:name="Transform to Experience Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: payload.status,
+    totalAmount: payload.totalAmount,
+    estimatedDelivery: payload.estimatedDeliveryDate,
+    trackingNumber: payload.trackingNumber,
+    message: "Order created successfully"
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">201</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Created" message='#["Order created successfully with ID: " ++ payload.orderId]'/>
+        
+        <error-handler>
+            <on-error-propagate type="HTTP:BAD_REQUEST">
+                <flow-ref doc:name="Handle Bad Request" name="handle-bad-request-error"/>
+            </on-error-propagate>
+            <on-error-propagate type="HTTP:INTERNAL_SERVER_ERROR">
+                <flow-ref doc:name="Handle Internal Server Error" name="handle-internal-server-error"/>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET /orders/{orderId} - Get Order Details -->
+    <flow name="get:\orders\(orderId):order-experience-api-config" doc:name="Get Order Details">
+        <logger level="INFO" doc:name="Log Get Order Request" message='#["Getting order details for ID: " ++ attributes.uriParams.orderId]'/>
+        
+        <!-- Validate Order ID -->
+        <validation:is-not-empty value="#[attributes.uriParams.orderId]" message="Order ID is required"/>
+        
+        <!-- Call Order Process API -->
+        <http:request method="GET" doc:name="Call Order Process API" config-ref="order-process-api-config" path='#["/orders/" ++ attributes.uriParams.orderId]'>
+            <http:headers><![CDATA[#[{"correlation-id": uuid()}]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform to Experience API response -->
+        <ee:transform doc:name="Transform to Experience Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: payload.status,
+    customerId: payload.customerId,
+    orderDate: payload.orderDate,
+    items: payload.items map {
+        productId: $.productId,
+        productName: $.productName,
+        quantity: $.quantity,
+        unitPrice: $.price,
+        totalPrice: $.quantity * $.price
+    },
+    totalAmount: payload.totalAmount,
+    shippingAddress: payload.shippingAddress,
+    trackingNumber: payload.trackingNumber,
+    estimatedDelivery: payload.estimatedDeliveryDate,
+    actualDelivery: payload.actualDeliveryDate
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Retrieved" message='#["Order details retrieved for ID: " ++ payload.orderId]'/>
+        
+        <error-handler>
+            <on-error-propagate type="HTTP:NOT_FOUND">
+                <flow-ref doc:name="Handle Not Found" name="handle-not-found-error"/>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET /orders - Get Orders List -->
+    <flow name="get:\orders:order-experience-api-config" doc:name="Get Orders List">
+        <logger level="INFO" doc:name="Log Get Orders Request" message='#["Getting orders list with query params: " ++ write(attributes.queryParams, "application/json")]'/>
+        
+        <!-- Build query parameters -->
+        <set-variable value="#[attributes.queryParams]" doc:name="Set Query Params" variableName="queryParams"/>
+        
+        <!-- Call Order Process API -->
+        <http:request method="GET" doc:name="Call Order Process API" config-ref="order-process-api-config" path="/orders">
+            <http:query-params><![CDATA[#[vars.queryParams]]]></http:query-params>
+        </http:request>
+        
+        <!-- Transform to Experience API response -->
+        <ee:transform doc:name="Transform to Experience Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orders: payload.orders map {
+        orderId: $.orderId,
+        status: $.status,
+        customerId: $.customerId,
+        orderDate: $.orderDate,
+        totalAmount: $.totalAmount,
+        itemCount: sizeOf($.items)
+    },
+    pagination: {
+        page: payload.pagination.page,
+        size: payload.pagination.size,
+        totalElements: payload.pagination.totalElements,
+        totalPages: payload.pagination.totalPages
+    }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Orders Retrieved" message='#["Retrieved " ++ sizeOf(payload.orders) ++ " orders"]'/>
+    </flow>
+
+    <!-- PUT /orders/{orderId} - Update Order -->
+    <flow name="put:\orders\(orderId):application\json:order-experience-api-config" doc:name="Update Order">
+        <logger level="INFO" doc:name="Log Update Order Request" message='#["Updating order ID: " ++ attributes.uriParams.orderId]'/>
+        
+        <!-- Validate Order ID and payload -->
+        <validation:is-not-empty value="#[attributes.uriParams.orderId]" message="Order ID is required"/>
+        <flow-ref doc:name="Validate Order Update Request" name="validate-order-update-request-subflow"/>
+        
+        <!-- Transform and call Process API -->
+        <ee:transform doc:name="Transform Update Request" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: attributes.uriParams.orderId,
+    updates: payload
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <http:request method="PUT" doc:name="Call Order Process API" config-ref="order-process-api-config" path='#["/orders/" ++ attributes.uriParams.orderId]'>
+            <http:headers><![CDATA[#[{"correlation-id": uuid(), "Content-Type": "application/json"}]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform response -->
+        <ee:transform doc:name="Transform Update Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: payload.status,
+    message: "Order updated successfully",
+    updatedAt: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Updated" message='#["Order updated successfully: " ++ payload.orderId]'/>
+    </flow>
+
+    <!-- DELETE /orders/{orderId} - Cancel Order -->
+    <flow name="delete:\orders\(orderId):order-experience-api-config" doc:name="Cancel Order">
+        <logger level="INFO" doc:name="Log Cancel Order Request" message='#["Cancelling order ID: " ++ attributes.uriParams.orderId]'/>
+        
+        <!-- Validate Order ID -->
+        <validation:is-not-empty value="#[attributes.uriParams.orderId]" message="Order ID is required"/>
+        
+        <!-- Call Order Process API -->
+        <http:request method="DELETE" doc:name="Call Order Process API" config-ref="order-process-api-config" path='#["/orders/" ++ attributes.uriParams.orderId]'>
+            <http:headers><![CDATA[#[{"correlation-id": uuid()}]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform response -->
+        <ee:transform doc:name="Transform Cancel Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: attributes.uriParams.orderId,
+    status: "CANCELLED",
+    message: "Order cancelled successfully",
+    cancelledAt: now()
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Cancelled" message='#["Order cancelled successfully: " ++ attributes.uriParams.orderId]'/>
+    </flow>
+
+    <!-- Enhanced Validation Sub-flows -->
+    <sub-flow name="validate-order-request-subflow" doc:name="Validate Order Request">
+        <!-- Basic field validation -->
+        <validation:is-not-empty value="#[payload.customerId]" message="Customer ID is required"/>
+        <validation:is-not-empty value="#[payload.items]" message="Order items are required"/>
+        <validation:is-true expression="#[sizeOf(payload.items) > 0]" message="At least one item is required"/>
+        <validation:is-not-empty value="#[payload.shippingAddress]" message="Shipping address is required"/>
+        <validation:is-not-empty value="#[payload.paymentDetails]" message="Payment details are required"/>
+        
+        <!-- Business rule validation -->
+        <set-variable value='#[sum(payload.items map ($.quantity * $.unitPrice))]' doc:name="Calculate Total" variableName="calculatedTotal"/>
+        <validation:is-true expression="#[vars.calculatedTotal >= 10]" message="Minimum order value is $10"/>
+        <validation:is-true expression="#[vars.calculatedTotal <= 50000]" message="Maximum order value is $50,000"/>
+        
+        <!-- Validate each item -->
+        <foreach doc:name="Validate Items" collection="#[payload.items]">
+            <validation:is-not-empty value="#[payload.productId]" message="Product ID is required for all items"/>
+            <validation:is-true expression="#[payload.quantity > 0 and payload.quantity <= 999]" message="Quantity must be between 1 and 999"/>
+            <validation:is-true expression="#[payload.unitPrice > 0]" message="Unit price must be greater than 0"/>
+        </foreach>
+        
+        <!-- Validate addresses -->
+        <flow-ref doc:name="Validate Shipping Address" name="validate-address-subflow"/>
+        
+        <!-- Validate payment method -->
+        <flow-ref doc:name="Validate Payment Method" name="validate-payment-method-subflow"/>
+    </sub-flow>
+    
+    <!-- Address Validation Sub-flow -->
+    <sub-flow name="validate-address-subflow" doc:name="Validate Address">
+        <validation:is-not-empty value="#[payload.shippingAddress.street]" message="Street address is required"/>
+        <validation:is-not-empty value="#[payload.shippingAddress.city]" message="City is required"/>
+        <validation:is-not-empty value="#[payload.shippingAddress.state]" message="State is required"/>
+        <validation:is-not-empty value="#[payload.shippingAddress.zipCode]" message="ZIP code is required"/>
+        <validation:matches value="#[payload.shippingAddress.zipCode]" regex="^[0-9]{5}(-[0-9]{4})?$" message="Invalid ZIP code format"/>
+        <validation:is-not-empty value="#[payload.shippingAddress.country]" message="Country is required"/>
+    </sub-flow>
+    
+    <!-- Payment Method Validation Sub-flow -->
+    <sub-flow name="validate-payment-method-subflow" doc:name="Validate Payment Method">
+        <validation:is-not-empty value="#[payload.paymentDetails.type]" message="Payment method type is required"/>
+        <choice doc:name="Validate by Payment Type">
+            <when expression="#[payload.paymentDetails.type == 'CREDIT_CARD' or payload.paymentDetails.type == 'DEBIT_CARD']">
+                <validation:is-not-empty value="#[payload.paymentDetails.cardNumber]" message="Card number is required"/>
+                <validation:is-not-empty value="#[payload.paymentDetails.expiryMonth]" message="Expiry month is required"/>
+                <validation:is-not-empty value="#[payload.paymentDetails.expiryYear]" message="Expiry year is required"/>
+                <validation:is-not-empty value="#[payload.paymentDetails.cvv]" message="CVV is required"/>
+                <validation:matches value="#[payload.paymentDetails.cardNumber]" regex="^[0-9*-]{13,19}$" message="Invalid card number format"/>
+            </when>
+            <when expression="#[payload.paymentDetails.type == 'PAYPAL']">
+                <validation:is-not-empty value="#[payload.paymentDetails.paypalToken]" message="PayPal token is required"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <sub-flow name="validate-order-update-request-subflow" doc:name="Validate Order Update Request">
+        <validation:is-not-empty value="#[payload]" message="Update payload is required"/>
+        <!-- Additional validation logic for updates -->
+    </sub-flow>
+
+    <!-- Error Handling Sub-flows -->
+    <sub-flow name="handle-bad-request-error" doc:name="Handle Bad Request Error">
+        <ee:transform doc:name="Transform Bad Request Error" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "BAD_REQUEST",
+    message: "Invalid request data",
+    details: error.description default "Bad request",
+    timestamp: now(),
+    path: attributes.requestPath
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <logger level="ERROR" doc:name="Log Bad Request Error" message='#["Bad request error: " ++ error.description]'/>
+    </sub-flow>
+
+    <sub-flow name="handle-not-found-error" doc:name="Handle Not Found Error">
+        <ee:transform doc:name="Transform Not Found Error" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "NOT_FOUND",
+    message: "Order not found",
+    timestamp: now(),
+    path: attributes.requestPath
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <logger level="WARN" doc:name="Log Not Found Error" message='#["Order not found: " ++ attributes.uriParams.orderId]'/>
+    </sub-flow>
+
+    <sub-flow name="handle-internal-server-error" doc:name="Handle Internal Server Error">
+        <ee:transform doc:name="Transform Internal Server Error" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "INTERNAL_SERVER_ERROR",
+    message: "An unexpected error occurred",
+    timestamp: now(),
+    path: attributes.requestPath,
+    correlationId: vars.correlationId default uuid()
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <logger level="ERROR" doc:name="Log Internal Server Error" message='#["Internal server error: " ++ error.description]'/>
+    </sub-flow>
+
+</mule>

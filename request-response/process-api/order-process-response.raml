@@ -1,0 +1,279 @@
+#%RAML 1.0 DataType
+
+displayName: Order Process API Response
+description: Response data type for Order Process API operations
+
+type: object
+properties:
+  processOrderResponse:
+    type: object
+    properties:
+      processId:
+        type: string
+        required: true
+        description: Unique process execution identifier
+        example: "PROC-2024-001234"
+      orderId:
+        type: string
+        required: true
+        description: Order identifier
+        example: "ORD-2024-001234"
+      processStatus:
+        type: string
+        required: true
+        enum: ["SUCCESS", "FAILED", "PARTIAL_SUCCESS", "PENDING", "IN_PROGRESS"]
+        description: Overall process execution status
+        example: "SUCCESS"
+      timestamp:
+        type: datetime
+        required: true
+        description: Process completion timestamp
+        example: "2024-03-15T10:35:00.000Z"
+      validationResults:
+        type: object
+        required: true
+        properties:
+          customerValidation:
+            type: object
+            required: true
+            properties:
+              status:
+                type: string
+                required: true
+                enum: ["VALID", "INVALID", "WARNING"]
+                description: Customer validation status
+                example: "VALID"
+              creditScore:
+                type: integer
+                required: false
+                description: Customer credit score
+                example: 750
+              riskLevel:
+                type: string
+                required: false
+                enum: ["LOW", "MEDIUM", "HIGH"]
+                description: Customer risk assessment
+                example: "LOW"
+              message:
+                type: string
+                required: false
+                description: Validation message
+                example: "Customer verified successfully"
+          inventoryValidation:
+            type: object
+            required: true
+            properties:
+              status:
+                type: string
+                required: true
+                enum: ["AVAILABLE", "PARTIAL", "UNAVAILABLE"]
+                description: Inventory availability status
+                example: "AVAILABLE"
+              reservationId:
+                type: string
+                required: false
+                description: Inventory reservation identifier
+                example: "RSV-789123"
+              availableQuantities:
+                type: array
+                required: false
+                description: Available quantities per item
+                items:
+                  type: object
+                  properties:
+                    productId:
+                      type: string
+                      required: true
+                      description: Product identifier
+                      example: "PROD-98765"
+                    requestedQuantity:
+                      type: integer
+                      required: true
+                      description: Originally requested quantity
+                      example: 2
+                    availableQuantity:
+                      type: integer
+                      required: true
+                      description: Actually available quantity
+                      example: 2
+                    warehouseId:
+                      type: string
+                      required: false
+                      description: Source warehouse
+                      example: "WH-NYC-001"
+      paymentResults:
+        type: object
+        required: true
+        properties:
+          paymentStatus:
+            type: string
+            required: true
+            enum: ["AUTHORIZED", "CAPTURED", "FAILED", "PENDING"]
+            description: Payment processing status
+            example: "AUTHORIZED"
+          authorizationId:
+            type: string
+            required: false
+            description: Payment authorization ID
+            example: "AUTH_456789"
+          transactionId:
+            type: string
+            required: false
+            description: Payment transaction ID
+            example: "TXN_789456123"
+          amount:
+            type: number
+            required: true
+            description: Processed amount
+            example: 657.95
+          currency:
+            type: string
+            required: true
+            description: Payment currency
+            example: "USD"
+          fees:
+            type: object
+            required: false
+            properties:
+              processingFee:
+                type: number
+                required: false
+                description: Payment processing fee
+                example: 3.29
+              tax:
+                type: number
+                required: false
+                description: Tax amount
+                example: 47.99
+          failureReason:
+            type: string
+            required: false
+            description: Payment failure reason if applicable
+            example: "Insufficient funds"
+      shippingResults:
+        type: object
+        required: true
+        properties:
+          shippingStatus:
+            type: string
+            required: true
+            enum: ["SCHEDULED", "FAILED", "PENDING"]
+            description: Shipping scheduling status
+            example: "SCHEDULED"
+          carrierInfo:
+            type: object
+            required: false
+            properties:
+              carrierId:
+                type: string
+                required: true
+                description: Carrier identifier
+                example: "FEDEX"
+              carrierName:
+                type: string
+                required: true
+                description: Carrier company name
+                example: "FedEx"
+              service:
+                type: string
+                required: true
+                description: Shipping service type
+                example: "Ground"
+              trackingNumber:
+                type: string
+                required: false
+                description: Tracking number
+                example: "TRK-987654321"
+          estimatedDelivery:
+            type: object
+            required: false
+            properties:
+              estimatedDate:
+                type: date-only
+                required: true
+                description: Estimated delivery date
+                example: "2024-04-18"
+              timeWindow:
+                type: string
+                required: false
+                description: Delivery time window
+                example: "9:00 AM - 5:00 PM"
+          shippingCost:
+            type: number
+            required: true
+            description: Calculated shipping cost
+            example: 9.99
+      businessRuleResults:
+        type: object
+        required: false
+        properties:
+          appliedDiscounts:
+            type: array
+            required: false
+            description: Applied discounts and promotions
+            items:
+              type: object
+              properties:
+                discountId:
+                  type: string
+                  required: true
+                  description: Discount identifier
+                  example: "DISC-PREMIUM-10"
+                discountType:
+                  type: string
+                  required: true
+                  enum: ["PERCENTAGE", "FIXED_AMOUNT", "FREE_SHIPPING"]
+                  description: Type of discount
+                  example: "PERCENTAGE"
+                discountValue:
+                  type: number
+                  required: true
+                  description: Discount value applied
+                  example: 59.99
+                description:
+                  type: string
+                  required: false
+                  description: Discount description
+                  example: "10% Premium Customer Discount"
+          fraudCheckResults:
+            type: object
+            required: false
+            properties:
+              riskScore:
+                type: number
+                required: true
+                description: Fraud risk score (0-100)
+                example: 15.5
+              riskLevel:
+                type: string
+                required: true
+                enum: ["LOW", "MEDIUM", "HIGH"]
+                description: Risk assessment level
+                example: "LOW"
+              action:
+                type: string
+                required: true
+                enum: ["APPROVE", "REVIEW", "DECLINE"]
+                description: Recommended action
+                example: "APPROVE"
+      nextSteps:
+        type: object
+        required: false
+        properties:
+          fulfillmentRequired:
+            type: boolean
+            required: true
+            description: Whether fulfillment process is needed
+            example: true
+          notificationsScheduled:
+            type: boolean
+            required: true
+            description: Whether customer notifications are scheduled
+            example: true
+          followUpActions:
+            type: array
+            required: false
+            description: Required follow-up actions
+            items:
+              type: string
+              example: "SEND_CONFIRMATION_EMAIL"

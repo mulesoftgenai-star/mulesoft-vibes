@@ -1,0 +1,480 @@
+#%RAML 1.0 DataType
+
+displayName: Shipping System API Response
+description: Response data type for Shipping System API operations
+
+type: object
+properties:
+  shippingResponse:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        description: Operation that was performed
+        example: "CREATE_SHIPMENT"
+      status:
+        type: string
+        required: true
+        enum: ["SUCCESS", "FAILED", "PARTIAL_SUCCESS", "PENDING"]
+        description: Response status
+        example: "SUCCESS"
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+        example: "2024-03-15T10:30:00.000Z"
+      orderId:
+        type: string
+        required: true
+        description: Associated order identifier
+        example: "ORD-2024-001234"
+      shipmentDetails:
+        type: object
+        required: false
+        description: Created shipment information
+        properties:
+          shipmentId:
+            type: string
+            required: true
+            description: Unique shipment identifier
+            example: "SHIP-789456123"
+          shipmentNumber:
+            type: string
+            required: true
+            description: Human-readable shipment number
+            example: "SH-240315-001"
+          trackingNumber:
+            type: string
+            required: false
+            description: Carrier tracking number
+            example: "1Z999AA1234567890"
+          carrierInfo:
+            type: object
+            required: true
+            properties:
+              carrierId:
+                type: string
+                required: true
+                description: Carrier identifier
+                example: "FEDEX"
+              carrierName:
+                type: string
+                required: true
+                description: Carrier company name
+                example: "FedEx"
+              serviceType:
+                type: string
+                required: true
+                description: Selected service type
+                example: "FedEx Ground"
+              serviceCode:
+                type: string
+                required: false
+                description: Carrier service code
+                example: "FDXG"
+          estimatedDelivery:
+            type: object
+            required: false
+            properties:
+              date:
+                type: date-only
+                required: true
+                description: Estimated delivery date
+                example: "2024-04-18"
+              timeWindow:
+                type: object
+                required: false
+                properties:
+                  start:
+                    type: string
+                    required: true
+                    description: Delivery window start time
+                    example: "09:00"
+                  end:
+                    type: string
+                    required: true
+                    description: Delivery window end time
+                    example: "17:00"
+              businessDays:
+                type: integer
+                required: false
+                description: Estimated delivery in business days
+                example: 3
+          shippingCost:
+            type: object
+            required: true
+            properties:
+              totalCost:
+                type: number
+                required: true
+                description: Total shipping cost
+                example: 12.95
+              baseCost:
+                type: number
+                required: false
+                description: Base shipping cost
+                example: 9.99
+              fuelSurcharge:
+                type: number
+                required: false
+                description: Fuel surcharge
+                example: 1.50
+              taxes:
+                type: number
+                required: false
+                description: Taxes and fees
+                example: 1.46
+              currency:
+                type: string
+                required: true
+                description: Cost currency
+                example: "USD"
+          packages:
+            type: array
+            required: false
+            description: Package tracking information
+            items:
+              type: object
+              properties:
+                packageId:
+                  type: string
+                  required: true
+                  description: Package identifier
+                  example: "PKG-001"
+                trackingNumber:
+                  type: string
+                  required: false
+                  description: Package-specific tracking number
+                  example: "1Z999AA1234567890"
+                weight:
+                  type: object
+                  required: false
+                  properties:
+                    value:
+                      type: number
+                      required: true
+                      example: 2.5
+                    unit:
+                      type: string
+                      required: true
+                      example: "LB"
+                dimensions:
+                  type: object
+                  required: false
+                  properties:
+                    length:
+                      type: number
+                      required: true
+                      example: 12.0
+                    width:
+                      type: number
+                      required: true
+                      example: 8.0
+                    height:
+                      type: number
+                      required: true
+                      example: 4.0
+                    unit:
+                      type: string
+                      required: true
+                      example: "IN"
+      rateQuotes:
+        type: array
+        required: false
+        description: Shipping rate quotes for GET_RATES operation
+        items:
+          type: object
+          properties:
+            carrierId:
+              type: string
+              required: true
+              description: Carrier identifier
+              example: "FEDEX"
+            carrierName:
+              type: string
+              required: true
+              description: Carrier name
+              example: "FedEx"
+            serviceType:
+              type: string
+              required: true
+              description: Service type
+              example: "FedEx Ground"
+            serviceCode:
+              type: string
+              required: false
+              description: Service code
+              example: "FDXG"
+            cost:
+              type: object
+              required: true
+              properties:
+                totalCost:
+                  type: number
+                  required: true
+                  description: Total shipping cost
+                  example: 12.95
+                baseCost:
+                  type: number
+                  required: false
+                  description: Base cost
+                  example: 9.99
+                surcharges:
+                  type: number
+                  required: false
+                  description: Additional surcharges
+                  example: 1.50
+                taxes:
+                  type: number
+                  required: false
+                  description: Taxes
+                  example: 1.46
+                currency:
+                  type: string
+                  required: true
+                  description: Currency
+                  example: "USD"
+            transitTime:
+              type: object
+              required: false
+              properties:
+                estimatedDays:
+                  type: integer
+                  required: true
+                  description: Estimated delivery days
+                  example: 3
+                estimatedDate:
+                  type: date-only
+                  required: false
+                  description: Estimated delivery date
+                  example: "2024-04-18"
+                guaranteedDelivery:
+                  type: boolean
+                  required: false
+                  description: Whether delivery time is guaranteed
+                  example: false
+            features:
+              type: array
+              required: false
+              description: Service features
+              items:
+                type: string
+                enum: ["SIGNATURE_REQUIRED", "INSURANCE_INCLUDED", "TRACKING", "WEEKEND_DELIVERY", "PRIORITY"]
+              example: ["TRACKING", "SIGNATURE_REQUIRED"]
+      trackingInfo:
+        type: object
+        required: false
+        description: Tracking information for TRACK_SHIPMENT operation
+        properties:
+          trackingNumber:
+            type: string
+            required: true
+            description: Tracking number
+            example: "1Z999AA1234567890"
+          currentStatus:
+            type: string
+            required: true
+            enum: ["LABEL_CREATED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "EXCEPTION", "RETURNED"]
+            description: Current shipment status
+            example: "IN_TRANSIT"
+          estimatedDelivery:
+            type: date-only
+            required: false
+            description: Updated estimated delivery date
+            example: "2024-04-18"
+          lastUpdateTime:
+            type: datetime
+            required: true
+            description: Last tracking update timestamp
+            example: "2024-03-16T08:30:00.000Z"
+          currentLocation:
+            type: object
+            required: false
+            properties:
+              city:
+                type: string
+                required: true
+                description: Current city
+                example: "Newark"
+              state:
+                type: string
+                required: true
+                description: Current state
+                example: "NJ"
+              country:
+                type: string
+                required: true
+                description: Current country
+                example: "US"
+              facilityName:
+                type: string
+                required: false
+                description: Facility name
+                example: "FedEx Ground Newark Hub"
+          trackingEvents:
+            type: array
+            required: false
+            description: Tracking event history
+            items:
+              type: object
+              properties:
+                timestamp:
+                  type: datetime
+                  required: true
+                  description: Event timestamp
+                  example: "2024-03-15T14:30:00.000Z"
+                status:
+                  type: string
+                  required: true
+                  description: Event status
+                  example: "PICKED_UP"
+                description:
+                  type: string
+                  required: true
+                  description: Event description
+                  example: "Package picked up at origin facility"
+                location:
+                  type: object
+                  required: false
+                  properties:
+                    city:
+                      type: string
+                      required: true
+                      example: "Newark"
+                    state:
+                      type: string
+                      required: true
+                      example: "NJ"
+                    country:
+                      type: string
+                      required: true
+                      example: "US"
+      addressValidation:
+        type: object
+        required: false
+        description: Address validation results for VALIDATE_ADDRESS operation
+        properties:
+          isValid:
+            type: boolean
+            required: true
+            description: Whether address is valid
+            example: true
+          confidence:
+            type: string
+            required: false
+            enum: ["HIGH", "MEDIUM", "LOW"]
+            description: Validation confidence level
+            example: "HIGH"
+          suggestedAddress:
+            type: object
+            required: false
+            description: Suggested corrected address
+            properties:
+              addressLine1:
+                type: string
+                required: true
+                description: Corrected address line 1
+                example: "123 Main St"
+              addressLine2:
+                type: string
+                required: false
+                description: Corrected address line 2
+                example: "Apt 4B"
+              city:
+                type: string
+                required: true
+                description: Corrected city
+                example: "New York"
+              state:
+                type: string
+                required: true
+                description: Corrected state
+                example: "NY"
+              postalCode:
+                type: string
+                required: true
+                description: Corrected postal code
+                example: "10001-1234"
+              country:
+                type: string
+                required: true
+                description: Corrected country
+                example: "US"
+          validationIssues:
+            type: array
+            required: false
+            description: Address validation issues
+            items:
+              type: object
+              properties:
+                field:
+                  type: string
+                  required: true
+                  description: Field with issue
+                  example: "postalCode"
+                issue:
+                  type: string
+                  required: true
+                  description: Issue description
+                  example: "Postal code format is incorrect"
+                severity:
+                  type: string
+                  required: true
+                  enum: ["ERROR", "WARNING", "INFO"]
+                  description: Issue severity
+                  example: "WARNING"
+      errors:
+        type: array
+        required: false
+        description: Error details if operation failed
+        items:
+          type: object
+          properties:
+            errorCode:
+              type: string
+              required: true
+              description: Shipping error code
+              example: "INVALID_ADDRESS"
+            errorMessage:
+              type: string
+              required: true
+              description: Human-readable error message
+              example: "Destination address is invalid or incomplete"
+            field:
+              type: string
+              required: false
+              description: Field that caused the error
+              example: "destination.postalCode"
+            carrierCode:
+              type: string
+              required: false
+              description: Carrier-specific error code
+              example: "ADDR_INVALID"
+      metadata:
+        type: object
+        required: true
+        description: Response metadata
+        properties:
+          requestId:
+            type: string
+            required: true
+            description: Original request identifier
+            example: "SHIP-REQ-DEF456"
+          processingTime:
+            type: integer
+            required: true
+            description: Processing time in milliseconds
+            example: 850
+          carriersQueried:
+            type: array
+            required: false
+            description: List of carriers that were queried for rates
+            items:
+              type: string
+            example: ["FEDEX", "UPS", "USPS"]
+          apiVersion:
+            type: string
+            required: true
+            description: API version used
+            example: "v1.0"

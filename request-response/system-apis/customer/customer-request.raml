@@ -1,0 +1,202 @@
+#%RAML 1.0 DataType
+
+displayName: Customer System API Request
+description: Request data type for Customer System API operations
+
+type: object
+properties:
+  customerRequest:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        enum: ["GET", "CREATE", "UPDATE", "VALIDATE", "SEARCH"]
+        description: Operation to be performed
+        example: "VALIDATE"
+      customerId:
+        type: string
+        required: false
+        description: Customer unique identifier (required for GET, UPDATE, VALIDATE)
+        example: "CUST-12345"
+      searchCriteria:
+        type: object
+        required: false
+        description: Search criteria for customer lookup
+        properties:
+          email:
+            type: string
+            required: false
+            description: Customer email address
+            example: "customer@example.com"
+          phone:
+            type: string
+            required: false
+            description: Customer phone number
+            example: "+1-555-123-4567"
+          firstName:
+            type: string
+            required: false
+            description: Customer first name
+            example: "John"
+          lastName:
+            type: string
+            required: false
+            description: Customer last name
+            example: "Doe"
+          customerNumber:
+            type: string
+            required: false
+            description: External customer number
+            example: "CN-789456"
+      customerData:
+        type: object
+        required: false
+        description: Customer data for CREATE/UPDATE operations
+        properties:
+          personalInfo:
+            type: object
+            required: true
+            properties:
+              firstName:
+                type: string
+                required: true
+                description: Customer first name
+                example: "John"
+                maxLength: 50
+              lastName:
+                type: string
+                required: true
+                description: Customer last name
+                example: "Doe"
+                maxLength: 50
+              middleName:
+                type: string
+                required: false
+                description: Customer middle name
+                example: "Michael"
+                maxLength: 50
+              dateOfBirth:
+                type: date-only
+                required: false
+                description: Customer date of birth
+                example: "1985-06-15"
+              gender:
+                type: string
+                required: false
+                enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]
+                description: Customer gender
+                example: "MALE"
+          contactInfo:
+            type: object
+            required: true
+            properties:
+              email:
+                type: string
+                required: true
+                description: Primary email address
+                pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+                example: "john.doe@example.com"
+              phone:
+                type: string
+                required: true
+                description: Primary phone number
+                example: "+1-555-123-4567"
+              alternatePhone:
+                type: string
+                required: false
+                description: Alternate phone number
+                example: "+1-555-987-6543"
+          addresses:
+            type: array
+            required: false
+            description: Customer addresses
+            items:
+              type: object
+              properties:
+                addressType:
+                  type: string
+                  required: true
+                  enum: ["HOME", "WORK", "BILLING", "SHIPPING"]
+                  description: Type of address
+                  example: "HOME"
+                street:
+                  type: string
+                  required: true
+                  description: Street address
+                  example: "123 Main Street"
+                city:
+                  type: string
+                  required: true
+                  description: City name
+                  example: "New York"
+                state:
+                  type: string
+                  required: true
+                  description: State or province
+                  example: "NY"
+                zipCode:
+                  type: string
+                  required: true
+                  description: Postal code
+                  example: "10001"
+                country:
+                  type: string
+                  required: true
+                  description: Country code
+                  example: "US"
+                isDefault:
+                  type: boolean
+                  required: false
+                  description: Whether this is the default address
+                  example: true
+          preferences:
+            type: object
+            required: false
+            description: Customer preferences
+            properties:
+              communicationChannel:
+                type: string
+                required: false
+                enum: ["EMAIL", "SMS", "PHONE", "MAIL"]
+                description: Preferred communication method
+                example: "EMAIL"
+              language:
+                type: string
+                required: false
+                description: Preferred language
+                example: "en-US"
+              currency:
+                type: string
+                required: false
+                description: Preferred currency
+                example: "USD"
+              marketingOptIn:
+                type: boolean
+                required: false
+                description: Marketing communication opt-in
+                example: true
+      validationRules:
+        type: object
+        required: false
+        description: Validation rules for the request
+        properties:
+          strictValidation:
+            type: boolean
+            required: false
+            description: Whether to apply strict validation
+            default: false
+            example: false
+          requiredFields:
+            type: array
+            required: false
+            description: List of fields that must be present
+            items:
+              type: string
+            example: ["email", "firstName", "lastName"]
+          validateAddresses:
+            type: boolean
+            required: false
+            description: Whether to validate address format
+            default: true
+            example: true

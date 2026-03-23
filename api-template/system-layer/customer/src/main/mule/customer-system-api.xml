@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+    
+    <!-- API Configuration - References existing RAML specification -->
+    <apikit:config name="customer-system-api-config" 
+                   api="../../../raml/customer-system-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" />
+    
+    <!-- Database Configuration -->
+    <db:config name="Database_Config" doc:name="Database Config">
+        <db:generic-connection url="${database.url}"
+                              driverClassName="${database.driver}"
+                              user="${secure::db.username}"
+                              password="${secure::db.password}">
+            <db:connection-properties>
+                <db:connection-property key="maximumPoolSize" value="10"/>
+                <db:connection-property key="minimumIdle" value="2"/>
+            </db:connection-properties>
+        </db:generic-connection>
+    </db:config>
+    
+    <!-- Main API Flow -->
+    <flow name="customer-system-api-main">
+        <http:listener doc:name="HTTP Listener" 
+                       config-ref="HTTP_Listener_config" 
+                       path="/system/customers/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <apikit:router config-ref="customer-system-api-config" />
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Bad request",
+  message: "Invalid request format or missing required fields",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- GET /customers/{customerId} Implementation -->
+    <flow name="get:\customers\(customerId):customer-system-api-config">
+        <logger level="INFO" doc:name="Logger" message="Retrieving customer: #[attributes.uriParams.customerId]" />
+        
+        <ee:transform doc:name="Set Variables">
+            <ee:variables>
+                <ee:set-variable variableName="customerId"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.uriParams.customerId]]></ee:set-variable>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Query Customer from Database -->
+        <db:select doc:name="Query Customer" config-ref="Database_Config">
+            <db:sql><![CDATA[
+                SELECT 
+                    customer_id,
+                    customer_number,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    date_of_birth,
+                    customer_type,
+                    status,
+                    created_date,
+                    updated_date
+                FROM customers 
+                WHERE customer_id = :customerId
+                AND status = 'ACTIVE'
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="customerId" value="#[vars.customerId]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <!-- Transform Database Result -->
+        <ee:transform doc:name="Transform Customer Data">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (sizeOf(payload) > 0)
+    {
+        customerId: payload[0].customer_id,
+        customerNumber: payload[0].customer_number,
+        personalInfo: {
+            firstName: payload[0].first_name,
+            lastName: payload[0].last_name,
+            dateOfBirth: payload[0].date_of_birth as String,
+            email: payload[0].email,
+            phone: payload[0].phone
+        },
+        customerType: payload[0].customer_type,
+        status: payload[0].status,
+        metadata: {
+            createdDate: payload[0].created_date as String,
+            updatedDate: payload[0].updated_date as String
+        },
+        correlationId: vars.correlationId
+    }
+else
+    null]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Check if Customer Found -->
+        <choice doc:name="Customer Found?">
+            <when expression="#[payload != null]">
+                <logger level="INFO" doc:name="Customer Found" message="Customer found: #[payload.customerId]" />
+            </when>
+            <otherwise>
+                <ee:transform doc:name="Customer Not Found">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Customer not found",
+    message: "Customer with ID " ++ vars.customerId ++ " was not found",
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <ee:transform doc:name="Transform Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Database error",
+    message: error.description default "An error occurred while retrieving customer data",
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- POST /customers Implementation -->
+    <flow name="post:\customers:application\json:customer-system-api-config">
+        <logger level="INFO" doc:name="Logger" message="Creating new customer: #[payload.personalInfo.email]" />
+        
+        <ee:transform doc:name="Set Variables">
+            <ee:variables>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+                <ee:set-variable variableName="newCustomerId"><![CDATA[%dw 2.0
+output application/java
+---
+"CUST" ++ (randomInt(99999) + 10000) as String]]></ee:set-variable>
+                <ee:set-variable variableName="customerNumber"><![CDATA[%dw 2.0
+output application/java
+---
+"CN-" ++ now() as String {format: "yyyyMMdd"} ++ "-" ++ (randomInt(9999) + 1000) as String]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Insert Customer into Database -->
+        <db:insert doc:name="Insert Customer" config-ref="Database_Config">
+            <db:sql><![CDATA[
+                INSERT INTO customers (
+                    customer_id,
+                    customer_number,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    date_of_birth,
+                    customer_type,
+                    status,
+                    created_date,
+                    updated_date
+                ) VALUES (
+                    :customerId,
+                    :customerNumber,
+                    :firstName,
+                    :lastName,
+                    :email,
+                    :phone,
+                    :dateOfBirth,
+                    :customerType,
+                    'ACTIVE',
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="customerId" value="#[vars.newCustomerId]"/>
+                <db:input-parameter key="customerNumber" value="#[vars.customerNumber]"/>
+                <db:input-parameter key="firstName" value="#[payload.personalInfo.firstName]"/>
+                <db:input-parameter key="lastName" value="#[payload.personalInfo.lastName]"/>
+                <db:input-parameter key="email" value="#[payload.personalInfo.email]"/>
+                <db:input-parameter key="phone" value="#[payload.personalInfo.phone default null]"/>
+                <db:input-parameter key="dateOfBirth" value="#[payload.personalInfo.dateOfBirth default null]"/>
+                <db:input-parameter key="customerType" value="#[payload.customerType default 'STANDARD']"/>
+            </db:input-parameters>
+        </db:insert>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Create Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    customerId: vars.newCustomerId,
+    customerNumber: vars.customerNumber,
+    personalInfo: payload.personalInfo,
+    customerType: payload.customerType default "STANDARD",
+    status: "ACTIVE",
+    metadata: {
+        createdDate: now() as String,
+        updatedDate: now() as String
+    },
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">201</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <ee:transform doc:name="Transform Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Database error",
+    message: error.description default "An error occurred while creating customer",
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+</mule>

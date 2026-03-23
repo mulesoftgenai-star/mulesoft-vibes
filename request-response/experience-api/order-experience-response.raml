@@ -1,0 +1,392 @@
+#%RAML 1.0 DataType
+
+displayName: Order Experience Response Types
+description: Response data types for Order Experience API operations
+
+type: object
+properties:
+  CreateOrderResponse:
+    type: object
+    properties:
+      orderId:
+        type: string
+        required: true
+        pattern: ^ORD[0-9A-Z]{6,}$
+        description: Unique order identifier
+        example: "ORD123456"
+      status:
+        type: string
+        required: true
+        enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+        description: Current order status
+        example: "PENDING"
+      totalAmount:
+        type: number
+        required: true
+        minimum: 0
+        multipleOf: 0.01
+        description: Total order amount
+        example: 599.98
+      currency:
+        type: string
+        required: true
+        pattern: ^[A-Z]{3}$
+        description: Currency code
+        example: "USD"
+      estimatedDelivery:
+        type: date-only
+        required: false
+        description: Estimated delivery date
+        example: "2024-01-22"
+      trackingNumber:
+        type: string
+        required: false
+        description: Tracking number for shipment
+        example: "TRK789012345"
+      message:
+        type: string
+        required: true
+        description: Response message
+        example: "Order created successfully and is being processed"
+
+  OrderDetailsResponse:
+    type: object
+    properties:
+      orderId:
+        type: string
+        required: true
+        pattern: ^ORD[0-9A-Z]{6,}$
+        description: Unique order identifier
+        example: "ORD123456"
+      customerId:
+        type: string
+        required: true
+        pattern: ^CUST[0-9A-Z]{5,}$
+        description: Customer identifier
+        example: "CUST12345"
+      orderDate:
+        type: datetime
+        required: true
+        description: Order creation date and time
+        example: "2024-01-15T10:30:00Z"
+      status:
+        type: string
+        required: true
+        enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+        description: Current order status
+        example: "PROCESSING"
+      totalAmount:
+        type: number
+        required: true
+        minimum: 0
+        multipleOf: 0.01
+        description: Total order amount
+        example: 599.98
+      currency:
+        type: string
+        required: true
+        pattern: ^[A-Z]{3}$
+        description: Currency code
+        example: "USD"
+      items:
+        type: array
+        required: true
+        minItems: 1
+        description: Order items
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              required: true
+              description: Product identifier
+              example: "PROD789"
+            productName:
+              type: string
+              required: true
+              description: Product name
+              example: "Premium Headphones"
+            quantity:
+              type: integer
+              required: true
+              minimum: 1
+              description: Quantity ordered
+              example: 2
+            unitPrice:
+              type: number
+              required: true
+              minimum: 0
+              multipleOf: 0.01
+              description: Unit price
+              example: 299.99
+            totalPrice:
+              type: number
+              required: true
+              minimum: 0
+              multipleOf: 0.01
+              description: Total price for this item
+              example: 599.98
+      shippingAddress:
+        type: object
+        required: true
+        properties:
+          street:
+            type: string
+            required: true
+            description: Street address
+            example: "123 Main St"
+          city:
+            type: string
+            required: true
+            description: City name
+            example: "San Francisco"
+          state:
+            type: string
+            required: true
+            description: State or province
+            example: "CA"
+          zipCode:
+            type: string
+            required: true
+            description: ZIP or postal code
+            example: "94105"
+          country:
+            type: string
+            required: true
+            description: Country code
+            example: "USA"
+      billingAddress:
+        type: object
+        required: true
+        properties:
+          street:
+            type: string
+            required: true
+            description: Street address
+            example: "123 Main St"
+          city:
+            type: string
+            required: true
+            description: City name
+            example: "San Francisco"
+          state:
+            type: string
+            required: true
+            description: State or province
+            example: "CA"
+          zipCode:
+            type: string
+            required: true
+            description: ZIP or postal code
+            example: "94105"
+          country:
+            type: string
+            required: true
+            description: Country code
+            example: "USA"
+      paymentStatus:
+        type: string
+        required: true
+        enum: ["PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "REFUNDED"]
+        description: Payment status
+        example: "AUTHORIZED"
+      shippingStatus:
+        type: string
+        required: true
+        enum: ["PENDING", "PROCESSING", "SHIPPED", "IN_TRANSIT", "DELIVERED"]
+        description: Shipping status
+        example: "IN_TRANSIT"
+      trackingNumber:
+        type: string
+        required: false
+        description: Tracking number
+        example: "TRK789012345"
+      estimatedDelivery:
+        type: date-only
+        required: false
+        description: Estimated delivery date
+        example: "2024-01-22"
+      orderHistory:
+        type: array
+        required: false
+        description: Order status history
+        items:
+          type: object
+          properties:
+            status:
+              type: string
+              required: true
+              description: Status
+              example: "PENDING"
+            timestamp:
+              type: datetime
+              required: true
+              description: Status timestamp
+              example: "2024-01-15T10:30:00Z"
+            description:
+              type: string
+              required: true
+              description: Status description
+              example: "Order created"
+
+  UpdateOrderResponse:
+    type: object
+    properties:
+      orderId:
+        type: string
+        required: true
+        pattern: ^ORD[0-9A-Z]{6,}$
+        description: Order identifier
+        example: "ORD123456"
+      status:
+        type: string
+        required: true
+        enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+        description: Current order status
+        example: "CONFIRMED"
+      message:
+        type: string
+        required: true
+        description: Update confirmation message
+        example: "Order updated successfully"
+      updatedFields:
+        type: array
+        required: true
+        description: List of fields that were updated
+        items:
+          type: string
+        example: ["shippingAddress", "specialInstructions"]
+
+  OrderListResponse:
+    type: object
+    properties:
+      orders:
+        type: array
+        required: true
+        description: List of orders
+        items:
+          type: object
+          properties:
+            orderId:
+              type: string
+              required: true
+              pattern: ^ORD[0-9A-Z]{6,}$
+              description: Order identifier
+              example: "ORD123456"
+            customerId:
+              type: string
+              required: true
+              pattern: ^CUST[0-9A-Z]{5,}$
+              description: Customer identifier
+              example: "CUST12345"
+            orderDate:
+              type: datetime
+              required: true
+              description: Order date
+              example: "2024-01-15T10:30:00Z"
+            status:
+              type: string
+              required: true
+              enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]
+              description: Order status
+              example: "CONFIRMED"
+            totalAmount:
+              type: number
+              required: true
+              minimum: 0
+              multipleOf: 0.01
+              description: Total amount
+              example: 299.99
+            currency:
+              type: string
+              required: true
+              pattern: ^[A-Z]{3}$
+              description: Currency code
+              example: "USD"
+            items:
+              type: array
+              required: true
+              description: Order items summary
+              items:
+                type: object
+                properties:
+                  productId:
+                    type: string
+                    required: true
+                    description: Product identifier
+                    example: "PROD789"
+                  productName:
+                    type: string
+                    required: true
+                    description: Product name
+                    example: "Premium Headphones"
+                  quantity:
+                    type: integer
+                    required: true
+                    minimum: 1
+                    description: Quantity
+                    example: 1
+                  unitPrice:
+                    type: number
+                    required: true
+                    minimum: 0
+                    multipleOf: 0.01
+                    description: Unit price
+                    example: 299.99
+            shippingAddress:
+              type: object
+              required: true
+              properties:
+                street:
+                  type: string
+                  required: true
+                  description: Street address
+                  example: "123 Main St"
+                city:
+                  type: string
+                  required: true
+                  description: City name
+                  example: "San Francisco"
+                state:
+                  type: string
+                  required: true
+                  description: State
+                  example: "CA"
+                zipCode:
+                  type: string
+                  required: true
+                  description: ZIP code
+                  example: "94105"
+                country:
+                  type: string
+                  required: true
+                  description: Country
+                  example: "USA"
+      pagination:
+        type: object
+        required: true
+        properties:
+          limit:
+            type: integer
+            required: true
+            minimum: 1
+            maximum: 100
+            description: Items per page
+            example: 20
+          offset:
+            type: integer
+            required: true
+            minimum: 0
+            description: Items skipped
+            example: 0
+          total:
+            type: integer
+            required: true
+            minimum: 0
+            description: Total items available
+            example: 150
+          hasMore:
+            type: boolean
+            required: true
+            description: More items available
+            example: true

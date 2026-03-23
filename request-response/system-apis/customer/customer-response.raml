@@ -1,0 +1,376 @@
+#%RAML 1.0 DataType
+
+displayName: Customer System API Response
+description: Response data type for Customer System API operations
+
+type: object
+properties:
+  customerResponse:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        description: Operation that was performed
+        example: "VALIDATE"
+      status:
+        type: string
+        required: true
+        enum: ["SUCCESS", "FAILED", "PARTIAL_SUCCESS", "WARNING"]
+        description: Response status
+        example: "SUCCESS"
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+        example: "2024-03-15T10:30:00.000Z"
+      customerId:
+        type: string
+        required: false
+        description: Customer identifier (returned for successful operations)
+        example: "CUST-12345"
+      customerData:
+        type: object
+        required: false
+        description: Customer information (for GET operations)
+        properties:
+          customerId:
+            type: string
+            required: true
+            description: Unique customer identifier
+            example: "CUST-12345"
+          customerNumber:
+            type: string
+            required: true
+            description: Business-friendly customer number
+            example: "CN-789456"
+          status:
+            type: string
+            required: true
+            enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING_VERIFICATION"]
+            description: Customer account status
+            example: "ACTIVE"
+          customerType:
+            type: string
+            required: true
+            enum: ["INDIVIDUAL", "BUSINESS", "PREMIUM", "VIP"]
+            description: Customer type classification
+            example: "INDIVIDUAL"
+          personalInfo:
+            type: object
+            required: true
+            properties:
+              firstName:
+                type: string
+                required: true
+                description: Customer first name
+                example: "John"
+              lastName:
+                type: string
+                required: true
+                description: Customer last name
+                example: "Doe"
+              middleName:
+                type: string
+                required: false
+                description: Customer middle name
+                example: "Michael"
+              dateOfBirth:
+                type: date-only
+                required: false
+                description: Customer date of birth
+                example: "1985-06-15"
+              gender:
+                type: string
+                required: false
+                enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]
+                description: Customer gender
+                example: "MALE"
+          contactInfo:
+            type: object
+            required: true
+            properties:
+              email:
+                type: string
+                required: true
+                description: Primary email address
+                example: "john.doe@example.com"
+              phone:
+                type: string
+                required: true
+                description: Primary phone number
+                example: "+1-555-123-4567"
+              alternatePhone:
+                type: string
+                required: false
+                description: Alternate phone number
+                example: "+1-555-987-6543"
+              emailVerified:
+                type: boolean
+                required: true
+                description: Whether email is verified
+                example: true
+              phoneVerified:
+                type: boolean
+                required: true
+                description: Whether phone is verified
+                example: true
+          addresses:
+            type: array
+            required: false
+            description: Customer addresses
+            items:
+              type: object
+              properties:
+                addressId:
+                  type: string
+                  required: true
+                  description: Unique address identifier
+                  example: "ADDR-99887766"
+                addressType:
+                  type: string
+                  required: true
+                  enum: ["HOME", "WORK", "BILLING", "SHIPPING"]
+                  description: Type of address
+                  example: "HOME"
+                street:
+                  type: string
+                  required: true
+                  description: Street address
+                  example: "123 Main Street"
+                city:
+                  type: string
+                  required: true
+                  description: City name
+                  example: "New York"
+                state:
+                  type: string
+                  required: true
+                  description: State or province
+                  example: "NY"
+                zipCode:
+                  type: string
+                  required: true
+                  description: Postal code
+                  example: "10001"
+                country:
+                  type: string
+                  required: true
+                  description: Country code
+                  example: "US"
+                isDefault:
+                  type: boolean
+                  required: false
+                  description: Whether this is the default address
+                  example: true
+                validated:
+                  type: boolean
+                  required: true
+                  description: Whether address has been validated
+                  example: true
+          creditInfo:
+            type: object
+            required: false
+            description: Customer credit information
+            properties:
+              creditScore:
+                type: integer
+                required: false
+                description: Customer credit score
+                example: 750
+              creditLimit:
+                type: number
+                required: false
+                description: Credit limit amount
+                example: 5000.00
+              availableCredit:
+                type: number
+                required: false
+                description: Available credit amount
+                example: 4500.00
+              riskLevel:
+                type: string
+                required: false
+                enum: ["LOW", "MEDIUM", "HIGH"]
+                description: Credit risk assessment
+                example: "LOW"
+          loyaltyInfo:
+            type: object
+            required: false
+            description: Loyalty program information
+            properties:
+              tier:
+                type: string
+                required: false
+                enum: ["BRONZE", "SILVER", "GOLD", "PLATINUM"]
+                description: Loyalty tier
+                example: "GOLD"
+              points:
+                type: integer
+                required: false
+                description: Available loyalty points
+                example: 2500
+              memberSince:
+                type: date-only
+                required: false
+                description: Loyalty membership start date
+                example: "2020-01-15"
+      validationResults:
+        type: object
+        required: false
+        description: Validation results for VALIDATE operations
+        properties:
+          isValid:
+            type: boolean
+            required: true
+            description: Overall validation result
+            example: true
+          validationScore:
+            type: integer
+            required: false
+            description: Validation score (0-100)
+            example: 85
+          checks:
+            type: array
+            required: false
+            description: Individual validation checks
+            items:
+              type: object
+              properties:
+                checkType:
+                  type: string
+                  required: true
+                  enum: ["EMAIL", "PHONE", "ADDRESS", "IDENTITY", "CREDIT"]
+                  description: Type of validation check
+                  example: "EMAIL"
+                status:
+                  type: string
+                  required: true
+                  enum: ["PASS", "FAIL", "WARNING"]
+                  description: Check result
+                  example: "PASS"
+                message:
+                  type: string
+                  required: false
+                  description: Validation message
+                  example: "Email address is valid and verified"
+                score:
+                  type: integer
+                  required: false
+                  description: Individual check score
+                  example: 100
+      searchResults:
+        type: object
+        required: false
+        description: Search results for SEARCH operations
+        properties:
+          totalResults:
+            type: integer
+            required: true
+            description: Total number of matching customers
+            example: 25
+          page:
+            type: integer
+            required: true
+            description: Current page number
+            example: 1
+          pageSize:
+            type: integer
+            required: true
+            description: Number of results per page
+            example: 10
+          customers:
+            type: array
+            required: true
+            description: List of matching customers
+            items:
+              type: object
+              properties:
+                customerId:
+                  type: string
+                  required: true
+                  description: Customer identifier
+                  example: "CUST-12345"
+                firstName:
+                  type: string
+                  required: true
+                  description: Customer first name
+                  example: "John"
+                lastName:
+                  type: string
+                  required: true
+                  description: Customer last name
+                  example: "Doe"
+                email:
+                  type: string
+                  required: true
+                  description: Customer email
+                  example: "john.doe@example.com"
+                phone:
+                  type: string
+                  required: false
+                  description: Customer phone
+                  example: "+1-555-123-4567"
+                status:
+                  type: string
+                  required: true
+                  description: Customer status
+                  example: "ACTIVE"
+                matchScore:
+                  type: number
+                  required: false
+                  description: Search relevance score
+                  example: 95.5
+      errors:
+        type: array
+        required: false
+        description: Error details if operation failed
+        items:
+          type: object
+          properties:
+            errorCode:
+              type: string
+              required: true
+              description: Error code
+              example: "CUST_VALIDATION_001"
+            errorMessage:
+              type: string
+              required: true
+              description: Error message
+              example: "Customer email is required"
+            field:
+              type: string
+              required: false
+              description: Field that caused the error
+              example: "email"
+            severity:
+              type: string
+              required: true
+              enum: ["ERROR", "WARNING", "INFO"]
+              description: Error severity
+              example: "ERROR"
+      metadata:
+        type: object
+        required: true
+        description: Response metadata
+        properties:
+          requestId:
+            type: string
+            required: true
+            description: Unique request identifier for tracing
+            example: "REQ-ABC123-DEF456"
+          processingTime:
+            type: integer
+            required: true
+            description: Processing time in milliseconds
+            example: 250
+          source:
+            type: string
+            required: true
+            description: Source system that provided the data
+            example: "CRM_SYSTEM"
+          version:
+            type: string
+            required: true
+            description: API version
+            example: "v1.0"

@@ -1,0 +1,342 @@
+#%RAML 1.0 DataType
+
+displayName: Payment System API Response
+description: Response data type for Payment System API operations
+
+type: object
+properties:
+  paymentResponse:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        description: Operation that was performed
+        example: "AUTHORIZE"
+      status:
+        type: string
+        required: true
+        enum: ["SUCCESS", "FAILED", "PENDING", "REQUIRES_ACTION"]
+        description: Payment operation status
+        example: "SUCCESS"
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+        example: "2024-03-15T10:30:00.000Z"
+      transactionId:
+        type: string
+        required: false
+        description: Payment transaction identifier
+        example: "TXN_789456123"
+      orderId:
+        type: string
+        required: true
+        description: Associated order identifier
+        example: "ORD-2024-001234"
+      authorizationDetails:
+        type: object
+        required: false
+        description: Authorization operation results
+        properties:
+          authorizationId:
+            type: string
+            required: true
+            description: Payment authorization identifier
+            example: "AUTH_456789"
+          authorizationCode:
+            type: string
+            required: false
+            description: Authorization code from processor
+            example: "AUTH123456"
+          authorizedAmount:
+            type: number
+            required: true
+            description: Successfully authorized amount
+            example: 657.95
+          currency:
+            type: string
+            required: true
+            description: Authorization currency
+            example: "USD"
+          expirationTime:
+            type: datetime
+            required: false
+            description: Authorization expiration timestamp
+            example: "2024-03-22T10:30:00.000Z"
+          paymentMethod:
+            type: object
+            required: true
+            properties:
+              type:
+                type: string
+                required: true
+                description: Payment method type used
+                example: "CREDIT_CARD"
+              last4Digits:
+                type: string
+                required: false
+                description: Last 4 digits of card (if applicable)
+                example: "1234"
+              cardBrand:
+                type: string
+                required: false
+                description: Card brand (if applicable)
+                example: "VISA"
+              walletType:
+                type: string
+                required: false
+                description: Wallet type (if applicable)
+                example: "PAYPAL"
+      captureDetails:
+        type: object
+        required: false
+        description: Capture operation results
+        properties:
+          captureId:
+            type: string
+            required: true
+            description: Payment capture identifier
+            example: "CAP_789123"
+          capturedAmount:
+            type: number
+            required: true
+            description: Successfully captured amount
+            example: 657.95
+          currency:
+            type: string
+            required: true
+            description: Capture currency
+            example: "USD"
+          settledAmount:
+            type: number
+            required: false
+            description: Amount settled to merchant account
+            example: 650.66
+          processingFees:
+            type: object
+            required: false
+            properties:
+              totalFees:
+                type: number
+                required: true
+                description: Total processing fees
+                example: 7.29
+              processingFee:
+                type: number
+                required: false
+                description: Payment processor fee
+                example: 6.99
+              transactionFee:
+                type: number
+                required: false
+                description: Per-transaction fee
+                example: 0.30
+      refundDetails:
+        type: object
+        required: false
+        description: Refund operation results
+        properties:
+          refundId:
+            type: string
+            required: true
+            description: Refund identifier
+            example: "REF_456789"
+          refundedAmount:
+            type: number
+            required: true
+            description: Successfully refunded amount
+            example: 100.00
+          currency:
+            type: string
+            required: true
+            description: Refund currency
+            example: "USD"
+          refundReason:
+            type: string
+            required: true
+            description: Reason for refund
+            example: "CUSTOMER_REQUEST"
+          expectedProcessingTime:
+            type: string
+            required: false
+            description: Expected time for refund to appear on customer's account
+            example: "3-5 business days"
+      fraudResults:
+        type: object
+        required: false
+        description: Fraud screening results
+        properties:
+          riskScore:
+            type: number
+            required: true
+            description: Risk score (0-100, higher is riskier)
+            minimum: 0
+            maximum: 100
+            example: 25.5
+          riskLevel:
+            type: string
+            required: true
+            enum: ["LOW", "MEDIUM", "HIGH"]
+            description: Overall risk assessment
+            example: "LOW"
+          decision:
+            type: string
+            required: true
+            enum: ["APPROVE", "REVIEW", "DECLINE"]
+            description: Fraud system recommendation
+            example: "APPROVE"
+          checks:
+            type: array
+            required: false
+            description: Individual fraud check results
+            items:
+              type: object
+              properties:
+                checkType:
+                  type: string
+                  required: true
+                  enum: ["CVV", "AVS", "VELOCITY", "DEVICE", "GEOLOCATION", "BEHAVIORAL"]
+                  description: Type of fraud check
+                  example: "CVV"
+                result:
+                  type: string
+                  required: true
+                  enum: ["PASS", "FAIL", "UNAVAILABLE"]
+                  description: Check result
+                  example: "PASS"
+                score:
+                  type: number
+                  required: false
+                  description: Individual check score
+                  example: 95.0
+                message:
+                  type: string
+                  required: false
+                  description: Additional check information
+                  example: "CVV verification successful"
+      securityResults:
+        type: object
+        required: false
+        description: Security validation results
+        properties:
+          cvvResult:
+            type: string
+            required: false
+            enum: ["MATCH", "NO_MATCH", "NOT_PROCESSED", "NOT_PROVIDED"]
+            description: CVV verification result
+            example: "MATCH"
+          avsResult:
+            type: string
+            required: false
+            enum: ["MATCH", "PARTIAL_MATCH", "NO_MATCH", "NOT_SUPPORTED"]
+            description: Address verification result
+            example: "MATCH"
+          threeDSecure:
+            type: object
+            required: false
+            properties:
+              status:
+                type: string
+                required: true
+                enum: ["AUTHENTICATED", "ATTEMPTED", "FAILED", "NOT_ENROLLED"]
+                description: 3D Secure authentication status
+                example: "AUTHENTICATED"
+              version:
+                type: string
+                required: false
+                description: 3D Secure version used
+                example: "2.1"
+              authenticationId:
+                type: string
+                required: false
+                description: 3D Secure authentication ID
+                example: "3ds_auth_123456"
+      processorResponse:
+        type: object
+        required: false
+        description: Payment processor response details
+        properties:
+          processorName:
+            type: string
+            required: true
+            description: Payment processor name
+            example: "Stripe"
+          processorTransactionId:
+            type: string
+            required: false
+            description: Processor's transaction identifier
+            example: "pi_1234567890ABCDEF"
+          responseCode:
+            type: string
+            required: false
+            description: Processor response code
+            example: "00"
+          responseMessage:
+            type: string
+            required: false
+            description: Processor response message
+            example: "Transaction Approved"
+          networkTransactionId:
+            type: string
+            required: false
+            description: Card network transaction ID
+            example: "NTI_987654321"
+      errors:
+        type: array
+        required: false
+        description: Error details if operation failed
+        items:
+          type: object
+          properties:
+            errorCode:
+              type: string
+              required: true
+              description: Payment error code
+              example: "CARD_DECLINED"
+            errorMessage:
+              type: string
+              required: true
+              description: Human-readable error message
+              example: "The card was declined by the issuing bank"
+            errorType:
+              type: string
+              required: true
+              enum: ["CARD_ERROR", "PROCESSING_ERROR", "AUTHENTICATION_ERROR", "VALIDATION_ERROR", "NETWORK_ERROR"]
+              description: Type of error encountered
+              example: "CARD_ERROR"
+            field:
+              type: string
+              required: false
+              description: Field that caused the validation error
+              example: "cvv"
+            retryable:
+              type: boolean
+              required: false
+              description: Whether the operation can be retried
+              example: false
+      metadata:
+        type: object
+        required: true
+        description: Response metadata
+        properties:
+          requestId:
+            type: string
+            required: true
+            description: Original request identifier for tracing
+            example: "PAY-REQ-ABC123"
+          processingTime:
+            type: integer
+            required: true
+            description: Processing time in milliseconds
+            example: 1250
+          gatewayProvider:
+            type: string
+            required: true
+            description: Payment gateway used for processing
+            example: "Stripe"
+          apiVersion:
+            type: string
+            required: true
+            description: API version used
+            example: "v1.0"

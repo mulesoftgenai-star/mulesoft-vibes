@@ -1,0 +1,489 @@
+#%RAML 1.0 DataType
+
+displayName: Payment
+description: |
+  Comprehensive Payment data type for Order Management System.
+  Supports multiple payment methods and complete transaction lifecycle.
+  
+type: object
+properties:
+  paymentId:
+    type: string
+    pattern: ^PAY-[0-9]{8}$
+    example: "PAY-11998877"
+    description: Unique payment identifier with PAY- prefix
+    required: true
+  paymentNumber:
+    type: string
+    minLength: 1
+    maxLength: 50
+    example: "PAYMENT-2024-001234"
+    description: Business-friendly payment number
+    required: true
+  orderId:
+    type: string
+    pattern: ^ORD-[0-9]{8}$
+    example: "ORD-12345678"
+    description: Reference to the associated order
+    required: true
+  customerId:
+    type: string
+    pattern: ^CUST-[0-9]{8}$
+    example: "CUST-87654321"
+    description: Reference to the customer making the payment
+    required: true
+  paymentDate:
+    type: datetime-only
+    example: "2024-03-23T13:42:27"
+    description: Date and time when payment was initiated
+    required: true
+  paymentStatus:
+    type: string
+    enum: [
+      "PENDING",
+      "AUTHORIZED", 
+      "CAPTURED",
+      "SETTLED",
+      "FAILED",
+      "CANCELLED",
+      "REFUNDED",
+      "PARTIALLY_REFUNDED",
+      "DISPUTED",
+      "CHARGEBACK"
+    ]
+    example: "AUTHORIZED"
+    description: Current status of the payment
+    required: true
+  paymentType:
+    type: string
+    enum: ["PAYMENT", "REFUND", "CHARGEBACK", "ADJUSTMENT"]
+    example: "PAYMENT"
+    description: Type of payment transaction
+    required: true
+  paymentMethod:
+    type: object
+    properties:
+      methodType:
+        type: string
+        enum: ["CREDIT_CARD", "DEBIT_CARD", "PAYPAL", "BANK_TRANSFER", "CASH", "STORE_CREDIT", "GIFT_CARD", "CRYPTOCURRENCY", "BUY_NOW_PAY_LATER"]
+        example: "CREDIT_CARD"
+        description: Payment method type
+        required: true
+      cardDetails:
+        type: object
+        properties:
+          cardType:
+            type: string
+            enum: ["VISA", "MASTERCARD", "AMERICAN_EXPRESS", "DISCOVER", "JCB", "DINERS_CLUB"]
+            example: "VISA"
+            description: Credit/debit card brand
+            required: false
+          maskedCardNumber:
+            type: string
+            pattern: ^\*{4}-\*{4}-\*{4}-[0-9]{4}$
+            example: "****-****-****-1234"
+            description: Masked card number showing only last 4 digits
+            required: false
+          cardToken:
+            type: string
+            example: "tok_1A2B3C4D5E6F7G8H"
+            description: Tokenized card reference for security
+            required: false
+          expiryMonth:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 12
+            description: Card expiry month
+            required: false
+          expiryYear:
+            type: integer
+            minimum: 2024
+            maximum: 2050
+            example: 2028
+            description: Card expiry year
+            required: false
+          cardholderName:
+            type: string
+            minLength: 1
+            maxLength: 100
+            example: "John Doe"
+            description: Name on the card
+            required: false
+          billingAddressId:
+            type: string
+            pattern: ^ADDR-[0-9]{8}$
+            example: "ADDR-99887766"
+            description: Reference to billing address
+            required: false
+        description: Credit/debit card specific details
+        required: false
+      digitalWalletDetails:
+        type: object
+        properties:
+          walletType:
+            type: string
+            enum: ["PAYPAL", "APPLE_PAY", "GOOGLE_PAY", "SAMSUNG_PAY", "AMAZON_PAY"]
+            example: "PAYPAL"
+            description: Digital wallet provider
+            required: false
+          walletAccountId:
+            type: string
+            example: "wallet_acc_123456789"
+            description: Wallet account identifier
+            required: false
+          walletToken:
+            type: string
+            example: "wallet_tok_9876543210"
+            description: Tokenized wallet reference
+            required: false
+        description: Digital wallet specific details
+        required: false
+      bankTransferDetails:
+        type: object
+        properties:
+          bankName:
+            type: string
+            example: "Chase Bank"
+            description: Bank name
+            required: false
+          accountType:
+            type: string
+            enum: ["CHECKING", "SAVINGS", "BUSINESS_CHECKING", "BUSINESS_SAVINGS"]
+            example: "CHECKING"
+            description: Bank account type
+            required: false
+          routingNumber:
+            type: string
+            pattern: ^[0-9]{9}$
+            example: "021000021"
+            description: Bank routing number
+            required: false
+          maskedAccountNumber:
+            type: string
+            pattern: ^\*{4,8}[0-9]{4}$
+            example: "****1234"
+            description: Masked account number
+            required: false
+          accountToken:
+            type: string
+            example: "bank_tok_ABCDEF123456"
+            description: Tokenized bank account reference
+            required: false
+        description: Bank transfer specific details
+        required: false
+    description: Payment method information
+    required: true
+  amounts:
+    type: object
+    properties:
+      requestedAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 109.97
+        description: Originally requested payment amount
+        required: true
+      authorizedAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 109.97
+        description: Amount that was authorized
+        required: false
+      capturedAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 109.97
+        description: Amount that was captured/settled
+        required: false
+      refundedAmount:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 0.00
+        description: Total amount refunded
+        required: false
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        description: ISO 4217 currency code
+        required: true
+      exchangeRate:
+        type: number
+        minimum: 0
+        example: 1.00
+        description: Currency exchange rate if different from order currency
+        required: false
+    description: Payment amount details
+    required: true
+  processingDetails:
+    type: object
+    properties:
+      gatewayProvider:
+        type: string
+        enum: ["STRIPE", "PAYPAL", "SQUARE", "AUTHORIZE_NET", "BRAINTREE", "ADYEN", "WORLDPAY"]
+        example: "STRIPE"
+        description: Payment gateway provider
+        required: true
+      gatewayTransactionId:
+        type: string
+        example: "pi_1234567890ABCDEF"
+        description: Gateway-specific transaction identifier
+        required: false
+      authorizationCode:
+        type: string
+        example: "AUTH123456"
+        description: Payment authorization code
+        required: false
+      processorResponseCode:
+        type: string
+        example: "00"
+        description: Processor response code
+        required: false
+      processorResponseMessage:
+        type: string
+        example: "Transaction Approved"
+        description: Processor response message
+        required: false
+      riskScore:
+        type: number
+        minimum: 0
+        maximum: 100
+        example: 15.5
+        description: Fraud risk score (0-100, lower is better)
+        required: false
+      riskDecision:
+        type: string
+        enum: ["ACCEPT", "REVIEW", "DECLINE"]
+        example: "ACCEPT"
+        description: Risk management decision
+        required: false
+    description: Payment processing details
+    required: true
+  fees:
+    type: object
+    properties:
+      processingFee:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 3.50
+        description: Payment processing fee
+        required: false
+      transactionFee:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 0.30
+        description: Per-transaction fee
+        required: false
+      gatewayFee:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 0.25
+        description: Payment gateway fee
+        required: false
+      totalFees:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 4.05
+        description: Total fees for this payment
+        required: false
+      feesCurrency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        description: Currency for fees
+        required: false
+    description: Payment processing fees
+    required: false
+  timeline:
+    type: object
+    properties:
+      initiatedAt:
+        type: datetime-only
+        example: "2024-03-23T13:42:27"
+        description: When payment was initiated
+        required: true
+      authorizedAt:
+        type: datetime-only
+        example: "2024-03-23T13:42:30"
+        description: When payment was authorized
+        required: false
+      capturedAt:
+        type: datetime-only
+        example: "2024-03-23T13:45:00"
+        description: When payment was captured
+        required: false
+      settledAt:
+        type: datetime-only
+        example: "2024-03-24T02:00:00"
+        description: When payment was settled
+        required: false
+      expiresAt:
+        type: datetime-only
+        example: "2024-03-30T13:42:30"
+        description: When authorization expires
+        required: false
+    description: Payment timeline events
+    required: true
+  refunds:
+    type: array
+    items:
+      type: object
+      properties:
+        refundId:
+          type: string
+          pattern: ^REF-[0-9]{8}$
+          example: "REF-11223344"
+          description: Unique refund identifier
+        refundAmount:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+          example: 25.00
+          description: Refund amount
+        refundReason:
+          type: string
+          enum: ["CUSTOMER_REQUEST", "DUPLICATE_CHARGE", "FRAUDULENT", "PRODUCT_DEFECT", "ORDER_CANCELLED", "OTHER"]
+          example: "CUSTOMER_REQUEST"
+          description: Reason for refund
+        refundStatus:
+          type: string
+          enum: ["PENDING", "PROCESSED", "FAILED", "CANCELLED"]
+          example: "PROCESSED"
+          description: Status of the refund
+        refundDate:
+          type: datetime-only
+          example: "2024-03-25T10:30:00"
+          description: When refund was processed
+        gatewayRefundId:
+          type: string
+          example: "re_1234567890FEDCBA"
+          description: Gateway-specific refund identifier
+        notes:
+          type: string
+          maxLength: 500
+          example: "Customer requested refund due to wrong size"
+          description: Additional refund notes
+          required: false
+    description: Refund history for this payment
+    required: false
+  securityInfo:
+    type: object
+    properties:
+      cvvResult:
+        type: string
+        enum: ["MATCH", "NO_MATCH", "NOT_PROCESSED", "NOT_PROVIDED"]
+        example: "MATCH"
+        description: CVV verification result
+        required: false
+      avsResult:
+        type: string
+        enum: ["MATCH", "PARTIAL_MATCH", "NO_MATCH", "NOT_SUPPORTED", "ERROR"]
+        example: "MATCH"
+        description: Address verification system result
+        required: false
+      threeDSecure:
+        type: object
+        properties:
+          status:
+            type: string
+            enum: ["AUTHENTICATED", "ATTEMPTED", "FAILED", "NOT_ENROLLED", "UNAVAILABLE"]
+            example: "AUTHENTICATED"
+            description: 3D Secure authentication status
+          version:
+            type: string
+            enum: ["1.0", "2.0", "2.1", "2.2"]
+            example: "2.1"
+            description: 3D Secure protocol version
+            required: false
+          transactionId:
+            type: string
+            example: "3ds_txn_123456789"
+            description: 3D Secure transaction ID
+            required: false
+        description: 3D Secure authentication details
+        required: false
+      fraudChecks:
+        type: array
+        items:
+          type: object
+          properties:
+            checkType:
+              type: string
+              enum: ["VELOCITY", "GEOLOCATION", "DEVICE_FINGERPRINT", "BEHAVIORAL", "BLACKLIST"]
+            result:
+              type: string
+              enum: ["PASS", "FAIL", "REVIEW"]
+            score:
+              type: number
+              minimum: 0
+              maximum: 100
+            details:
+              type: string
+              required: false
+        description: Fraud prevention check results
+        required: false
+    description: Payment security information
+    required: false
+  metadata:
+    type: object
+    properties:
+      createdBy:
+        type: string
+        example: "payment_service"
+        description: User or system that created the payment record
+        required: true
+      createdDate:
+        type: datetime-only
+        example: "2024-03-23T13:42:27"
+        description: Payment record creation timestamp
+        required: true
+      lastModifiedBy:
+        type: string
+        example: "admin_user"
+        description: User who last modified the payment record
+        required: false
+      lastModifiedDate:
+        type: datetime-only
+        example: "2024-03-23T13:45:15"
+        description: Last modification timestamp
+        required: false
+      version:
+        type: integer
+        minimum: 1
+        example: 2
+        description: Record version for optimistic locking
+        required: false
+      tags:
+        type: array
+        items:
+          type: string
+        example: ["high_value", "international", "recurring"]
+        description: Classification tags for the payment
+        required: false
+      externalReferences:
+        type: object
+        description: External system references
+        properties:
+          erpPaymentId:
+            type: string
+            description: ERP system payment ID
+            required: false
+          accountingTransactionId:
+            type: string
+            description: Accounting system transaction ID
+            required: false
+          legacyPaymentId:
+            type: string
+            description: Legacy system payment ID
+            required: false
+        required: false
+    description: System metadata and audit information
+    required: true

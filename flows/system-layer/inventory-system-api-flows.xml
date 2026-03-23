@@ -1,0 +1,464 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+                          http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+                          http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+
+    <!-- Inventory System API Main Flow -->
+    <flow name="inventory-system-api-main" doc:name="Inventory System API Main Flow">
+        <http:listener doc:name="HTTP Listener" path="/system/inventory/*" config-ref="inventory-system-httpListenerConfig">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <logger level="INFO" doc:name="Log Request" message='#["Inventory System API Request: " ++ attributes.method ++ " " ++ attributes.requestPath]'/>
+        
+        <apikit:router config-ref="inventory-system-api-config"/>
+        
+        <error-handler ref="inventory-system-api-errorHandler"/>
+    </flow>
+
+    <!-- POST /inventory/check - Check Inventory Availability -->
+    <flow name="post:\inventory\check:application\json:inventory-system-api-config" doc:name="Check Inventory">
+        <logger level="INFO" doc:name="Log Inventory Check" message='#["Checking inventory for " ++ sizeOf(payload.items) ++ " items"]'/>
+        
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[payload.items]' doc:name="Store Items" variableName="requestedItems"/>
+        
+        <!-- Check each item availability -->
+        <ee:transform doc:name="Transform for Batch Query" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload.items map $.productId]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Query inventory for all products -->
+        <db:select doc:name="Query Inventory" config-ref="inventoryDatabaseConfig">
+            <db:sql><![CDATA[
+                SELECT 
+                    product_id,
+                    warehouse_id,
+                    warehouse_name,
+                    available_quantity,
+                    reserved_quantity,
+                    total_quantity,
+                    min_stock_level,
+                    max_stock_level,
+                    last_updated
+                FROM inventory 
+                WHERE product_id IN (<dynamic_in_clause>)
+                AND status = 'ACTIVE'
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="productIds" value="#[payload]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <!-- Transform Inventory Check Result -->
+        <ee:transform doc:name="Transform Inventory Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var inventoryMap = payload groupBy $.product_id
+var itemResults = vars.requestedItems map (requestedItem) -> {
+    productId: requestedItem.productId,
+    requestedQuantity: requestedItem.quantity,
+    availableQuantity: (inventoryMap[requestedItem.productId] default []) 
+                      reduce (inv, acc = 0) -> acc + inv.available_quantity,
+    isAvailable: (inventoryMap[requestedItem.productId] default []) 
+                reduce (inv, acc = 0) -> acc + inv.available_quantity >= requestedItem.quantity,
+    warehouses: (inventoryMap[requestedItem.productId] default []) map {
+        warehouseId: $.warehouse_id,
+        warehouseName: $.warehouse_name,
+        availableQuantity: $.available_quantity,
+        reservedQuantity: $.reserved_quantity
+    }
+}
+---
+{
+    correlationId: vars.correlationId,
+    timestamp: now() as String,
+    allItemsAvailable: itemResults every $.isAvailable,
+    items: itemResults
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Inventory Result" message='#["Inventory check completed. All items available: " ++ payload.allItemsAvailable as String]'/>
+        
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Inventory Error">
+                <logger level="ERROR" doc:name="Log Inventory Error" message='#["Inventory check failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Inventory Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "INVENTORY_CHECK_FAILED",
+    message: "Failed to check inventory availability",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /inventory/reserve - Reserve Inventory -->
+    <flow name="post:\inventory\reserve:application\json:inventory-system-api-config" doc:name="Reserve Inventory">
+        <logger level="INFO" doc:name="Log Inventory Reserve" message='#["Reserving inventory for " ++ sizeOf(payload.items) ++ " items"]'/>
+        
+        <set-variable value='#[uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#["RES-" ++ now() as String {format: "yyyyMMddHHmmss"} ++ "-" ++ (randomInt(999) + 100) as String]' doc:name="Generate Reservation ID" variableName="reservationId"/>
+        
+        <!-- Reserve each item -->
+        <foreach doc:name="Process Each Item" collection="#[payload.items]">
+            <set-variable value='#[payload]' doc:name="Store Current Item" variableName="currentItem"/>
+            
+            <!-- Check and reserve inventory -->
+            <db:update doc:name="Reserve Inventory" config-ref="inventoryDatabaseConfig">
+                <db:sql><![CDATA[
+                    UPDATE inventory 
+                    SET 
+                        available_quantity = available_quantity - :quantity,
+                        reserved_quantity = reserved_quantity + :quantity,
+                        last_updated = CURRENT_TIMESTAMP
+                    WHERE product_id = :productId 
+                    AND available_quantity >= :quantity
+                    AND status = 'ACTIVE'
+                ]]></db:sql>
+                <db:input-parameters>
+                    <db:input-parameter key="productId" value="#[vars.currentItem.productId]"/>
+                    <db:input-parameter key="quantity" value="#[vars.currentItem.quantity]"/>
+                </db:input-parameters>
+            </db:update>
+            
+            <!-- Check if reservation was successful -->
+            <choice doc:name="Reservation Successful?">
+                <when expression="#[payload.affectedRows == 0]">
+                    <raise-error type="INVENTORY:INSUFFICIENT_STOCK" description='#["Insufficient inventory for product: " ++ vars.currentItem.productId]'/>
+                </when>
+            </choice>
+            
+            <!-- Create reservation record -->
+            <db:insert doc:name="Insert Reservation Record" config-ref="inventoryDatabaseConfig">
+                <db:sql><![CDATA[
+                    INSERT INTO inventory_reservations (
+                        reservation_id,
+                        product_id,
+                        quantity,
+                        correlation_id,
+                        status,
+                        created_date,
+                        expires_at
+                    ) VALUES (
+                        :reservationId,
+                        :productId,
+                        :quantity,
+                        :correlationId,
+                        'ACTIVE',
+                        CURRENT_TIMESTAMP,
+                        :expiresAt
+                    )
+                ]]></db:sql>
+                <db:input-parameters>
+                    <db:input-parameter key="reservationId" value="#[vars.reservationId ++ '-' ++ vars.currentItem.productId]"/>
+                    <db:input-parameter key="productId" value="#[vars.currentItem.productId]"/>
+                    <db:input-parameter key="quantity" value="#[vars.currentItem.quantity]"/>
+                    <db:input-parameter key="correlationId" value="#[vars.correlationId]"/>
+                    <db:input-parameter key="expiresAt" value="#[now() + |PT30M|]"/>
+                </db:input-parameters>
+            </db:insert>
+        </foreach>
+        
+        <!-- Transform Success Response -->
+        <ee:transform doc:name="Transform Reserve Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    reservationId: vars.reservationId,
+    correlationId: vars.correlationId,
+    status: "RESERVED",
+    timestamp: now() as String,
+    expiresAt: (now() + |PT30M|) as String,
+    items: vars.originalPayload.items map {
+        productId: $.productId,
+        quantity: $.quantity,
+        reservationId: vars.reservationId ++ '-' ++ $.productId
+    }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Publish Inventory Reserved Event -->
+        <vm:publish queueName="inventory.events" doc:name="Publish Inventory Event">
+            <vm:content><![CDATA[#[{
+                eventType: "INVENTORY_RESERVED",
+                reservationId: vars.reservationId,
+                correlationId: vars.correlationId,
+                timestamp: now() as String,
+                items: vars.originalPayload.items
+            }]]]></vm:content>
+        </vm:publish>
+        
+        <logger level="INFO" doc:name="Log Reserve Success" message='#["Inventory reserved successfully: " ++ vars.reservationId]'/>
+        
+        <error-handler>
+            <on-error-propagate type="INVENTORY:INSUFFICIENT_STOCK" doc:name="Handle Insufficient Stock">
+                <logger level="WARN" doc:name="Log Insufficient Stock" message='#["Insufficient stock: " ++ error.description]'/>
+                
+                <!-- Rollback any partial reservations -->
+                <flow-ref doc:name="Rollback Reservation" name="rollback-reservation-subflow"/>
+                
+                <ee:transform doc:name="Transform Stock Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "INSUFFICIENT_STOCK",
+    message: "Insufficient inventory available",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">409</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="ANY" doc:name="Handle Reserve Error">
+                <logger level="ERROR" doc:name="Log Reserve Error" message='#["Inventory reservation failed: " ++ error.description]'/>
+                
+                <!-- Rollback any partial reservations -->
+                <flow-ref doc:name="Rollback Reservation" name="rollback-reservation-subflow"/>
+                
+                <ee:transform doc:name="Transform Reserve Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "INVENTORY_RESERVATION_FAILED",
+    message: "Failed to reserve inventory",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /inventory/release - Release Reserved Inventory -->
+    <flow name="post:\inventory\release:application\json:inventory-system-api-config" doc:name="Release Inventory">
+        <logger level="INFO" doc:name="Log Inventory Release" message='#["Releasing inventory for correlation ID: " ++ payload.correlationId]'/>
+        
+        <set-variable value='#[payload.correlationId]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Get reservation records -->
+        <db:select doc:name="Get Reservations" config-ref="inventoryDatabaseConfig">
+            <db:sql><![CDATA[
+                SELECT 
+                    reservation_id,
+                    product_id,
+                    quantity
+                FROM inventory_reservations 
+                WHERE correlation_id = :correlationId 
+                AND status = 'ACTIVE'
+            ]]></db:sql>
+            <db:input-parameters>
+                <db:input-parameter key="correlationId" value="#[vars.correlationId]"/>
+            </db:input-parameters>
+        </db:select>
+        
+        <!-- Release each reserved item -->
+        <foreach doc:name="Release Each Reservation" collection="#[payload]">
+            <set-variable value='#[payload]' doc:name="Store Current Reservation" variableName="currentReservation"/>
+            
+            <!-- Release inventory -->
+            <db:update doc:name="Release Inventory" config-ref="inventoryDatabaseConfig">
+                <db:sql><![CDATA[
+                    UPDATE inventory 
+                    SET 
+                        available_quantity = available_quantity + :quantity,
+                        reserved_quantity = reserved_quantity - :quantity,
+                        last_updated = CURRENT_TIMESTAMP
+                    WHERE product_id = :productId
+                ]]></db:sql>
+                <db:input-parameters>
+                    <db:input-parameter key="productId" value="#[vars.currentReservation.product_id]"/>
+                    <db:input-parameter key="quantity" value="#[vars.currentReservation.quantity]"/>
+                </db:input-parameters>
+            </db:update>
+            
+            <!-- Update reservation status -->
+            <db:update doc:name="Update Reservation Status" config-ref="inventoryDatabaseConfig">
+                <db:sql><![CDATA[
+                    UPDATE inventory_reservations 
+                    SET 
+                        status = 'RELEASED',
+                        released_date = CURRENT_TIMESTAMP
+                    WHERE reservation_id = :reservationId
+                ]]></db:sql>
+                <db:input-parameters>
+                    <db:input-parameter key="reservationId" value="#[vars.currentReservation.reservation_id]"/>
+                </db:input-parameters>
+            </db:update>
+        </foreach>
+        
+        <!-- Transform Release Response -->
+        <ee:transform doc:name="Transform Release Response" xsi:type="ee:MessageTransformer">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    status: "RELEASED",
+    timestamp: now() as String,
+    releasedItems: payload map {
+        productId: $.product_id,
+        quantity: $.quantity,
+        reservationId: $.reservation_id
+    }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Publish Inventory Released Event -->
+        <vm:publish queueName="inventory.events" doc:name="Publish Release Event">
+            <vm:content><![CDATA[#[{
+                eventType: "INVENTORY_RELEASED",
+                correlationId: vars.correlationId,
+                timestamp: now() as String,
+                items: payload.releasedItems
+            }]]]></vm:content>
+        </vm:publish>
+        
+        <logger level="INFO" doc:name="Log Release Success" message='#["Inventory released successfully for correlation ID: " ++ vars.correlationId]'/>
+        
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Release Error">
+                <logger level="ERROR" doc:name="Log Release Error" message='#["Inventory release failed: " ++ error.description]'/>
+                <ee:transform doc:name="Transform Release Error" xsi:type="ee:MessageTransformer">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "INVENTORY_RELEASE_FAILED",
+    message: "Failed to release inventory",
+    details: error.description,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Rollback Reservation Sub-flow -->
+    <sub-flow name="rollback-reservation-subflow" doc:name="Rollback Reservation">
+        <logger level="WARN" doc:name="Log Rollback" message="Rolling back inventory reservations"/>
+        
+        <try doc:name="Try Rollback">
+            <!-- Get any partial reservations for this correlation ID -->
+            <db:select doc:name="Get Partial Reservations" config-ref="inventoryDatabaseConfig">
+                <db:sql><![CDATA[
+                    SELECT 
+                        reservation_id,
+                        product_id,
+                        quantity
+                    FROM inventory_reservations 
+                    WHERE correlation_id = :correlationId 
+                    AND status = 'ACTIVE'
+                ]]></db:sql>
+                <db:input-parameters>
+                    <db:input-parameter key="correlationId" value="#[vars.correlationId]"/>
+                </db:input-parameters>
+            </db:select>
+            
+            <!-- Rollback each partial reservation -->
+            <foreach doc:name="Rollback Each Reservation" collection="#[payload]">
+                <set-variable value='#[payload]' doc:name="Store Current Reservation" variableName="rollbackReservation"/>
+                
+                <!-- Release the reserved inventory -->
+                <db:update doc:name="Rollback Inventory" config-ref="inventoryDatabaseConfig">
+                    <db:sql><![CDATA[
+                        UPDATE inventory 
+                        SET 
+                            available_quantity = available_quantity + :quantity,
+                            reserved_quantity = reserved_quantity - :quantity,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE product_id = :productId
+                    ]]></db:sql>
+                    <db:input-parameters>
+                        <db:input-parameter key="productId" value="#[vars.rollbackReservation.product_id]"/>
+                        <db:input-parameter key="quantity" value="#[vars.rollbackReservation.quantity]"/>
+                    </db:input-parameters>
+                </db:update>
+                
+                <!-- Mark reservation as rolled back -->
+                <db:update doc:name="Mark Reservation Rolled Back" config-ref="inventoryDatabaseConfig">
+                    <db:sql><![CDATA[
+                        UPDATE inventory_reservations 
+                        SET 
+                            status = 'ROLLED_BACK',
+                            released_date = CURRENT_TIMESTAMP
+                        WHERE reservation_id = :reservationId
+                    ]]></db:sql>
+                    <db:input-parameters>
+                        <db:input-parameter key="reservationId" value="#[vars.rollbackReservation.reservation_id]"/>
+                    </db:input-parameters>
+                </db:update>
+            </foreach>
+            
+            <error-handler>
+                <on-error-continue type="ANY" doc:name="Continue on Rollback Error">
+                    <logger level="ERROR" doc:name="Log Rollback Error" message="Failed to rollback some reservations"/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+</mule>

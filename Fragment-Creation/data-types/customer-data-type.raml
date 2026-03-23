@@ -1,0 +1,386 @@
+#%RAML 1.0 DataType
+
+displayName: Customer
+description: |
+  Comprehensive Customer data type for Order Management System.
+  Supports both B2C and B2B customer scenarios with complete profile information.
+  
+type: object
+properties:
+  customerId:
+    type: string
+    pattern: ^CUST-[0-9]{8}$
+    example: "CUST-87654321"
+    description: Unique customer identifier with CUST- prefix
+    required: true
+  customerNumber:
+    type: string
+    minLength: 1
+    maxLength: 50
+    example: "CUSTOMER-2024-001234"
+    description: Business-friendly customer number
+    required: true
+  customerType:
+    type: string
+    enum: ["INDIVIDUAL", "BUSINESS", "PARTNER", "EMPLOYEE", "GUEST"]
+    example: "INDIVIDUAL"
+    description: Customer type classification
+    required: true
+  status:
+    type: string
+    enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING_VERIFICATION", "CLOSED"]
+    example: "ACTIVE"
+    description: Current customer status
+    required: true
+  profile:
+    type: object
+    properties:
+      personalInfo:
+        type: object
+        properties:
+          title:
+            type: string
+            enum: ["MR", "MS", "MRS", "DR", "PROF"]
+            example: "MR"
+            description: Customer title
+            required: false
+          firstName:
+            type: string
+            minLength: 1
+            maxLength: 100
+            example: "John"
+            description: Customer first name
+          middleName:
+            type: string
+            maxLength: 100
+            example: "Michael"
+            description: Customer middle name
+            required: false
+          lastName:
+            type: string
+            minLength: 1
+            maxLength: 100
+            example: "Smith"
+            description: Customer last name
+          dateOfBirth:
+            type: date-only
+            example: "1985-06-15"
+            description: Date of birth (for age verification)
+            required: false
+          gender:
+            type: string
+            enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]
+            example: "MALE"
+            description: Gender information
+            required: false
+        description: Personal information for individual customers
+        required: false
+      businessInfo:
+        type: object
+        properties:
+          companyName:
+            type: string
+            minLength: 1
+            maxLength: 255
+            example: "Acme Corporation"
+            description: Business/Company name
+          businessType:
+            type: string
+            enum: ["CORPORATION", "LLC", "PARTNERSHIP", "SOLE_PROPRIETORSHIP", "NON_PROFIT"]
+            example: "CORPORATION"
+            description: Type of business entity
+            required: false
+          industry:
+            type: string
+            example: "Technology"
+            description: Business industry
+            required: false
+          taxId:
+            type: string
+            pattern: ^[0-9]{2}-[0-9]{7}$
+            example: "12-3456789"
+            description: Business tax identification number
+            required: false
+          dunsNumber:
+            type: string
+            pattern: ^[0-9]{9}$
+            example: "123456789"
+            description: D-U-N-S number
+            required: false
+        description: Business information for commercial customers
+        required: false
+    description: Customer profile information
+    required: true
+  contactInfo:
+    type: object
+    properties:
+      primaryEmail:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+        example: "john.smith@email.com"
+        description: Primary email address
+        required: true
+      secondaryEmail:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+        example: "j.smith.backup@email.com"
+        description: Secondary email address
+        required: false
+      primaryPhone:
+        type: object
+        properties:
+          countryCode:
+            type: string
+            pattern: ^\+[1-9]\d{0,3}$
+            example: "+1"
+            description: Country calling code
+          phoneNumber:
+            type: string
+            pattern: ^[0-9]{10}$
+            example: "5551234567"
+            description: Phone number without country code
+          extension:
+            type: string
+            pattern: ^[0-9]{1,6}$
+            example: "123"
+            description: Phone extension
+            required: false
+          phoneType:
+            type: string
+            enum: ["MOBILE", "HOME", "WORK", "FAX"]
+            example: "MOBILE"
+            description: Type of phone number
+        description: Primary contact phone number
+        required: true
+      secondaryPhone:
+        type: object
+        properties:
+          countryCode:
+            type: string
+            pattern: ^\+[1-9]\d{0,3}$
+          phoneNumber:
+            type: string
+            pattern: ^[0-9]{10}$
+          extension:
+            type: string
+            pattern: ^[0-9]{1,6}$
+            required: false
+          phoneType:
+            type: string
+            enum: ["MOBILE", "HOME", "WORK", "FAX"]
+        description: Secondary contact phone number
+        required: false
+    description: Customer contact information
+    required: true
+  addresses:
+    type: array
+    minItems: 0
+    items:
+      type: object
+      properties:
+        addressId:
+          type: string
+          pattern: ^ADDR-[0-9]{8}$
+          example: "ADDR-99887766"
+          description: Unique address identifier
+        addressType:
+          type: string
+          enum: ["HOME", "WORK", "BILLING", "SHIPPING", "MAILING"]
+          example: "HOME"
+          description: Type of address
+        isPrimary:
+          type: boolean
+          example: true
+          description: Whether this is the primary address
+        addressLine1:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: "123 Main Street"
+          description: First line of address
+        addressLine2:
+          type: string
+          maxLength: 255
+          example: "Apt 4B"
+          description: Second line of address
+          required: false
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "New York"
+          description: City name
+        state:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "NY"
+          description: State/Province code or name
+        postalCode:
+          type: string
+          pattern: ^[0-9]{5}(-[0-9]{4})?$
+          example: "10001"
+          description: Postal/ZIP code
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          example: "US"
+          description: ISO 3166-1 alpha-2 country code
+    description: Customer addresses
+    required: false
+  preferences:
+    type: object
+    properties:
+      communicationPreferences:
+        type: object
+        properties:
+          emailMarketing:
+            type: boolean
+            example: true
+            description: Opt-in for marketing emails
+          smsMarketing:
+            type: boolean
+            example: false
+            description: Opt-in for SMS marketing
+          phoneMarketing:
+            type: boolean
+            example: false
+            description: Opt-in for phone marketing
+          preferredLanguage:
+            type: string
+            pattern: ^[a-z]{2}(-[A-Z]{2})?$
+            example: "en-US"
+            description: Preferred language (ISO 639-1)
+          preferredCurrency:
+            type: string
+            pattern: ^[A-Z]{3}$
+            example: "USD"
+            description: Preferred currency (ISO 4217)
+        description: Communication preferences
+        required: false
+      shippingPreferences:
+        type: object
+        properties:
+          preferredShippingMethod:
+            type: string
+            enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "PICKUP"]
+            example: "STANDARD"
+            description: Default shipping preference
+          deliveryInstructions:
+            type: string
+            maxLength: 500
+            example: "Leave at front door"
+            description: Special delivery instructions
+            required: false
+        description: Shipping and delivery preferences
+        required: false
+    description: Customer preferences and settings
+    required: false
+  loyaltyInfo:
+    type: object
+    properties:
+      loyaltyProgram:
+        type: string
+        example: "GOLD"
+        description: Loyalty program tier
+        required: false
+      membershipNumber:
+        type: string
+        example: "GOLD123456789"
+        description: Loyalty program membership number
+        required: false
+      points:
+        type: integer
+        minimum: 0
+        example: 2500
+        description: Current loyalty points balance
+        required: false
+      memberSince:
+        type: date-only
+        example: "2020-01-15"
+        description: Date customer joined loyalty program
+        required: false
+    description: Customer loyalty program information
+    required: false
+  creditInfo:
+    type: object
+    properties:
+      creditLimit:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 5000.00
+        description: Approved credit limit
+        required: false
+      availableCredit:
+        type: number
+        minimum: 0
+        multipleOf: 0.01
+        example: 4750.00
+        description: Currently available credit
+        required: false
+      creditRating:
+        type: string
+        enum: ["EXCELLENT", "GOOD", "FAIR", "POOR", "NO_RATING"]
+        example: "GOOD"
+        description: Credit rating assessment
+        required: false
+      paymentTerms:
+        type: string
+        enum: ["NET_15", "NET_30", "NET_60", "COD", "PREPAID"]
+        example: "NET_30"
+        description: Payment terms for B2B customers
+        required: false
+    description: Credit and payment information
+    required: false
+  metadata:
+    type: object
+    properties:
+      createdBy:
+        type: string
+        example: "system"
+        description: User or system that created the customer record
+      createdDate:
+        type: datetime-only
+        example: "2024-01-15T10:30:00"
+        description: Customer record creation timestamp
+      lastModifiedBy:
+        type: string
+        example: "admin_user"
+        description: User who last modified the customer record
+        required: false
+      lastModifiedDate:
+        type: datetime-only
+        example: "2024-03-23T14:30:15"
+        description: Last modification timestamp
+        required: false
+      lastLoginDate:
+        type: datetime-only
+        example: "2024-03-22T09:15:30"
+        description: Last customer login timestamp
+        required: false
+      version:
+        type: integer
+        minimum: 1
+        example: 3
+        description: Record version for optimistic locking
+        required: false
+      externalReferences:
+        type: object
+        description: External system references
+        properties:
+          crmCustomerId:
+            type: string
+            description: CRM system customer ID
+            required: false
+          erpCustomerId:
+            type: string
+            description: ERP system customer ID
+            required: false
+          legacyCustomerId:
+            type: string
+            description: Legacy system customer ID
+            required: false
+        required: false
+    description: System metadata and audit information
+    required: true

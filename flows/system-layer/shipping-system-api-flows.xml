@@ -1,0 +1,987 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd">
+
+    <!-- Global Configuration -->
+    <global-property name="shipping.api.host" value="${shipping.api.host}" />
+    <global-property name="shipping.api.port" value="${shipping.api.port}" />
+    <global-property name="shipping.api.basePath" value="${shipping.api.basePath}" />
+
+    <!-- HTTP Listener Configuration -->
+    <http:listener-config name="shipping-system-api-httpListenerConfig" 
+                          host="${shipping.api.host}" 
+                          port="${shipping.api.port}" 
+                          basePath="${shipping.api.basePath}"
+                          doc:name="HTTP Listener Config" />
+
+    <!-- HTTP Request Configuration for External Shipping Services -->
+    <http:request-config name="shipping-provider-requestConfig" 
+                         host="${shipping.provider.host}" 
+                         port="${shipping.provider.port}"
+                         doc:name="HTTP Request Config" />
+
+    <!-- APIKit Configuration -->
+    <apikit:config name="shipping-system-api-config" 
+                   raml="shipping-system-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" 
+                   doc:name="APIKit Config" />
+
+    <!-- Main API Router Flow -->
+    <flow name="shipping-system-api-main" doc:id="shipping-system-api-main">
+        <http:listener config-ref="shipping-system-api-httpListenerConfig" 
+                       path="/*" 
+                       doc:name="Listener" />
+        
+        <!-- Add correlation ID if not present -->
+        <choice doc:name="Check Correlation ID">
+            <when expression="#[isEmpty(attributes.headers.'x-correlation-id')]">
+                <set-variable variableName="correlationId" 
+                             value="#[uuid()]" 
+                             doc:name="Generate Correlation ID" />
+            </when>
+            <otherwise>
+                <set-variable variableName="correlationId" 
+                             value="#[attributes.headers.'x-correlation-id']" 
+                             doc:name="Use Existing Correlation ID" />
+            </otherwise>
+        </choice>
+
+        <logger level="INFO" 
+                message="Shipping System API Request - Method: #[attributes.method] URI: #[attributes.requestUri] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Request" />
+
+        <apikit:router config-ref="shipping-system-api-config" doc:name="APIKit Router" />
+        
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Bad Request">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_BAD_REQUEST",
+    "message": "Invalid request parameters",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Not Found">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_NOT_FOUND",
+    "message": "Resource not found",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="ANY">
+                <logger level="ERROR" 
+                        message="Shipping System API Error - Correlation ID: #[vars.correlationId] Error: #[error.description]" 
+                        doc:name="Log Error" />
+                <ee:transform doc:name="Transform Generic Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_INTERNAL_ERROR",
+    "message": "Internal server error occurred",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Create Shipment Flow -->
+    <flow name="post:\shipments:shipping-system-api-config" doc:id="create-shipment-flow">
+        <logger level="INFO" 
+                message="Creating shipment - Correlation ID: #[vars.correlationId] Payload: #[payload]" 
+                doc:name="Log Request" />
+
+        <!-- Validate request payload -->
+        <validation:is-not-empty value="#[payload.orderId]" 
+                                 message="Order ID is required" 
+                                 doc:name="Validate Order ID" />
+        <validation:is-not-empty value="#[payload.shippingAddress]" 
+                                 message="Shipping address is required" 
+                                 doc:name="Validate Shipping Address" />
+
+        <!-- Transform request to shipping provider format -->
+        <ee:transform doc:name="Transform to Provider Format">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "orderReference": payload.orderId,
+  "serviceType": payload.shippingMethod default "STANDARD",
+  "recipient": {
+    "name": payload.shippingAddress.fullName,
+    "address": {
+      "street": payload.shippingAddress.street,
+      "city": payload.shippingAddress.city,
+      "state": payload.shippingAddress.state,
+      "postalCode": payload.shippingAddress.postalCode,
+      "country": payload.shippingAddress.country
+    },
+    "phone": payload.shippingAddress.phone,
+    "email": payload.shippingAddress.email
+  },
+  "items": payload.items map (item, index) -> {
+    "description": item.name,
+    "quantity": item.quantity,
+    "weight": item.weight default 1.0,
+    "value": item.price
+  },
+  "specialInstructions": payload.specialInstructions
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="originalPayload"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <!-- Call external shipping provider -->
+        <try doc:name="Try Shipping Provider Call">
+            <http:request method="POST" 
+                          path="/shipments" 
+                          config-ref="shipping-provider-requestConfig"
+                          doc:name="Call Shipping Provider">
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="Authorization" value="Bearer ${shipping.provider.token}" />
+                </http:headers>
+            </http:request>
+            
+            <error-handler>
+                <on-error-propagate type="HTTP:CONNECTIVITY">
+                    <logger level="ERROR" 
+                            message="Shipping provider connectivity error - Correlation ID: #[vars.correlationId]" 
+                            doc:name="Log Connectivity Error" />
+                    <raise-error type="SHIPPING:PROVIDER_UNAVAILABLE" 
+                                 description="Shipping provider is temporarily unavailable" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="HTTP:BAD_REQUEST">
+                    <logger level="ERROR" 
+                            message="Shipping provider bad request - Correlation ID: #[vars.correlationId] Response: #[payload]" 
+                            doc:name="Log Bad Request" />
+                    <raise-error type="SHIPPING:INVALID_REQUEST" 
+                                 description="Invalid shipping request parameters" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+
+        <!-- Transform response to API format -->
+        <ee:transform doc:name="Transform Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "shipmentId": payload.trackingNumber,
+  "orderId": vars.originalPayload.orderId,
+  "status": "CREATED",
+  "trackingNumber": payload.trackingNumber,
+  "carrier": payload.carrier default "STANDARD_CARRIER",
+  "service": payload.serviceType default "STANDARD",
+  "estimatedDeliveryDate": payload.estimatedDeliveryDate,
+  "cost": {
+    "amount": payload.cost.amount,
+    "currency": payload.cost.currency default "USD"
+  },
+  "createdDate": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"},
+  "correlationId": vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">201</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <logger level="INFO" 
+                message="Shipment created successfully - Shipment ID: #[payload.shipmentId] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Success" />
+        
+        <error-handler>
+            <on-error-propagate type="SHIPPING:PROVIDER_UNAVAILABLE">
+                <ee:transform doc:name="Transform Provider Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_PROVIDER_UNAVAILABLE",
+    "message": "Shipping service is temporarily unavailable",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="SHIPPING:INVALID_REQUEST">
+                <ee:transform doc:name="Transform Invalid Request Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_INVALID_REQUEST",
+    "message": "Invalid shipping parameters provided",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Get Shipment Status Flow -->
+    <flow name="get:\shipments\(shipmentId):shipping-system-api-config" doc:id="get-shipment-status-flow">
+        <set-variable variableName="shipmentId" 
+                     value="#[attributes.uriParams.shipmentId]" 
+                     doc:name="Set Shipment ID" />
+
+        <logger level="INFO" 
+                message="Getting shipment status - Shipment ID: #[vars.shipmentId] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Request" />
+
+        <!-- Validate shipment ID -->
+        <validation:is-not-empty value="#[vars.shipmentId]" 
+                                 message="Shipment ID is required" 
+                                 doc:name="Validate Shipment ID" />
+
+        <!-- Call shipping provider for tracking -->
+        <try doc:name="Try Provider Tracking Call">
+            <http:request method="GET" 
+                          path="/tracking/#[vars.shipmentId]" 
+                          config-ref="shipping-provider-requestConfig"
+                          doc:name="Get Tracking Info">
+                <http:headers>
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="Authorization" value="Bearer ${shipping.provider.token}" />
+                </http:headers>
+            </http:request>
+            
+            <error-handler>
+                <on-error-propagate type="HTTP:NOT_FOUND">
+                    <raise-error type="SHIPPING:SHIPMENT_NOT_FOUND" 
+                                 description="Shipment not found" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="HTTP:CONNECTIVITY">
+                    <raise-error type="SHIPPING:PROVIDER_UNAVAILABLE" 
+                                 description="Tracking service temporarily unavailable" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+
+        <!-- Transform tracking response -->
+        <ee:transform doc:name="Transform Tracking Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "shipmentId": vars.shipmentId,
+  "orderId": payload.orderReference,
+  "status": upper(payload.status) match {
+    case "CREATED" -> "CREATED"
+    case "PICKED_UP" -> "IN_TRANSIT"
+    case "IN_TRANSIT" -> "IN_TRANSIT"
+    case "OUT_FOR_DELIVERY" -> "OUT_FOR_DELIVERY"
+    case "DELIVERED" -> "DELIVERED"
+    case "FAILED" -> "FAILED"
+    else -> "UNKNOWN"
+  },
+  "trackingNumber": payload.trackingNumber,
+  "carrier": payload.carrier,
+  "service": payload.serviceType,
+  "estimatedDeliveryDate": payload.estimatedDeliveryDate,
+  "actualDeliveryDate": payload.actualDeliveryDate,
+  "trackingEvents": payload.events map (event, index) -> {
+    "timestamp": event.timestamp,
+    "status": event.status,
+    "location": event.location,
+    "description": event.description
+  },
+  "lastUpdated": payload.lastUpdated default (now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}),
+  "correlationId": vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" 
+                message="Shipment status retrieved - Shipment ID: #[vars.shipmentId] Status: #[payload.status] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Success" />
+        
+        <error-handler>
+            <on-error-propagate type="SHIPPING:SHIPMENT_NOT_FOUND">
+                <ee:transform doc:name="Transform Not Found Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPMENT_NOT_FOUND",
+    "message": "Shipment with ID " ++ vars.shipmentId ++ " not found",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="SHIPPING:PROVIDER_UNAVAILABLE">
+                <ee:transform doc:name="Transform Service Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_SERVICE_UNAVAILABLE",
+    "message": "Tracking service is temporarily unavailable",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Update Shipment Flow -->
+    <flow name="put:\shipments\(shipmentId):application\json:shipping-system-api-config" doc:id="update-shipment-flow">
+        <set-variable variableName="shipmentId" 
+                     value="#[attributes.uriParams.shipmentId]" 
+                     doc:name="Set Shipment ID" />
+
+        <logger level="INFO" 
+                message="Updating shipment - Shipment ID: #[vars.shipmentId] Correlation ID: #[vars.correlationId] Payload: #[payload]" 
+                doc:name="Log Update Request" />
+
+        <!-- Validate shipment ID -->
+        <validation:is-not-empty value="#[vars.shipmentId]" 
+                                 message="Shipment ID is required" 
+                                 doc:name="Validate Shipment ID" />
+
+        <!-- Store original request for potential rollback -->
+        <set-variable variableName="updateRequest" 
+                     value="#[payload]" 
+                     doc:name="Store Update Request" />
+
+        <!-- Transform update request to provider format -->
+        <ee:transform doc:name="Transform Update to Provider Format">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  (shipmentId: vars.shipmentId),
+  (status: payload.status) if payload.status?,
+  (deliveryInstructions: payload.deliveryInstructions) if payload.deliveryInstructions?,
+  (destinationAddress: {
+    street: payload.destinationAddress.street,
+    city: payload.destinationAddress.city,
+    state: payload.destinationAddress.state,
+    zipCode: payload.destinationAddress.zipCode,
+    country: payload.destinationAddress.country
+  }) if payload.destinationAddress?,
+  lastUpdated: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <!-- Call shipping provider for update -->
+        <try doc:name="Try Update Shipment">
+            <http:request method="PUT" 
+                          path="/shipments/#[vars.shipmentId]" 
+                          config-ref="shipping-provider-requestConfig"
+                          doc:name="Update Shipment at Provider">
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="Authorization" value="Bearer ${shipping.provider.token}" />
+                </http:headers>
+            </http:request>
+            
+            <error-handler>
+                <on-error-propagate type="HTTP:NOT_FOUND">
+                    <raise-error type="SHIPPING:SHIPMENT_NOT_FOUND" 
+                                 description="Shipment not found for update" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="HTTP:BAD_REQUEST">
+                    <logger level="WARN" 
+                            message="Invalid update request - Shipment ID: #[vars.shipmentId] Error: #[payload]" 
+                            doc:name="Log Bad Request" />
+                    <raise-error type="SHIPPING:INVALID_UPDATE" 
+                                 description="Invalid shipment update parameters" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="HTTP:CONNECTIVITY">
+                    <raise-error type="SHIPPING:PROVIDER_UNAVAILABLE" 
+                                 description="Shipping service temporarily unavailable" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+
+        <!-- Transform update response -->
+        <ee:transform doc:name="Transform Update Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  shipmentId: vars.shipmentId,
+  status: payload.status default vars.updateRequest.status,
+  lastUpdated: payload.lastUpdated default (now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}),
+  message: "Shipment updated successfully",
+  updatedFields: {
+    (status: vars.updateRequest.status) if vars.updateRequest.status?,
+    (deliveryInstructions: vars.updateRequest.deliveryInstructions) if vars.updateRequest.deliveryInstructions?,
+    (destinationAddress: vars.updateRequest.destinationAddress) if vars.updateRequest.destinationAddress?
+  },
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" 
+                message="Shipment updated successfully - Shipment ID: #[vars.shipmentId] Status: #[payload.status] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Update Success" />
+        
+        <error-handler>
+            <on-error-propagate type="SHIPPING:SHIPMENT_NOT_FOUND">
+                <ee:transform doc:name="Transform Update Not Found Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPMENT_NOT_FOUND",
+    "message": "Shipment with ID " ++ vars.shipmentId ++ " not found for update",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="SHIPPING:INVALID_UPDATE">
+                <ee:transform doc:name="Transform Invalid Update Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_INVALID_UPDATE",
+    "message": "Invalid update parameters provided for shipment",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="SHIPPING:PROVIDER_UNAVAILABLE">
+                <ee:transform doc:name="Transform Update Service Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_SERVICE_UNAVAILABLE",
+    "message": "Shipping service is temporarily unavailable for updates",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Cancel Shipment Flow -->
+    <flow name="delete:\shipments\(shipmentId):shipping-system-api-config" doc:id="cancel-shipment-flow">
+        <set-variable variableName="shipmentId" 
+                     value="#[attributes.uriParams.shipmentId]" 
+                     doc:name="Set Shipment ID" />
+
+        <logger level="INFO" 
+                message="Cancelling shipment - Shipment ID: #[vars.shipmentId] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Request" />
+
+        <!-- Validate shipment ID -->
+        <validation:is-not-empty value="#[vars.shipmentId]" 
+                                 message="Shipment ID is required" 
+                                 doc:name="Validate Shipment ID" />
+
+        <!-- Call shipping provider for cancellation -->
+        <try doc:name="Try Cancellation">
+            <http:request method="DELETE" 
+                          path="/shipments/#[vars.shipmentId]" 
+                          config-ref="shipping-provider-requestConfig"
+                          doc:name="Cancel Shipment">
+                <http:headers>
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="Authorization" value="Bearer ${shipping.provider.token}" />
+                </http:headers>
+            </http:request>
+            
+            <error-handler>
+                <on-error-propagate type="HTTP:NOT_FOUND">
+                    <raise-error type="SHIPPING:SHIPMENT_NOT_FOUND" 
+                                 description="Shipment not found for cancellation" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="HTTP:CONNECTIVITY">
+                    <raise-error type="SHIPPING:PROVIDER_UNAVAILABLE" 
+                                 description="Shipping service temporarily unavailable" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+
+        <!-- Transform cancellation response -->
+        <ee:transform doc:name="Transform Cancel Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "shipmentId": vars.shipmentId,
+  "status": "CANCELLED",
+  "cancelledAt": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"},
+  "message": "Shipment cancelled successfully",
+  "correlationId": vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" 
+                message="Shipment cancelled successfully - Shipment ID: #[vars.shipmentId] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Cancel Success" />
+        
+        <error-handler>
+            <on-error-propagate type="SHIPPING:SHIPMENT_NOT_FOUND">
+                <ee:transform doc:name="Transform Shipment Not Found Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPMENT_NOT_FOUND",
+    "message": "Shipment with ID " ++ vars.shipmentId ++ " not found for cancellation",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="SHIPPING:PROVIDER_UNAVAILABLE">
+                <ee:transform doc:name="Transform Cancel Service Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_SERVICE_UNAVAILABLE",
+    "message": "Shipping service is temporarily unavailable for cancellation",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Get Shipping Rates Flow -->
+    <flow name="post:\rates:shipping-system-api-config" doc:id="get-shipping-rates-flow">
+        <logger level="INFO" 
+                message="Getting shipping rates - Correlation ID: #[vars.correlationId] Payload: #[payload]" 
+                doc:name="Log Rates Request" />
+
+        <!-- Validate request payload -->
+        <validation:is-not-empty value="#[payload.origin]" 
+                                 message="Origin information is required" 
+                                 doc:name="Validate Origin" />
+        <validation:is-not-empty value="#[payload.destination]" 
+                                 message="Destination information is required" 
+                                 doc:name="Validate Destination" />
+        <validation:is-not-empty value="#[payload.packages]" 
+                                 message="Package information is required" 
+                                 doc:name="Validate Packages" />
+
+        <!-- Transform request for multiple carriers -->
+        <ee:transform doc:name="Transform for Carrier APIs">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "shipFrom": {
+    "postalCode": payload.origin.zipCode,
+    "country": payload.origin.country
+  },
+  "shipTo": {
+    "postalCode": payload.destination.zipCode,
+    "country": payload.destination.country
+  },
+  "packages": payload.packages map (pkg, index) -> {
+    "weight": {
+      "value": pkg.weight.value,
+      "unit": pkg.weight.unit
+    },
+    "dimensions": {
+      "length": pkg.dimensions.length,
+      "width": pkg.dimensions.width,
+      "height": pkg.dimensions.height,
+      "unit": pkg.dimensions.unit
+    }
+  }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <!-- Call multiple shipping providers -->
+        <scatter-gather doc:name="Get Rates from Multiple Carriers">
+            <route>
+                <try doc:name="Try FedEx Rates">
+                    <http:request method="POST" 
+                                  path="/fedex/rates" 
+                                  config-ref="shipping-provider-requestConfig"
+                                  doc:name="Get FedEx Rates">
+                        <http:headers>
+                            <http:header headerName="Content-Type" value="application/json" />
+                            <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                            <http:header headerName="Authorization" value="Bearer ${fedex.api.token}" />
+                        </http:headers>
+                    </http:request>
+                    <error-handler>
+                        <on-error-continue type="ANY">
+                            <set-payload value='{"carrier": "FedEx", "error": "Service unavailable"}' doc:name="Set FedEx Error" />
+                        </on-error-continue>
+                    </error-handler>
+                </try>
+            </route>
+            <route>
+                <try doc:name="Try UPS Rates">
+                    <http:request method="POST" 
+                                  path="/ups/rates" 
+                                  config-ref="shipping-provider-requestConfig"
+                                  doc:name="Get UPS Rates">
+                        <http:headers>
+                            <http:header headerName="Content-Type" value="application/json" />
+                            <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                            <http:header headerName="Authorization" value="Bearer ${ups.api.token}" />
+                        </http:headers>
+                    </http:request>
+                    <error-handler>
+                        <on-error-continue type="ANY">
+                            <set-payload value='{"carrier": "UPS", "error": "Service unavailable"}' doc:name="Set UPS Error" />
+                        </on-error-continue>
+                    </error-handler>
+                </try>
+            </route>
+        </scatter-gather>
+
+        <!-- Transform and consolidate rates -->
+        <ee:transform doc:name="Transform Consolidated Rates">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "rates": flatten(payload.* map (carrierResponse, index) -> 
+    if (carrierResponse.error?)
+      []
+    else
+      (carrierResponse.rates default []) map (rate, rateIndex) -> {
+        "carrier": rate.carrier default "Unknown",
+        "serviceType": rate.serviceType,
+        "cost": rate.totalCost,
+        "estimatedDays": rate.deliveryDays,
+        "currency": rate.currency default "USD",
+        "serviceDescription": rate.description default ""
+      }
+  ),
+  "requestId": vars.correlationId,
+  "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" 
+                message="Shipping rates retrieved - Found #[sizeOf(payload.rates)] rates - Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Rates Success" />
+
+        <error-handler>
+            <on-error-propagate type="ANY" doc:name="Handle Rates Error">
+                <logger level="ERROR" 
+                        message="Shipping rates request failed - Correlation ID: #[vars.correlationId] Error: #[error.description]" 
+                        doc:name="Log Rates Error" />
+                <ee:transform doc:name="Transform Rates Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SHIPPING_RATES_FAILED",
+    "message": "Failed to retrieve shipping rates",
+    "details": error.description,
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Track Package by Tracking Number Flow -->
+    <flow name="get:\tracking\(trackingNumber):shipping-system-api-config" doc:id="track-package-flow">
+        <set-variable variableName="trackingNumber" 
+                     value="#[attributes.uriParams.trackingNumber]" 
+                     doc:name="Set Tracking Number" />
+
+        <logger level="INFO" 
+                message="Tracking package - Tracking Number: #[vars.trackingNumber] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Track Request" />
+
+        <!-- Validate tracking number -->
+        <validation:is-not-empty value="#[vars.trackingNumber]" 
+                                 message="Tracking number is required" 
+                                 doc:name="Validate Tracking Number" />
+
+        <!-- Try multiple carriers to find the shipment -->
+        <choice doc:name="Determine Carrier from Tracking Number">
+            <when expression="#[vars.trackingNumber startsWith '1Z']">
+                <!-- UPS tracking format -->
+                <http:request method="GET" 
+                              path="/ups/tracking/#[vars.trackingNumber]" 
+                              config-ref="shipping-provider-requestConfig"
+                              doc:name="Track UPS Package">
+                    <http:headers>
+                        <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                        <http:header headerName="Authorization" value="Bearer ${ups.api.token}" />
+                    </http:headers>
+                </http:request>
+            </when>
+            <when expression="#[vars.trackingNumber matches /^[0-9]{12,14}$/]">
+                <!-- FedEx tracking format -->
+                <http:request method="GET" 
+                              path="/fedex/tracking/#[vars.trackingNumber]" 
+                              config-ref="shipping-provider-requestConfig"
+                              doc:name="Track FedEx Package">
+                    <http:headers>
+                        <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                        <http:header headerName="Authorization" value="Bearer ${fedex.api.token}" />
+                    </http:headers>
+                </http:request>
+            </when>
+            <otherwise>
+                <!-- Generic tracking call -->
+                <http:request method="GET" 
+                              path="/tracking/#[vars.trackingNumber]" 
+                              config-ref="shipping-provider-requestConfig"
+                              doc:name="Track Generic Package">
+                    <http:headers>
+                        <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                        <http:header headerName="Authorization" value="Bearer ${shipping.provider.token}" />
+                    </http:headers>
+                </http:request>
+            </otherwise>
+        </choice>
+
+        <!-- Transform tracking response -->
+        <ee:transform doc:name="Transform Tracking Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "trackingNumber": vars.trackingNumber,
+  "shipmentId": payload.shipmentId default null,
+  "currentStatus": upper(payload.status) match {
+    case "LABEL_CREATED" -> "CREATED"
+    case "PICKED_UP" -> "IN_TRANSIT"
+    case "IN_TRANSIT" -> "IN_TRANSIT"
+    case "OUT_FOR_DELIVERY" -> "OUT_FOR_DELIVERY"
+    case "DELIVERED" -> "DELIVERED"
+    case "DELIVERY_ATTEMPTED" -> "DELIVERY_ATTEMPTED"
+    case "EXCEPTION" -> "EXCEPTION"
+    case "RETURNED" -> "RETURNED"
+    else -> "UNKNOWN"
+  },
+  "estimatedDelivery": payload.estimatedDeliveryDate,
+  "lastUpdateTime": payload.lastUpdated default (now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}),
+  "currentLocation": {
+    "city": payload.currentLocation.city default null,
+    "state": payload.currentLocation.state default null,
+    "country": payload.currentLocation.country default null,
+    "facilityName": payload.currentLocation.facility default null
+  },
+  "carrier": {
+    "name": payload.carrier default "Unknown",
+    "serviceType": payload.serviceType default null
+  },
+  "trackingEvents": (payload.events default []) map (event, index) -> {
+    "eventId": event.id default "EVT-" ++ index as String,
+    "eventType": event.type,
+    "eventDate": event.timestamp,
+    "location": event.location,
+    "description": event.description
+  },
+  "correlationId": vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" 
+                message="Package tracking retrieved - Tracking Number: #[vars.trackingNumber] Status: #[payload.currentStatus] Correlation ID: #[vars.correlationId]" 
+                doc:name="Log Track Success" />
+
+        <error-handler>
+            <on-error-propagate type="HTTP:NOT_FOUND">
+                <ee:transform doc:name="Transform Tracking Not Found">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "TRACKING_NOT_FOUND",
+    "message": "Tracking number " ++ vars.trackingNumber ++ " not found",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            
+            <on-error-propagate type="ANY">
+                <ee:transform doc:name="Transform Tracking Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "TRACKING_SERVICE_ERROR",
+    "message": "Tracking service temporarily unavailable",
+    "correlationId": vars.correlationId,
+    "timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"}
+  }
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+</mule>

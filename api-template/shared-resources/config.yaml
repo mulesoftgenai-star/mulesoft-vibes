@@ -1,0 +1,91 @@
+# Configuration Properties for MuleSoft APIs
+# Environment-specific configurations
+
+# Server Configuration
+http:
+  host: "0.0.0.0"
+  port: "8081"
+
+https:
+  host: "0.0.0.0" 
+  port: "8082"
+
+# TLS Configuration
+tls:
+  keystore:
+    type: "JKS"
+    path: "keystore.jks"
+    alias: "mulesoft"
+    password: "${secure::tls.keystore.password}"
+    key:
+      password: "${secure::tls.keystore.key.password}"
+
+# Downstream Services Configuration
+downstream:
+  host: "api.example.com"
+  port: "443"
+
+# Database Configuration
+database:
+  host: "${secure::db.host}"
+  port: "${secure::db.port}"
+  database: "${secure::db.name}"
+  username: "${secure::db.username}"
+  password: "${secure::db.password}"
+
+# External Systems Configuration
+systems:
+  customer:
+    host: "${secure::customer.system.host}"
+    port: "${secure::customer.system.port}"
+    basePath: "/api/v1"
+    timeout: "30000"
+  
+  inventory:
+    host: "${secure::inventory.system.host}"
+    port: "${secure::inventory.system.port}"
+    basePath: "/api/v1"
+    timeout: "30000"
+  
+  payment:
+    host: "${secure::payment.system.host}"
+    port: "${secure::payment.system.port}"
+    basePath: "/api/v1"
+    timeout: "30000"
+  
+  shipping:
+    host: "${secure::shipping.system.host}"
+    port: "${secure::shipping.system.port}"
+    basePath: "/api/v1"
+    timeout: "30000"
+
+# API Configuration
+api:
+  version: "v1"
+  name: "Order Management API"
+  description: "Order Management System Integration API"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  pattern: "[%d{yyyy-MM-dd HH:mm:ss}] %-5level %logger{36} - %msg%n"
+
+# Security Configuration
+security:
+  oauth2:
+    client:
+      id: "${secure::oauth2.client.id}"
+      secret: "${secure::oauth2.client.secret}"
+    token:
+      url: "${secure::oauth2.token.url}"
+  
+  api:
+    key: "${secure::api.key}"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true

@@ -1,0 +1,322 @@
+#%RAML 1.0 DataType
+
+displayName: Inventory System API Response
+description: Response data type for Inventory System API operations
+
+type: object
+properties:
+  inventoryResponse:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        description: Operation that was performed
+        example: "CHECK_AVAILABILITY"
+      requestId:
+        type: string
+        required: true
+        description: Original request identifier
+        example: "INV-REQ-789012"
+      status:
+        type: string
+        required: true
+        enum: ["SUCCESS", "FAILED", "PARTIAL_SUCCESS", "WARNING"]
+        description: Response status
+        example: "SUCCESS"
+      timestamp:
+        type: datetime
+        required: true
+        description: Response timestamp
+        example: "2024-03-15T10:30:00.000Z"
+      availabilityResults:
+        type: array
+        required: false
+        description: Availability check results
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              required: true
+              description: Product identifier
+              example: "PROD-98765"
+            sku:
+              type: string
+              required: true
+              description: Stock keeping unit
+              example: "WH-PREM-001"
+            productName:
+              type: string
+              required: true
+              description: Product name
+              example: "Premium Headphones"
+            requestedQuantity:
+              type: integer
+              required: true
+              description: Originally requested quantity
+              example: 2
+            availableQuantity:
+              type: integer
+              required: true
+              description: Currently available quantity
+              example: 15
+            availabilityStatus:
+              type: string
+              required: true
+              enum: ["AVAILABLE", "PARTIAL", "UNAVAILABLE", "BACKORDERED"]
+              description: Availability status
+              example: "AVAILABLE"
+            warehouseBreakdown:
+              type: array
+              required: false
+              description: Availability by warehouse
+              items:
+                type: object
+                properties:
+                  warehouseId:
+                    type: string
+                    required: true
+                    description: Warehouse identifier
+                    example: "WH-NYC-001"
+                  warehouseName:
+                    type: string
+                    required: true
+                    description: Warehouse name
+                    example: "New York Distribution Center"
+                  availableQuantity:
+                    type: integer
+                    required: true
+                    description: Available quantity in this warehouse
+                    example: 8
+                  reservedQuantity:
+                    type: integer
+                    required: false
+                    description: Reserved quantity in this warehouse
+                    example: 2
+                  location:
+                    type: object
+                    required: false
+                    properties:
+                      city:
+                        type: string
+                        required: true
+                        example: "New York"
+                      state:
+                        type: string
+                        required: true
+                        example: "NY"
+                      country:
+                        type: string
+                        required: true
+                        example: "US"
+            alternatives:
+              type: array
+              required: false
+              description: Alternative products if requested item unavailable
+              items:
+                type: object
+                properties:
+                  productId:
+                    type: string
+                    required: true
+                    description: Alternative product identifier
+                    example: "PROD-98766"
+                  productName:
+                    type: string
+                    required: true
+                    description: Alternative product name
+                    example: "Premium Wireless Headphones v2"
+                  availableQuantity:
+                    type: integer
+                    required: true
+                    description: Available quantity of alternative
+                    example: 10
+                  similarity:
+                    type: number
+                    required: false
+                    description: Similarity score (0-100)
+                    example: 95.5
+      reservationResults:
+        type: array
+        required: false
+        description: Reservation operation results
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              required: true
+              description: Product identifier
+              example: "PROD-98765"
+            reservationId:
+              type: string
+              required: false
+              description: Created reservation identifier
+              example: "RSV-789123"
+            reservedQuantity:
+              type: integer
+              required: true
+              description: Successfully reserved quantity
+              example: 2
+            expirationTime:
+              type: datetime
+              required: false
+              description: Reservation expiration timestamp
+              example: "2024-03-15T11:00:00.000Z"
+            warehouseId:
+              type: string
+              required: false
+              description: Warehouse where inventory is reserved
+              example: "WH-NYC-001"
+      stockUpdateResults:
+        type: array
+        required: false
+        description: Stock update operation results
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              required: true
+              description: Product identifier
+              example: "PROD-98765"
+            previousQuantity:
+              type: integer
+              required: true
+              description: Quantity before update
+              example: 15
+            updatedQuantity:
+              type: integer
+              required: true
+              description: Quantity after update
+              example: 25
+            adjustmentAmount:
+              type: integer
+              required: true
+              description: Amount of adjustment applied
+              example: 10
+            warehouseId:
+              type: string
+              required: false
+              description: Warehouse where update was applied
+              example: "WH-NYC-001"
+      productDetails:
+        type: array
+        required: false
+        description: Product detail results for GET_PRODUCT operations
+        items:
+          type: object
+          properties:
+            productId:
+              type: string
+              required: true
+              description: Product identifier
+              example: "PROD-98765"
+            sku:
+              type: string
+              required: true
+              description: Stock keeping unit
+              example: "WH-PREM-001"
+            productName:
+              type: string
+              required: true
+              description: Product name
+              example: "Premium Headphones"
+            description:
+              type: string
+              required: false
+              description: Product description
+              example: "High-quality wireless headphones with noise cancellation"
+            category:
+              type: string
+              required: true
+              description: Product category
+              example: "Electronics"
+            brand:
+              type: string
+              required: false
+              description: Product brand
+              example: "AudioTech"
+            price:
+              type: number
+              required: true
+              description: Current product price
+              example: 199.99
+            currency:
+              type: string
+              required: true
+              description: Price currency
+              example: "USD"
+            totalStock:
+              type: integer
+              required: true
+              description: Total available stock across all warehouses
+              example: 45
+            reservedStock:
+              type: integer
+              required: false
+              description: Total reserved stock
+              example: 5
+            lowStockThreshold:
+              type: integer
+              required: false
+              description: Low stock alert threshold
+              example: 10
+      errors:
+        type: array
+        required: false
+        description: Error details if operation failed
+        items:
+          type: object
+          properties:
+            errorCode:
+              type: string
+              required: true
+              description: Error code
+              example: "INV_INSUFFICIENT_STOCK"
+            errorMessage:
+              type: string
+              required: true
+              description: Error message
+              example: "Insufficient stock available for requested quantity"
+            productId:
+              type: string
+              required: false
+              description: Product related to the error
+              example: "PROD-98765"
+            requestedQuantity:
+              type: integer
+              required: false
+              description: Requested quantity that caused the error
+              example: 10
+            availableQuantity:
+              type: integer
+              required: false
+              description: Actually available quantity
+              example: 5
+      metadata:
+        type: object
+        required: true
+        description: Response metadata
+        properties:
+          requestId:
+            type: string
+            required: true
+            description: Original request identifier
+            example: "INV-REQ-789012"
+          processingTime:
+            type: integer
+            required: true
+            description: Processing time in milliseconds
+            example: 150
+          source:
+            type: string
+            required: true
+            description: Source system that provided the data
+            example: "INVENTORY_SYSTEM"
+          version:
+            type: string
+            required: true
+            description: API version
+            example: "v1.0"

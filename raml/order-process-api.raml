@@ -1,0 +1,519 @@
+#%RAML 1.0
+title: Order Process API
+version: v1
+description: |
+  Process layer API for order management business logic and orchestration.
+  This API coordinates between system APIs to implement order processing workflows.
+mediaType: application/json
+baseUri: https://api.mulesoft-vibes.com/process/orders/{version}
+protocols: [HTTPS]
+
+types:
+  OrderDataTypes: !include ../Fragment-Creation/data-types/order-data-type.raml
+  CustomerDataTypes: !include ../Fragment-Creation/data-types/customer-data-type.raml
+  PaymentDataTypes: !include ../Fragment-Creation/data-types/payment-data-type.raml
+  ShipmentDataTypes: !include ../Fragment-Creation/data-types/shipment-data-type.raml
+  ProcessErrors: !include ../Fragment-Creation/error-responses/process-layer-errors.raml
+  OrderProcessRequest: !include ../request-response/process-api/order-process-request.raml
+  OrderProcessResponse: !include ../request-response/process-api/order-process-response.raml
+
+traits:
+  oauth2-secured: !include ../Fragment-Creation/security-traits/oauth2-security-trait.raml
+  idempotent:
+    headers:
+      Idempotency-Key:
+        type: string
+        required: false
+        description: Unique key to ensure idempotent operations
+        example: "idem-12345-abcde"
+  traceable:
+    headers:
+      X-Trace-ID:
+        type: string
+        required: false
+        description: Distributed tracing identifier
+        example: "trace-98765-fghij"
+
+securitySchemes:
+  oauth_2_0:
+    type: OAuth 2.0
+    description: OAuth 2.0 authentication
+    settings:
+      authorizationUri: https://auth.mulesoft-vibes.com/oauth/authorize
+      accessTokenUri: https://auth.mulesoft-vibes.com/oauth/token
+      authorizationGrants: [ client_credentials, authorization_code ]
+
+securedBy: [ oauth_2_0 ]
+
+/orders:
+  description: Order processing operations
+  is: [idempotent, traceable]
+  
+  post:
+    displayName: Process Order
+    description: Process a new order through the complete workflow
+    body:
+      application/json:
+        type: OrderProcessRequest
+        examples:
+          processOrder:
+            processOrderRequest:
+              orderId: "ORD-2024-001234"
+              action: "PROCESS"
+              customerData:
+                customerId: "CUST-12345"
+                customerType: "PREMIUM"
+                loyaltyPoints: 1250
+              orderData:
+                orderItems:
+                  - productId: "PROD-001"
+                    quantity: 2
+                    reservationId: "RSV-789123"
+                totalAmount: 150.00
+                currency: "USD"
+              paymentData:
+                paymentMethod: "CREDIT_CARD"
+                paymentToken: "PAY_TOKEN_ABC123"
+                amount: 150.00
+              shippingData:
+                shippingAddress:
+                  street: "123 Main Street"
+                  city: "New York"
+                  state: "NY"
+                  zipCode: "10001"
+                  country: "US"
+                shippingMethod: "STANDARD"
+                deliveryPreferences:
+                  deliveryDate: "2024-04-15"
+                  timeSlot: "MORNING"
+                  instructions: "Leave at front door"
+              businessRules:
+                applyDiscounts: true
+                validateInventory: true
+                requirePaymentAuth: true
+                priority: "NORMAL"
+    responses:
+      200:
+        description: Order processed successfully
+        body:
+          application/json:
+            type: OrderProcessResponse
+            examples:
+              success:
+                processOrderResponse:
+                  processId: "PROC-2024-001234"
+                  orderId: "ORD-2024-001234"
+                  processStatus: "SUCCESS"
+                  timestamp: "2024-03-15T10:35:00.000Z"
+                  validationResults:
+                    customerValidation:
+                      status: "VALID"
+                      creditScore: 750
+                      riskLevel: "LOW"
+                      message: "Customer verified successfully"
+                    inventoryValidation:
+                      status: "AVAILABLE"
+                      reservationId: "RSV-789123"
+                      availableQuantities:
+                        - productId: "PROD-98765"
+                          requestedQuantity: 2
+                          availableQuantity: 2
+                          warehouseId: "WH-NYC-001"
+                  paymentResults:
+                    paymentStatus: "AUTHORIZED"
+                    authorizationId: "AUTH_456789"
+                    transactionId: "TXN_789456123"
+                    amount: 150.00
+                    currency: "USD"
+                    fees:
+                      processingFee: 3.29
+                      tax: 10.99
+                  shippingResults:
+                    shippingStatus: "SCHEDULED"
+                    carrierInfo:
+                      carrierId: "FEDEX"
+                      carrierName: "FedEx"
+                      service: "Ground"
+                      trackingNumber: "TRK-987654321"
+                    estimatedDelivery:
+                      estimatedDate: "2024-04-18"
+                      timeWindow: "9:00 AM - 5:00 PM"
+                    shippingCost: 9.99
+                  businessRuleResults:
+                    appliedDiscounts:
+                      - discountId: "DISC-PREMIUM-10"
+                        discountType: "PERCENTAGE"
+                        discountValue: 15.00
+                        description: "Premium Customer Discount"
+                    fraudCheckResults:
+                      riskScore: 15.5
+                      riskLevel: "LOW"
+                      action: "APPROVE"
+                  nextSteps:
+                    fulfillmentRequired: true
+                    notificationsScheduled: true
+                    followUpActions:
+                      - "SEND_CONFIRMATION_EMAIL"
+      400:
+        body:
+          application/json:
+            type: ProcessErrors
+      409:
+        body:
+          application/json:
+            type: ProcessErrors
+      422:
+        body:
+          application/json:
+            type: ProcessErrors
+      500:
+        body:
+          application/json:
+            type: ProcessErrors
+
+  /{orderId}:
+    uriParameters:
+      orderId:
+        type: string
+        pattern: ^ORD-[0-9]+$
+        example: "ORD-001"
+        description: Unique order identifier
+    
+    get:
+      displayName: Get Order Processing Status
+      description: Retrieve order processing status and workflow details
+      responses:
+        200:
+          description: Order processing status retrieved successfully
+          body:
+            application/json:
+              type: OrderProcessResponse
+              examples:
+                processingStatus:
+                  processOrderResponse:
+                    processId: "PROC-2024-001234"
+                    orderId: "ORD-001"
+                    processStatus: "IN_PROGRESS"
+                    timestamp: "2024-01-15T10:32:00Z"
+                    validationResults:
+                      customerValidation:
+                        status: "VALID"
+                        creditScore: 750
+                        riskLevel: "LOW"
+                        message: "Customer verified successfully"
+                      inventoryValidation:
+                        status: "AVAILABLE"
+                        reservationId: "RSV-789123"
+                    paymentResults:
+                      paymentStatus: "PENDING"
+                      amount: 150.00
+                      currency: "USD"
+                    shippingResults:
+                      shippingStatus: "PENDING"
+                      shippingCost: 9.99
+                    nextSteps:
+                      fulfillmentRequired: true
+                      notificationsScheduled: false
+        404:
+          body:
+            application/json:
+              type: ProcessErrors
+        500:
+          body:
+            application/json:
+              type: ProcessErrors
+
+    put:
+      displayName: Update Order Processing
+      description: Update order processing workflow status
+      body:
+        application/json:
+          type: OrderProcessRequest
+          examples:
+            updateProcessing:
+              processOrderRequest:
+                orderId: "ORD-001"
+                action: "UPDATE"
+                customerData:
+                  customerId: "CUST-12345"
+                  customerType: "PREMIUM"
+                orderData:
+                  orderItems:
+                    - productId: "PROD-001"
+                      quantity: 2
+                  totalAmount: 150.00
+                  currency: "USD"
+                paymentData:
+                  paymentMethod: "CREDIT_CARD"
+                  paymentToken: "new_card_token_67890"
+                  amount: 150.00
+                shippingData:
+                  shippingAddress:
+                    street: "123 Main Street"
+                    city: "New York"
+                    state: "NY"
+                    zipCode: "10001"
+                    country: "US"
+                  shippingMethod: "STANDARD"
+                businessRules:
+                  requirePaymentAuth: true
+                  priority: "NORMAL"
+      responses:
+        200:
+          description: Order processing updated successfully
+          body:
+            application/json:
+              type: OrderProcessResponse
+              examples:
+                updated:
+                  processOrderResponse:
+                    processId: "PROC-2024-001235"
+                    orderId: "ORD-001"
+                    processStatus: "IN_PROGRESS"
+                    timestamp: "2024-01-15T10:45:00Z"
+                    validationResults:
+                      customerValidation:
+                        status: "VALID"
+                        message: "Customer verified successfully"
+                      inventoryValidation:
+                        status: "AVAILABLE"
+                    paymentResults:
+                      paymentStatus: "PENDING"
+                      amount: 150.00
+                      currency: "USD"
+                    shippingResults:
+                      shippingStatus: "PENDING"
+                      shippingCost: 9.99
+                    nextSteps:
+                      fulfillmentRequired: true
+                      notificationsScheduled: true
+        400:
+          body:
+            application/json:
+              type: ProcessErrors
+        404:
+          body:
+            application/json:
+              type: ProcessErrors
+        422:
+          body:
+            application/json:
+              type: ProcessErrors
+        500:
+          body:
+            application/json:
+              type: ProcessErrors
+
+/orders/validation:
+  description: Order validation operations
+  is: [traceable]
+  
+  post:
+    displayName: Validate Order
+    description: Validate order data before processing
+    body:
+      application/json:
+        type: OrderProcessRequest
+        examples:
+          validateOrder:
+            processOrderRequest:
+              orderId: "ORD-001"
+              action: "VALIDATE"
+              customerData:
+                customerId: "CUST-12345"
+                customerType: "REGULAR"
+              orderData:
+                orderItems:
+                  - productId: "PROD-001"
+                    quantity: 2
+                totalAmount: 150.00
+                currency: "USD"
+              paymentData:
+                paymentMethod: "CREDIT_CARD"
+                paymentToken: "PAY_TOKEN_VALIDATE123"
+                amount: 150.00
+              shippingData:
+                shippingAddress:
+                  street: "123 Main Street"
+                  city: "New York"
+                  state: "NY"
+                  zipCode: "10001"
+                  country: "US"
+                shippingMethod: "STANDARD"
+              businessRules:
+                validateInventory: true
+                requirePaymentAuth: false
+                priority: "NORMAL"
+    responses:
+      200:
+        description: Order validation completed
+        body:
+          application/json:
+            type: OrderProcessResponse
+            examples:
+              validationResult:
+                processOrderResponse:
+                  processId: "PROC-2024-VALIDATE001"
+                  orderId: "ORD-001"
+                  processStatus: "SUCCESS"
+                  timestamp: "2024-01-15T10:30:00Z"
+                  validationResults:
+                    customerValidation:
+                      status: "VALID"
+                      creditScore: 720
+                      riskLevel: "LOW"
+                      message: "Customer verified"
+                    inventoryValidation:
+                      status: "AVAILABLE"
+                      availableQuantities:
+                        - productId: "PROD-001"
+                          requestedQuantity: 2
+                          availableQuantity: 2
+                  paymentResults:
+                    paymentStatus: "AUTHORIZED"
+                    amount: 150.00
+                    currency: "USD"
+                  shippingResults:
+                    shippingStatus: "PENDING"
+                    shippingCost: 9.99
+                  nextSteps:
+                    fulfillmentRequired: true
+                    notificationsScheduled: false
+      400:
+        body:
+          application/json:
+            type: ProcessErrors
+      500:
+        body:
+          application/json:
+            type: ProcessErrors
+
+/orders/fulfillment:
+  description: Order fulfillment operations
+  is: [idempotent, traceable]
+  
+  post:
+    displayName: Fulfill Order
+    description: Execute order fulfillment process
+    body:
+      application/json:
+        type: OrderProcessRequest
+        examples:
+          fulfillOrder:
+            processOrderRequest:
+              orderId: "ORD-001"
+              action: "FULFILL"
+              customerData:
+                customerId: "CUST-12345"
+                customerType: "PREMIUM"
+              orderData:
+                orderItems:
+                  - productId: "PROD-001"
+                    quantity: 2
+                totalAmount: 150.00
+                currency: "USD"
+              paymentData:
+                paymentMethod: "CREDIT_CARD"
+                paymentToken: "PAY_TOKEN_FULFILL123"
+                amount: 150.00
+              shippingData:
+                shippingAddress:
+                  street: "123 Main Street"
+                  city: "New York"
+                  state: "NY"
+                  zipCode: "10001"
+                  country: "US"
+                shippingMethod: "STANDARD"
+                fulfillmentDetails:
+                  warehouseId: "WH-001"
+                  fulfillmentType: "standard_shipping"
+              businessRules:
+                priority: "NORMAL"
+    responses:
+      200:
+        description: Order fulfillment initiated
+        body:
+          application/json:
+            type: OrderProcessResponse
+            examples:
+              fulfillmentInitiated:
+                processOrderResponse:
+                  processId: "PROC-2024-FUL001"
+                  orderId: "ORD-001"
+                  processStatus: "SUCCESS"
+                  timestamp: "2024-01-20T14:30:00Z"
+                  validationResults:
+                    customerValidation:
+                      status: "VALID"
+                      message: "Customer verified for fulfillment"
+                    inventoryValidation:
+                      status: "AVAILABLE"
+                      reservationId: "RSV-FUL123"
+                  paymentResults:
+                    paymentStatus: "AUTHORIZED"
+                    amount: 150.00
+                    currency: "USD"
+                  shippingResults:
+                    shippingStatus: "SCHEDULED"
+                    carrierInfo:
+                      carrierId: "FEDEX"
+                      carrierName: "FedEx"
+                      service: "Ground"
+                      trackingNumber: "TRK-123456"
+                    estimatedDelivery:
+                      estimatedDate: "2024-01-25"
+                      timeWindow: "9:00 AM - 5:00 PM"
+                    shippingCost: 9.99
+                    fulfillmentDetails:
+                      fulfillmentId: "FUL-12345"
+                      warehouseId: "WH-001"
+                      fulfillmentStatus: "in_progress"
+                  nextSteps:
+                    fulfillmentRequired: false
+                    notificationsScheduled: true
+                    followUpActions:
+                      - "SEND_SHIPPING_NOTIFICATION"
+      400:
+        body:
+          application/json:
+            type: ProcessErrors
+      422:
+        body:
+          application/json:
+            type: ProcessErrors
+      500:
+        body:
+          application/json:
+            type: ProcessErrors
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status including downstream dependencies
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              version:
+                type: string
+              dependencies:
+                type: object
+                properties:
+                  customerSystemApi:
+                    type: string
+                    enum: [UP, DOWN]
+                  inventorySystemApi:
+                    type: string
+                    enum: [UP, DOWN]
+                  paymentSystemApi:
+                    type: string
+                    enum: [UP, DOWN]

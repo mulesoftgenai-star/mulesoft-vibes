@@ -1,0 +1,405 @@
+#%RAML 1.0 DataType
+
+displayName: Shipping System API Request
+description: Request data type for Shipping System API operations
+
+type: object
+properties:
+  shippingRequest:
+    type: object
+    properties:
+      operation:
+        type: string
+        required: true
+        enum: ["CREATE_SHIPMENT", "GET_RATES", "TRACK_SHIPMENT", "CANCEL_SHIPMENT", "UPDATE_SHIPMENT", "VALIDATE_ADDRESS"]
+        description: Shipping operation to be performed
+        example: "CREATE_SHIPMENT"
+      orderId:
+        type: string
+        required: true
+        description: Associated order identifier
+        example: "ORD-2024-001234"
+      shipmentId:
+        type: string
+        required: false
+        description: Existing shipment identifier (for TRACK, CANCEL, UPDATE operations)
+        example: "SHIP-789456123"
+      shipmentDetails:
+        type: object
+        required: false
+        description: Shipment creation details
+        properties:
+          shipmentType:
+            type: string
+            required: true
+            enum: ["PACKAGE", "DOCUMENT", "FREIGHT", "DIGITAL"]
+            description: Type of shipment
+            example: "PACKAGE"
+          priority:
+            type: string
+            required: false
+            enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "SAME_DAY"]
+            description: Shipping priority
+            default: "STANDARD"
+            example: "STANDARD"
+          serviceLevel:
+            type: string
+            required: false
+            enum: ["GROUND", "AIR", "EXPRESS", "OVERNIGHT", "TWO_DAY"]
+            description: Requested service level
+            example: "GROUND"
+          packageDetails:
+            type: array
+            required: true
+            description: Details of packages in the shipment
+            items:
+              type: object
+              properties:
+                packageId:
+                  type: string
+                  required: false
+                  description: Unique package identifier
+                  example: "PKG-001"
+                weight:
+                  type: object
+                  required: true
+                  properties:
+                    value:
+                      type: number
+                      required: true
+                      description: Package weight value
+                      minimum: 0.1
+                      example: 2.5
+                    unit:
+                      type: string
+                      required: true
+                      enum: ["LB", "KG", "OZ", "G"]
+                      description: Weight unit
+                      example: "LB"
+                dimensions:
+                  type: object
+                  required: true
+                  properties:
+                    length:
+                      type: number
+                      required: true
+                      description: Package length
+                      minimum: 0.1
+                      example: 12.0
+                    width:
+                      type: number
+                      required: true
+                      description: Package width
+                      minimum: 0.1
+                      example: 8.0
+                    height:
+                      type: number
+                      required: true
+                      description: Package height
+                      minimum: 0.1
+                      example: 4.0
+                    unit:
+                      type: string
+                      required: true
+                      enum: ["IN", "CM", "FT", "M"]
+                      description: Dimension unit
+                      example: "IN"
+                declaredValue:
+                  type: object
+                  required: false
+                  properties:
+                    amount:
+                      type: number
+                      required: true
+                      description: Declared value amount
+                      minimum: 0
+                      example: 199.99
+                    currency:
+                      type: string
+                      required: true
+                      description: Currency code
+                      example: "USD"
+                contents:
+                  type: array
+                  required: false
+                  description: Package contents
+                  items:
+                    type: object
+                    properties:
+                      itemId:
+                        type: string
+                        required: true
+                        description: Item identifier
+                        example: "ITEM-001"
+                      description:
+                        type: string
+                        required: true
+                        description: Item description
+                        example: "Premium Headphones"
+                      quantity:
+                        type: integer
+                        required: true
+                        description: Item quantity
+                        example: 1
+                      value:
+                        type: number
+                        required: false
+                        description: Item value
+                        example: 199.99
+      addresses:
+        type: object
+        required: true
+        description: Shipping addresses
+        properties:
+          origin:
+            type: object
+            required: true
+            description: Shipping origin address
+            properties:
+              name:
+                type: string
+                required: false
+                description: Company or person name
+                example: "MegaCorp Distribution"
+              addressLine1:
+                type: string
+                required: true
+                description: First line of address
+                example: "1000 Warehouse Blvd"
+              addressLine2:
+                type: string
+                required: false
+                description: Second line of address
+                example: "Building A"
+              city:
+                type: string
+                required: true
+                description: City name
+                example: "Newark"
+              state:
+                type: string
+                required: true
+                description: State or province
+                example: "NJ"
+              postalCode:
+                type: string
+                required: true
+                description: Postal code
+                example: "07102"
+              country:
+                type: string
+                required: true
+                description: Country code
+                example: "US"
+              phone:
+                type: string
+                required: false
+                description: Contact phone number
+                example: "+1-555-123-4567"
+              email:
+                type: string
+                required: false
+                description: Contact email
+                example: "shipping@megacorp.com"
+          destination:
+            type: object
+            required: true
+            description: Shipping destination address
+            properties:
+              name:
+                type: string
+                required: true
+                description: Recipient name
+                example: "John Doe"
+              addressLine1:
+                type: string
+                required: true
+                description: First line of address
+                example: "123 Main Street"
+              addressLine2:
+                type: string
+                required: false
+                description: Second line of address
+                example: "Apt 4B"
+              city:
+                type: string
+                required: true
+                description: City name
+                example: "New York"
+              state:
+                type: string
+                required: true
+                description: State or province
+                example: "NY"
+              postalCode:
+                type: string
+                required: true
+                description: Postal code
+                example: "10001"
+              country:
+                type: string
+                required: true
+                description: Country code
+                example: "US"
+              phone:
+                type: string
+                required: false
+                description: Recipient phone number
+                example: "+1-555-987-6543"
+              email:
+                type: string
+                required: false
+                description: Recipient email
+                example: "john.doe@example.com"
+              isResidential:
+                type: boolean
+                required: false
+                description: Whether destination is residential
+                default: true
+                example: true
+              deliveryInstructions:
+                type: string
+                required: false
+                description: Special delivery instructions
+                maxLength: 500
+                example: "Leave at front door if no answer"
+      carrierPreferences:
+        type: object
+        required: false
+        description: Carrier and service preferences
+        properties:
+          preferredCarriers:
+            type: array
+            required: false
+            description: Preferred shipping carriers in order of preference
+            items:
+              type: string
+              enum: ["FEDEX", "UPS", "USPS", "DHL", "AMAZON", "ONTRAC"]
+            example: ["FEDEX", "UPS"]
+          excludedCarriers:
+            type: array
+            required: false
+            description: Carriers to exclude from consideration
+            items:
+              type: string
+              enum: ["FEDEX", "UPS", "USPS", "DHL", "AMAZON", "ONTRAC"]
+            example: ["USPS"]
+          maxCost:
+            type: number
+            required: false
+            description: Maximum acceptable shipping cost
+            minimum: 0
+            example: 25.00
+          maxDeliveryDays:
+            type: integer
+            required: false
+            description: Maximum acceptable delivery time in days
+            minimum: 1
+            example: 5
+      deliveryOptions:
+        type: object
+        required: false
+        description: Delivery preferences and options
+        properties:
+          deliveryDate:
+            type: date-only
+            required: false
+            description: Requested delivery date
+            example: "2024-04-18"
+          deliveryTimeWindow:
+            type: object
+            required: false
+            properties:
+              start:
+                type: string
+                required: true
+                description: Delivery window start time
+                pattern: "^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                example: "09:00"
+              end:
+                type: string
+                required: true
+                description: Delivery window end time
+                pattern: "^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                example: "17:00"
+          signatureRequired:
+            type: boolean
+            required: false
+            description: Whether delivery signature is required
+            default: false
+            example: true
+          authorityToLeave:
+            type: boolean
+            required: false
+            description: Whether carrier can leave package unattended
+            default: true
+            example: false
+          deliveryNotifications:
+            type: object
+            required: false
+            properties:
+              email:
+                type: boolean
+                required: false
+                description: Send email notifications
+                default: true
+                example: true
+              sms:
+                type: boolean
+                required: false
+                description: Send SMS notifications
+                default: false
+                example: true
+      insurance:
+        type: object
+        required: false
+        description: Shipping insurance options
+        properties:
+          insured:
+            type: boolean
+            required: false
+            description: Whether to insure the shipment
+            default: false
+            example: true
+          declaredValue:
+            type: number
+            required: false
+            description: Declared value for insurance
+            minimum: 0
+            example: 199.99
+          insuranceProvider:
+            type: string
+            required: false
+            enum: ["CARRIER", "THIRD_PARTY"]
+            description: Insurance provider
+            default: "CARRIER"
+            example: "CARRIER"
+      options:
+        type: object
+        required: false
+        description: Additional shipping options
+        properties:
+          getRates:
+            type: boolean
+            required: false
+            description: Whether to return rate quotes
+            default: true
+            example: true
+          validateAddress:
+            type: boolean
+            required: false
+            description: Whether to validate addresses
+            default: true
+            example: true
+          includePOBoxes:
+            type: boolean
+            required: false
+            description: Whether to allow PO Box addresses
+            default: true
+            example: true
+          requireSignature:
+            type: boolean
+            required: false
+            description: Whether delivery signature is required
+            default: false
+            example: false

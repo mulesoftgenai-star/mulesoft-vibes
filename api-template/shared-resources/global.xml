@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+      xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+                          http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+    
+    <!-- Configuration Properties -->
+    <secure-properties:config name="Secure_Properties_Config" 
+                              doc:name="Secure Properties Config" 
+                              file="secure-properties.yaml" 
+                              key="${encryption.key}" />
+    
+    <configuration-properties doc:name="Configuration properties" file="config.yaml" />
+    
+    <!-- HTTP Listener Configuration -->
+    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
+        <http:listener-connection host="${http.host}" port="${http.port}" />
+    </http:listener-config>
+    
+    <!-- HTTPS Listener Configuration -->
+    <http:listener-config name="HTTPS_Listener_config" doc:name="HTTPS Listener config">
+        <http:listener-connection host="${https.host}" port="${https.port}" protocol="HTTPS">
+            <tls:context>
+                <tls:key-store type="${tls.keystore.type}" 
+                               path="${tls.keystore.path}" 
+                               alias="${tls.keystore.alias}" 
+                               keyPassword="${tls.keystore.key.password}" 
+                               password="${tls.keystore.password}" />
+            </tls:context>
+        </http:listener-connection>
+    </http:listener-config>
+    
+    <!-- HTTP Request Configuration for downstream services -->
+    <http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration">
+        <http:request-connection host="${downstream.host}" port="${downstream.port}" />
+    </http:request-config>
+    
+    <!-- Error Handler Global Configuration -->
+    <error-handler name="Global_Error_Handler" doc:name="Global Error Handler">
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="HTTP:TIMEOUT">
+            <set-payload value='#[{"error":"Service timeout","message":"The request timed out","timestamp":now() as String,"correlationId":correlationId}]' doc:name="Set Timeout Error Response" />
+            <set-variable value="504" doc:name="Set Status 504" variableName="httpStatus" />
+        </on-error-propagate>
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="HTTP:CONNECTIVITY">
+            <set-payload value='#[{"error":"Service unavailable","message":"Unable to connect to downstream service","timestamp":now() as String,"correlationId":correlationId}]' doc:name="Set Connectivity Error Response" />
+            <set-variable value="503" doc:name="Set Status 503" variableName="httpStatus" />
+        </on-error-propagate>
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+            <set-payload value='#[{"error":"Internal server error","message":"An unexpected error occurred","timestamp":now() as String,"correlationId":correlationId}]' doc:name="Set Generic Error Response" />
+            <set-variable value="500" doc:name="Set Status 500" variableName="httpStatus" />
+        </on-error-propagate>
+    </error-handler>
+</mule>

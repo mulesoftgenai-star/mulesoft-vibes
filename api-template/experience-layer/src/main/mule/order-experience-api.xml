@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+    
+    <!-- API Configuration - References existing RAML specification -->
+    <apikit:config name="order-experience-api-config" 
+                   api="../../raml/order-experience-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" />
+    
+    <!-- Main API Flow -->
+    <flow name="order-experience-api-main">
+        <http:listener doc:name="HTTP Listener" 
+                       config-ref="HTTP_Listener_config" 
+                       path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        
+        <apikit:router config-ref="order-experience-api-config" />
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Bad request",
+  message: "Invalid request format or missing required fields",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Not found",
+  message: "The requested resource was not found",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Method not allowed",
+  message: "The HTTP method is not allowed for this resource",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Not acceptable",
+  message: "The requested media type is not supported",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Unsupported media type",
+  message: "The request media type is not supported",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" 
+                                logException="true" 
+                                doc:name="On Error Propagate" 
+                                type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "Not implemented",
+  message: "This functionality is not yet implemented",
+  timestamp: now() as String,
+  correlationId: correlationId
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- POST /orders Implementation -->
+    <flow name="post:\orders:application\json:order-experience-api-config">
+        <logger level="INFO" doc:name="Logger" message="Creating new order: #[payload]" />
+        
+        <ee:transform doc:name="Set Correlation ID">
+            <ee:message>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Validate Request -->
+        <ee:transform doc:name="Validate and Transform Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    correlationId: vars.correlationId,
+    customerId: payload.customerId,
+    items: payload.items map (item, index) -> {
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice
+    },
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress default payload.shippingAddress,
+    paymentMethod: payload.paymentMethod,
+    specialInstructions: payload.specialInstructions default "",
+    requestTimestamp: now() as String
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Process Layer API -->
+        <http:request method="POST" 
+                      doc:name="Call Order Process API" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/process/orders" 
+                      responseTimeout="30000">
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "Content-Type" : "application/json",
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    orderNumber: payload.orderNumber,
+    status: payload.status,
+    totalAmount: payload.totalAmount,
+    currency: payload.currency default "USD",
+    estimatedDelivery: payload.estimatedDelivery,
+    trackingUrl: payload.trackingUrl,
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">201</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <ee:transform doc:name="Transform Error">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Order creation failed",
+    message: error.description default "An error occurred while creating the order",
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- GET /orders/{orderId} Implementation -->
+    <flow name="get:\orders\(orderId):order-experience-api-config">
+        <logger level="INFO" doc:name="Logger" message="Retrieving order: #[attributes.uriParams.orderId]" />
+        
+        <ee:transform doc:name="Set Variables">
+            <ee:variables>
+                <ee:set-variable variableName="orderId"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.uriParams.orderId]]></ee:set-variable>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Call Process Layer API -->
+        <http:request method="GET" 
+                      doc:name="Get Order from Process API" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/process/orders/#[vars.orderId]" 
+                      responseTimeout="15000">
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Order Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    orderNumber: payload.orderNumber,
+    customerId: payload.customerId,
+    orderDate: payload.orderDate,
+    status: payload.status,
+    totalAmount: payload.totalAmount,
+    currency: payload.currency,
+    items: payload.items,
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress,
+    paymentMethod: payload.paymentMethod,
+    specialInstructions: payload.specialInstructions,
+    trackingNumber: payload.trackingNumber default null,
+    estimatedDelivery: payload.estimatedDelivery default null,
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="HTTP:NOT_FOUND">
+                <ee:transform doc:name="Order Not Found">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Order not found",
+    message: "Order with ID " ++ vars.orderId ++ " was not found",
+    correlationId: vars.correlationId,
+    timestamp: now() as String
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <!-- GET /orders Implementation -->
+    <flow name="get:\orders:order-experience-api-config">
+        <logger level="INFO" doc:name="Logger" message="Listing orders with query params: #[attributes.queryParams]" />
+        
+        <ee:transform doc:name="Set Query Variables">
+            <ee:variables>
+                <ee:set-variable variableName="correlationId"><![CDATA[%dw 2.0
+output application/java
+---
+correlationId default uuid()]]></ee:set-variable>
+                <ee:set-variable variableName="queryParams"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <!-- Call Process Layer API -->
+        <http:request method="GET" 
+                      doc:name="List Orders from Process API" 
+                      config-ref="HTTP_Request_configuration" 
+                      path="/process/orders" 
+                      responseTimeout="20000">
+            <http:query-params><![CDATA[#[vars.queryParams]]]></http:query-params>
+            <http:headers>
+                <![CDATA[#[output application/java
+---
+{
+    "X-Correlation-ID" : vars.correlationId,
+    "Authorization" : "Bearer " ++ vars.authToken
+}]]]>
+            </http:headers>
+        </http:request>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Orders List">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orders: payload.orders map (order) -> {
+        orderId: order.orderId,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        orderDate: order.orderDate,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        itemCount: sizeOf(order.items)
+    },
+    pagination: payload.pagination,
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    
+</mule>
