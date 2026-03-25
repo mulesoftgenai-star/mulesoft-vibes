@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <flow name="payment-api-main" doc:id="payment-api-main">
+        <http:listener doc:name="Listener" doc:id="http-listener" config-ref="HTTP_Listener_config" path="/payments/*"/>
+        <logger level="INFO" doc:name="Logger" doc:id="logger" message="Payment System API request: #[attributes.method] #[attributes.requestPath]"/>
+        
+        <choice doc:name="Route by Method and Path" doc:id="method-path-router">
+            <when expression='#[attributes.method == "POST" and attributes.requestPath contains "/validate"]'>
+                <flow-ref doc:name="Validate Payment" doc:id="validate-payment-ref" name="validate-payment-flow"/>
+            </when>
+            <when expression='#[attributes.method == "POST" and attributes.requestPath contains "/authorize"]'>
+                <flow-ref doc:name="Authorize Payment" doc:id="authorize-payment-ref" name="authorize-payment-flow"/>
+            </when>
+            <when expression='#[attributes.method == "POST" and attributes.requestPath contains "/void"]'>
+                <flow-ref doc:name="Void Payment" doc:id="void-payment-ref" name="void-payment-flow"/>
+            </when>
+            <when expression='#[attributes.method == "GET"]'>
+                <flow-ref doc:name="Get Payment" doc:id="get-payment-ref" name="get-payment-flow"/>
+            </when>
+            <otherwise>
+                <set-payload value='#[{"error": "Method not supported", "method": attributes.method}]' doc:name="Method Not Supported" doc:id="method-not-supported"/>
+                <set-variable value="405" doc:name="Set Status" doc:id="set-status" variableName="httpStatus"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="validate-payment-flow" doc:id="validate-payment-flow">
+        <logger level="INFO" doc:name="Validate Payment" doc:id="validate-logger" message="Validating payment method"/>
+        <set-payload value='#[{"valid": true, "message": "Payment method is valid"}]' doc:name="Mock Validation Response" doc:id="mock-validation"/>
+    </flow>
+
+    <flow name="authorize-payment-flow" doc:id="authorize-payment-flow">
+        <logger level="INFO" doc:name="Authorize Payment" doc:id="authorize-logger" message="Authorizing payment"/>
+        <set-payload value='#[{"paymentId": "PAY-001", "authorizationId": "AUTH-123", "status": "AUTHORIZED", "message": "Payment authorized successfully"}]' doc:name="Mock Authorization Response" doc:id="mock-authorization"/>
+    </flow>
+
+    <flow name="void-payment-flow" doc:id="void-payment-flow">
+        <logger level="INFO" doc:name="Void Payment" doc:id="void-logger" message="Voiding payment authorization"/>
+        <set-payload value='#[{"paymentId": "PAY-001", "status": "VOIDED", "message": "Payment authorization voided"}]' doc:name="Mock Void Response" doc:id="mock-void"/>
+    </flow>
+
+    <flow name="get-payment-flow" doc:id="get-payment-flow">
+        <logger level="INFO" doc:name="Get Payment" doc:id="get-payment-logger" message="Retrieving payment information"/>
+        <set-payload value='#[{"paymentId": "PAY-001", "amount": 299.99, "status": "AUTHORIZED", "currency": "USD"}]' doc:name="Mock Payment Response" doc:id="mock-payment"/>
+    </flow>
+</mule>

@@ -1,27 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
-      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
-                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
 
-    <!-- Configuration Properties -->
-    <configuration-properties file="config.properties" doc:name="Configuration properties"/>
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
 
-    <!-- HTTP Listener Configuration -->
-    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
-        <http:listener-connection host="${http.host}" port="${http.port}"/>
-    </http:listener-config>
-
-    <!-- Order Process API HTTP Request Configuration -->
-    <http:request-config name="Order_Process_API_Config" doc:name="Order Process API Config">
-        <http:request-connection host="${api.process.host}" port="${api.process.port}" protocol="${api.process.protocol}">
-            <http:request-builder>
-                <http:header headerName="Accept" value="application/json"/>
-                <http:header headerName="Content-Type" value="application/json"/>
-            </http:request-builder>
-        </http:request-connection>
-    </http:request-config>
-
+	<!-- Configuration Properties -->
+	<configuration-properties doc:name="Configuration properties" doc:id="config-props" file="config.properties" />
+	
+	<!-- HTTP Listener Configuration -->
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="http-listener-config">
+		<http:listener-connection host="${http.host}" port="${http.port}" />
+	</http:listener-config>
+	
+	<!-- HTTP Request Configuration for Process API -->
+	<http:request-config name="Order_Process_API_Config" doc:name="Order Process API Config" doc:id="process-api-config">
+		<http:request-connection host="${process.api.host}" port="${process.api.port}" protocol="HTTP">
+			<http:request-builder>
+				<http:header headerName="Accept" value="application/json"/>
+				<http:header headerName="Content-Type" value="application/json"/>
+			</http:request-builder>
+		</http:request-connection>
+	</http:request-config>
+	
+	<!-- Global Error Handler -->
+	<error-handler name="globalErrorHandler" doc:id="global-error-handler">
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="on-error-continue" type="ANY">
+			<logger level="ERROR" doc:name="Error Logger" doc:id="error-logger" message="#['Error occurred: ' ++ error.description ++ ' - ' ++ error.detailedDescription]" />
+			<set-payload value='#[{"error": "Internal Server Error", "message": error.description, "timestamp": now() as String}]' doc:name="Set Error Response" doc:id="set-error-response" />
+			<set-variable value="#[500]" doc:name="Set Status Code" doc:id="set-status-code" variableName="httpStatus" />
+		</on-error-continue>
+	</error-handler>
+	
+	<!-- Common Configurations -->
+	<configuration defaultErrorHandler-ref="globalErrorHandler" doc:name="Configuration" doc:id="global-configuration" />
 </mule>

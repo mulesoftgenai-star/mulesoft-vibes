@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <flow name="customer-api-main" doc:id="customer-api-main">
+        <http:listener doc:name="Listener" doc:id="http-listener" config-ref="HTTP_Listener_config" path="/customers/*"/>
+        <logger level="INFO" doc:name="Logger" doc:id="logger" message="Customer System API request: #[attributes.method] #[attributes.requestPath]"/>
+        
+        <choice doc:name="Route by Method and Path" doc:id="method-path-router">
+            <when expression='#[attributes.method == "GET" and attributes.requestPath contains "/validate"]'>
+                <flow-ref doc:name="Validate Customer" doc:id="validate-customer-ref" name="validate-customer-flow"/>
+            </when>
+            <when expression='#[attributes.method == "GET"]'>
+                <flow-ref doc:name="Get Customer" doc:id="get-customer-ref" name="get-customer-flow"/>
+            </when>
+            <when expression='#[attributes.method == "POST"]'>
+                <flow-ref doc:name="Create Customer" doc:id="create-customer-ref" name="create-customer-flow"/>
+            </when>
+            <when expression='#[attributes.method == "PUT"]'>
+                <flow-ref doc:name="Update Customer" doc:id="update-customer-ref" name="update-customer-flow"/>
+            </when>
+            <otherwise>
+                <set-payload value='#[{"error": "Method not supported", "method": attributes.method}]' doc:name="Method Not Supported" doc:id="method-not-supported"/>
+                <set-variable value="405" doc:name="Set Status" doc:id="set-status" variableName="httpStatus"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="validate-customer-flow" doc:id="validate-customer-flow">
+        <logger level="INFO" doc:name="Validate Customer" doc:id="validate-logger" message="Validating customer"/>
+        <set-payload value='#[{"customerId": "CUST-001", "isValid": true, "validationResults": {"activeStatus": {"valid": true, "message": "Customer is active"}}}]' doc:name="Mock Validation Response" doc:id="mock-validation"/>
+    </flow>
+
+    <flow name="get-customer-flow" doc:id="get-customer-flow">
+        <logger level="INFO" doc:name="Get Customer" doc:id="get-logger" message="Retrieving customer"/>
+        <set-payload value='#[{"customerId": "CUST-001", "email": "customer@example.com", "firstName": "John", "lastName": "Doe", "status": "ACTIVE"}]' doc:name="Mock Customer Response" doc:id="mock-customer"/>
+    </flow>
+
+    <flow name="create-customer-flow" doc:id="create-customer-flow">
+        <logger level="INFO" doc:name="Create Customer" doc:id="create-logger" message="Creating customer"/>
+        <set-payload value='#[{"customerId": "CUST-002", "status": "CREATED", "message": "Customer created successfully"}]' doc:name="Mock Create Response" doc:id="mock-create"/>
+    </flow>
+
+    <flow name="update-customer-flow" doc:id="update-customer-flow">
+        <logger level="INFO" doc:name="Update Customer" doc:id="update-logger" message="Updating customer"/>
+        <set-payload value='#[{"customerId": "CUST-001", "status": "UPDATED", "message": "Customer updated successfully"}]' doc:name="Mock Update Response" doc:id="mock-update"/>
+    </flow>
+</mule>

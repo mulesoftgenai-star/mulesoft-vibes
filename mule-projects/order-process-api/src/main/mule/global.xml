@@ -1,57 +1,68 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
-      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
-                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
 
-    <!-- Configuration Properties -->
-    <configuration-properties file="config.properties" doc:name="Configuration properties"/>
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
 
-    <!-- HTTP Listener Configuration -->
-    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
-        <http:listener-connection host="${http.host}" port="${http.port}"/>
-    </http:listener-config>
-
-    <!-- Customer System API HTTP Request Configuration -->
-    <http:request-config name="Customer_System_API_Config" doc:name="Customer System API Config">
-        <http:request-connection host="${api.customer.host}" port="${api.customer.port}" protocol="${api.customer.protocol}">
-            <http:request-builder>
-                <http:header headerName="Accept" value="application/json"/>
-                <http:header headerName="Content-Type" value="application/json"/>
-            </http:request-builder>
-        </http:request-connection>
-    </http:request-config>
-
-    <!-- Inventory System API HTTP Request Configuration -->
-    <http:request-config name="Inventory_System_API_Config" doc:name="Inventory System API Config">
-        <http:request-connection host="${api.inventory.host}" port="${api.inventory.port}" protocol="${api.inventory.protocol}">
-            <http:request-builder>
-                <http:header headerName="Accept" value="application/json"/>
-                <http:header headerName="Content-Type" value="application/json"/>
-            </http:request-builder>
-        </http:request-connection>
-    </http:request-config>
-
-    <!-- Payment System API HTTP Request Configuration -->
-    <http:request-config name="Payment_System_API_Config" doc:name="Payment System API Config">
-        <http:request-connection host="${api.payment.host}" port="${api.payment.port}" protocol="${api.payment.protocol}">
-            <http:request-builder>
-                <http:header headerName="Accept" value="application/json"/>
-                <http:header headerName="Content-Type" value="application/json"/>
-            </http:request-builder>
-        </http:request-connection>
-    </http:request-config>
-
-    <!-- Shipping System API HTTP Request Configuration -->
-    <http:request-config name="Shipping_System_API_Config" doc:name="Shipping System API Config">
-        <http:request-connection host="${api.shipping.host}" port="${api.shipping.port}" protocol="${api.shipping.protocol}">
-            <http:request-builder>
-                <http:header headerName="Accept" value="application/json"/>
-                <http:header headerName="Content-Type" value="application/json"/>
-            </http:request-builder>
-        </http:request-connection>
-    </http:request-config>
-
+	<!-- Configuration Properties -->
+	<configuration-properties doc:name="Configuration properties" doc:id="config-props" file="config.properties" />
+	
+	<!-- HTTP Listener Configuration -->
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="http-listener-config">
+		<http:listener-connection host="${http.host}" port="${http.port}" />
+	</http:listener-config>
+	
+	<!-- System API Configurations -->
+	<http:request-config name="Customer_System_API_Config" doc:name="Customer System API Config" doc:id="customer-api-config">
+		<http:request-connection host="${customer.api.host}" port="${customer.api.port}" protocol="HTTP">
+			<http:request-builder>
+				<http:header headerName="Accept" value="application/json"/>
+				<http:header headerName="Content-Type" value="application/json"/>
+			</http:request-builder>
+		</http:request-connection>
+	</http:request-config>
+	
+	<http:request-config name="Inventory_System_API_Config" doc:name="Inventory System API Config" doc:id="inventory-api-config">
+		<http:request-connection host="${inventory.api.host}" port="${inventory.api.port}" protocol="HTTP">
+			<http:request-builder>
+				<http:header headerName="Accept" value="application/json"/>
+				<http:header headerName="Content-Type" value="application/json"/>
+			</http:request-builder>
+		</http:request-connection>
+	</http:request-config>
+	
+	<http:request-config name="Payment_System_API_Config" doc:name="Payment System API Config" doc:id="payment-api-config">
+		<http:request-connection host="${payment.api.host}" port="${payment.api.port}" protocol="HTTP">
+			<http:request-builder>
+				<http:header headerName="Accept" value="application/json"/>
+				<http:header headerName="Content-Type" value="application/json"/>
+			</http:request-builder>
+		</http:request-connection>
+	</http:request-config>
+	
+	<http:request-config name="Shipping_System_API_Config" doc:name="Shipping System API Config" doc:id="shipping-api-config">
+		<http:request-connection host="${shipping.api.host}" port="${shipping.api.port}" protocol="HTTP">
+			<http:request-builder>
+				<http:header headerName="Accept" value="application/json"/>
+				<http:header headerName="Content-Type" value="application/json"/>
+			</http:request-builder>
+		</http:request-connection>
+	</http:request-config>
+	
+	<!-- Global Error Handler -->
+	<error-handler name="globalErrorHandler" doc:id="global-error-handler">
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="on-error-continue" type="ANY">
+			<logger level="ERROR" doc:name="Error Logger" doc:id="error-logger" message="#['Error occurred: ' ++ error.description ++ ' - ' ++ error.detailedDescription]" />
+			<set-payload value='#[{"error": "Internal Server Error", "message": error.description, "timestamp": now() as String}]' doc:name="Set Error Response" doc:id="set-error-response" />
+			<set-variable value="#[500]" doc:name="Set Status Code" doc:id="set-status-code" variableName="httpStatus" />
+		</on-error-continue>
+	</error-handler>
+	
+	<!-- Common Configurations -->
+	<configuration defaultErrorHandler-ref="globalErrorHandler" doc:name="Configuration" doc:id="global-configuration" />
 </mule>

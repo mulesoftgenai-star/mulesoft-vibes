@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <flow name="inventory-api-main" doc:id="inventory-api-main">
+        <http:listener doc:name="Listener" doc:id="http-listener" config-ref="HTTP_Listener_config" path="/inventory/*"/>
+        <logger level="INFO" doc:name="Logger" doc:id="logger" message="Inventory System API request: #[attributes.method] #[attributes.requestPath]"/>
+        
+        <choice doc:name="Route by Method and Path" doc:id="method-path-router">
+            <when expression='#[attributes.method == "POST" and attributes.requestPath contains "/check-availability"]'>
+                <flow-ref doc:name="Check Availability" doc:id="check-availability-ref" name="check-availability-flow"/>
+            </when>
+            <when expression='#[attributes.method == "POST" and attributes.requestPath contains "/reserve"]'>
+                <flow-ref doc:name="Reserve Inventory" doc:id="reserve-inventory-ref" name="reserve-inventory-flow"/>
+            </when>
+            <when expression='#[attributes.method == "DELETE" and attributes.requestPath contains "/release"]'>
+                <flow-ref doc:name="Release Inventory" doc:id="release-inventory-ref" name="release-inventory-flow"/>
+            </when>
+            <when expression='#[attributes.method == "GET"]'>
+                <flow-ref doc:name="Get Inventory" doc:id="get-inventory-ref" name="get-inventory-flow"/>
+            </when>
+            <otherwise>
+                <set-payload value='#[{"error": "Method not supported", "method": attributes.method}]' doc:name="Method Not Supported" doc:id="method-not-supported"/>
+                <set-variable value="405" doc:name="Set Status" doc:id="set-status" variableName="httpStatus"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="check-availability-flow" doc:id="check-availability-flow">
+        <logger level="INFO" doc:name="Check Availability" doc:id="availability-logger" message="Checking inventory availability"/>
+        <set-payload value='#[{"valid": true, "availableQuantity": 100, "message": "Inventory available"}]' doc:name="Mock Availability Response" doc:id="mock-availability"/>
+    </flow>
+
+    <flow name="reserve-inventory-flow" doc:id="reserve-inventory-flow">
+        <logger level="INFO" doc:name="Reserve Inventory" doc:id="reserve-logger" message="Reserving inventory"/>
+        <set-payload value='#[{"reservationId": "RES-001", "status": "RESERVED", "message": "Inventory reserved successfully"}]' doc:name="Mock Reserve Response" doc:id="mock-reserve"/>
+    </flow>
+
+    <flow name="release-inventory-flow" doc:id="release-inventory-flow">
+        <logger level="INFO" doc:name="Release Inventory" doc:id="release-logger" message="Releasing inventory reservation"/>
+        <set-payload value='#[{"reservationId": "RES-001", "status": "RELEASED", "message": "Inventory reservation released"}]' doc:name="Mock Release Response" doc:id="mock-release"/>
+    </flow>
+
+    <flow name="get-inventory-flow" doc:id="get-inventory-flow">
+        <logger level="INFO" doc:name="Get Inventory" doc:id="get-inventory-logger" message="Retrieving inventory information"/>
+        <set-payload value='#[{"productId": "PROD-001", "availableQuantity": 100, "reservedQuantity": 10, "totalQuantity": 110}]' doc:name="Mock Inventory Response" doc:id="mock-inventory"/>
+    </flow>
+</mule>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <flow name="shipping-api-main" doc:id="shipping-api-main">
+        <http:listener doc:name="Listener" doc:id="http-listener" config-ref="HTTP_Listener_config" path="/shipments/*"/>
+        <logger level="INFO" doc:name="Logger" doc:id="logger" message="Shipping System API request: #[attributes.method] #[attributes.requestPath]"/>
+        
+        <choice doc:name="Route by Method and Path" doc:id="method-path-router">
+            <when expression='#[attributes.method == "POST" and not (attributes.requestPath contains "/")]'>
+                <flow-ref doc:name="Create Shipment" doc:id="create-shipment-ref" name="create-shipment-flow"/>
+            </when>
+            <when expression='#[attributes.method == "GET"]'>
+                <flow-ref doc:name="Get Shipment" doc:id="get-shipment-ref" name="get-shipment-flow"/>
+            </when>
+            <when expression='#[attributes.method == "PUT"]'>
+                <flow-ref doc:name="Update Shipment" doc:id="update-shipment-ref" name="update-shipment-flow"/>
+            </when>
+            <otherwise>
+                <set-payload value='#[{"error": "Method not supported", "method": attributes.method}]' doc:name="Method Not Supported" doc:id="method-not-supported"/>
+                <set-variable value="405" doc:name="Set Status" doc:id="set-status" variableName="httpStatus"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <flow name="create-shipment-flow" doc:id="create-shipment-flow">
+        <logger level="INFO" doc:name="Create Shipment" doc:id="create-logger" message="Creating shipment"/>
+        <set-payload value='#[{"shipmentId": "SHIP-001", "trackingNumber": "1Z999AA1234567890", "estimatedDelivery": "2024-01-20", "status": "CREATED", "message": "Shipment created successfully"}]' doc:name="Mock Shipment Response" doc:id="mock-shipment"/>
+    </flow>
+
+    <flow name="get-shipment-flow" doc:id="get-shipment-flow">
+        <logger level="INFO" doc:name="Get Shipment" doc:id="get-logger" message="Retrieving shipment information"/>
+        <set-payload value='#[{"shipmentId": "SHIP-001", "trackingNumber": "1Z999AA1234567890", "status": "IN_TRANSIT", "estimatedDelivery": "2024-01-20"}]' doc:name="Mock Get Shipment Response" doc:id="mock-get-shipment"/>
+    </flow>
+
+    <flow name="update-shipment-flow" doc:id="update-shipment-flow">
+        <logger level="INFO" doc:name="Update Shipment" doc:id="update-logger" message="Updating shipment status"/>
+        <set-payload value='#[{"shipmentId": "SHIP-001", "status": "DELIVERED", "updatedAt": now(), "message": "Shipment status updated"}]' doc:name="Mock Update Response" doc:id="mock-update"/>
+    </flow>
+</mule>
