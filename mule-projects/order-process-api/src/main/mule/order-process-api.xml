@@ -14,21 +14,39 @@
     <flow name="process-order-main-flow" doc:id="process-order-main-flow">
         <http:listener config-ref="HTTP_Listener_config" path="/process/orders" allowedMethods="POST" doc:name="Process Order Listener"/>
         
+        <!-- Initialize Request Context -->
+        <flow-ref name="generate-process-trace-id-subflow" doc:name="Generate Process Trace ID"/>
+        <flow-ref name="extract-process-error-context-subflow" doc:name="Extract Process Error Context"/>
         <set-variable value="#[correlationId]" doc:name="Set Correlation ID" variableName="correlationId"/>
         <set-variable value="#[payload]" doc:name="Store Incoming Order" variableName="incomingOrder"/>
         
-        <!-- Generate Order ID -->
-        <set-variable value="#['ORD-' ++ now() as String {format: 'yyyy'} ++ '-' ++ (randomInt(999) + 1)]" doc:name="Generate Order ID" variableName="orderId"/>
+        <!-- Enhanced Input Validation -->
+        <validation:is-not-null value="#[payload]" message="Order request payload is required"/>
+        <validation:is-not-null value="#[payload.customerId]" message="Customer ID is required for order processing"/>
+        <validation:is-not-empty collection="#[payload.items]" message="Order must contain at least one item"/>
+        <validation:is-not-null value="#[payload.paymentDetails]" message="Payment details are required"/>
+        <validation:is-not-null value="#[payload.shippingAddress]" message="Shipping address is required"/>
         
-        <logger level="INFO" doc:name="Process Start Logger" message="Starting order processing for ID: #[vars.orderId], Correlation: #[vars.correlationId]"/>
+        <!-- Generate Order ID -->
+        <set-variable value="#['ORD-' ++ now() as String {format: 'yyyy'} ++ '-' ++ (randomInt(999) + 100)]" doc:name="Generate Order ID" variableName="orderId"/>
+        <set-variable value="#[payload.customerId]" doc:name="Set Customer ID" variableName="customerId"/>
+        <set-variable value="initialization" doc:name="Set Processing Stage" variableName="processingStage"/>
+        
+        <logger level="INFO" doc:name="Enhanced Process Start Logger" 
+                message='#["Starting order processing - Order ID: " ++ vars.orderId ++ ", Customer ID: " ++ vars.customerId ++ ", Trace ID: " ++ vars.traceId ++ ", Correlation ID: " ++ vars.correlationId ++ ", Items Count: " ++ sizeOf(payload.items)]'/>
         
         <!-- Validate Order -->
+        <set-variable value="validation" doc:name="Set Validation Stage" variableName="processingStage"/>
         <flow-ref name="validate-order-subflow" doc:name="Validate Order"/>
         
         <choice doc:name="Validation Result Check">
             <when expression="#[payload.valid == true]">
-                <!-- Begin Transaction Scope -->
+                <logger level="INFO" doc:name="Validation Success Logger" 
+                        message='#["Order validation successful - Order ID: " ++ vars.orderId ++ ", Trace ID: " ++ vars.traceId]'/>
+                
+                <!-- Begin Enhanced Transaction Scope -->
                 <try doc:name="Order Processing Transaction">
+                    <set-variable value="transaction_processing" doc:name="Set Transaction Stage" variableName="processingStage"/>
                     
                     <!-- Step 1: Reserve Inventory -->
                     <logger level="INFO" doc:name="Reserve Inventory Logger" message="Reserving inventory for order: #[vars.orderId]"/>
@@ -66,50 +84,123 @@ output application/json
                     </ee:transform>
                     
                     <error-handler>
-                        <on-error-propagate doc:name="Transaction Error Handler">
-                            <logger level="ERROR" doc:name="Transaction Error Logger" message="Order processing failed for #[vars.orderId]. Initiating compensation."/>
-                            <flow-ref name="compensation-subflow" doc:name="Execute Compensation"/>
+                        <on-error-propagate doc:name="Enhanced Transaction Error Handler">
+                            <set-variable value="error_handling" doc:name="Set Error Handling Stage" variableName="processingStage"/>
+                            <logger level="ERROR" doc:name="Enhanced Transaction Error Logger" 
+                                    message='#["Order processing transaction failed - Order ID: " ++ vars.orderId ++ ", Error: " ++ error.description ++ ", Trace ID: " ++ vars.traceId ++ ", Processing Stage: " ++ vars.processingStage]'/>
                             
-                            <ee:transform doc:name="Error Response Transform">
+                            <!-- Execute Compensation with Error Context -->
+                            <try doc:name="Compensation Try Block">
+                                <flow-ref name="enhanced-compensation-subflow" doc:name="Execute Enhanced Compensation"/>
+                                <set-variable value="compensation_completed" doc:name="Set Compensation Status" variableName="compensationStatus"/>
+                                
+                                <error-handler>
+                                    <on-error-continue doc:name="Compensation Error Handler">
+                                        <set-variable value="compensation_failed" doc:name="Set Compensation Failed Status" variableName="compensationStatus"/>
+                                        <logger level="ERROR" doc:name="Compensation Failed Logger" 
+                                                message='#["Compensation failed for Order ID: " ++ vars.orderId ++ ", Trace ID: " ++ vars.traceId]'/>
+                                        <raise-error type="COMPENSATION_ERROR" description="Compensation process failed">
+                                            <error-handler>
+                                                <on-error-continue/>
+                                            </error-handler>
+                                        </raise-error>
+                                    </on-error-continue>
+                                </error-handler>
+                            </try>
+                            
+                            <!-- Enhanced Error Response -->
+                            <ee:transform doc:name="Enhanced Transaction Error Response">
                                 <ee:message>
                                     <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
-    error: "ORDER_PROCESSING_FAILED",
-    orderId: vars.orderId,
-    message: "Order processing failed and compensation completed",
-    details: error.description,
-    timestamp: now(),
-    correlationId: vars.correlationId
+    error: {
+        code: "ORDER_PROCESSING_TRANSACTION_FAILED",
+        message: "Order processing transaction failed",
+        details: error.description,
+        timestamp: now(),
+        traceId: vars.traceId,
+        path: attributes.requestPath default "",
+        method: attributes.method default "",
+        statusCode: 500,
+        context: {
+            service: "order-process-api",
+            operation: flow.name,
+            orderId: vars.orderId,
+            customerId: vars.customerId,
+            correlationId: vars.correlationId,
+            processingStage: vars.processingStage,
+            compensationStatus: vars.compensationStatus default "not_executed",
+            failurePoint: error.errorType.identifier default "UNKNOWN"
+        },
+        retryable: (vars.compensationStatus == "compensation_completed"),
+        retryAfter: if (vars.compensationStatus == "compensation_completed") 60 else null,
+        helpUrl: "https://docs.api.company.com/errors/order-processing-transaction"
+    }
 }]]></ee:set-payload>
                                 </ee:message>
                                 <ee:variables>
                                     <ee:set-variable variableName="httpStatus">500</ee:set-variable>
                                 </ee:variables>
                             </ee:transform>
+                            
+                            <!-- Raise custom error for global handler -->
+                            <raise-error type="ORDER_PROCESSING_ERROR" description="#['Order processing transaction failed at stage: ' ++ vars.processingStage]">
+                                <error-handler>
+                                    <on-error-continue/>
+                                </error-handler>
+                            </raise-error>
                         </on-error-propagate>
                     </error-handler>
                 </try>
             </when>
             <otherwise>
-                <!-- Validation Failed Response -->
+                <!-- Enhanced Validation Failed Response -->
+                <set-variable value="validation_failed" doc:name="Set Validation Failed Stage" variableName="processingStage"/>
+                <logger level="WARN" doc:name="Validation Failed Logger" 
+                        message='#["Order validation failed - Order ID: " ++ vars.orderId ++ ", Trace ID: " ++ vars.traceId ++ ", Validation Results: " ++ write(payload, "application/json")]'/>
+                
                 <set-variable variableName="httpStatus" value="422" doc:name="Set Validation Error Status"/>
-                <ee:transform doc:name="Validation Failed Response">
+                <ee:transform doc:name="Enhanced Validation Failed Response">
                     <ee:message>
                         <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
-    error: "ORDER_VALIDATION_FAILED",
-    message: "Order validation failed",
-    validationResults: payload,
-    orderId: vars.orderId,
-    timestamp: now(),
-    correlationId: vars.correlationId
+    error: {
+        code: "ORDER_BUSINESS_VALIDATION_FAILED",
+        message: "Order business validation failed",
+        details: "One or more business validation rules failed",
+        timestamp: now(),
+        traceId: vars.traceId,
+        path: attributes.requestPath default "",
+        method: attributes.method default "",
+        statusCode: 422,
+        validationErrors: (payload.customerValidation.errors default []) ++ 
+                         (payload.inventoryValidation.errors default []) ++ 
+                         (payload.paymentValidation.errors default []),
+        context: {
+            service: "order-process-api",
+            operation: flow.name,
+            orderId: vars.orderId,
+            customerId: vars.customerId,
+            correlationId: vars.correlationId,
+            validationResults: payload
+        },
+        retryable: false,
+        helpUrl: "https://docs.api.company.com/errors/order-business-validation"
+    }
 }]]></ee:set-payload>
                     </ee:message>
                 </ee:transform>
+                
+                <!-- Raise business validation error -->
+                <raise-error type="BUSINESS_VALIDATION_ERROR" description="Order business validation failed">
+                    <error-handler>
+                        <on-error-continue/>
+                    </error-handler>
+                </raise-error>
             </otherwise>
         </choice>
     </flow>
@@ -298,41 +389,160 @@ output application/json
         <set-variable variableName="shipmentInfo" value="#[payload]" doc:name="Store Shipment Info"/>
     </sub-flow>
 
-    <!-- Compensation Sub-flow -->
+    <!-- Enhanced Compensation Sub-flow -->
+    <sub-flow name="enhanced-compensation-subflow" doc:id="enhanced-compensation-subflow">
+        <logger level="ERROR" doc:name="Enhanced Compensation Start Logger" 
+                message='#["Executing enhanced compensation logic - Order ID: " ++ vars.orderId ++ ", Trace ID: " ++ vars.traceId ++ ", Processing Stage: " ++ vars.processingStage]'/>
+        
+        <set-variable variableName="compensationResults" doc:name="Initialize Compensation Results">
+            <![CDATA[#[{
+                "inventoryReleased": false,
+                "paymentVoided": false,
+                "shipmentCancelled": false,
+                "compensationErrors": []
+            }]]]>
+        </set-variable>
+        
+        <!-- Release Inventory Reservations with Enhanced Error Handling -->
+        <try doc:name="Enhanced Release Inventory">
+            <choice doc:name="Check Inventory Reservation Exists">
+                <when expression="#[vars.inventoryReservation != null and vars.inventoryReservation.reservationId != null]">
+                    <http:request config-ref="Inventory_System_API_Config" 
+                                  path="#['/inventory/release/' ++ vars.inventoryReservation.reservationId]" 
+                                  method="DELETE" 
+                                  doc:name="Release Inventory Reservation">
+                        <http:headers><![CDATA[#[{
+                            'X-Correlation-ID': vars.correlationId,
+                            'X-Trace-ID': vars.traceId,
+                            'X-Compensation-Action': 'inventory-release'
+                        }]]]></http:headers>
+                    </http:request>
+                    <set-variable value="#[vars.compensationResults ++ {inventoryReleased: true}]" 
+                                  doc:name="Mark Inventory Released" 
+                                  variableName="compensationResults"/>
+                    <logger level="INFO" doc:name="Inventory Release Success Logger" 
+                            message='#["Inventory reservation released successfully - Reservation ID: " ++ vars.inventoryReservation.reservationId ++ ", Order ID: " ++ vars.orderId]'/>
+                </when>
+                <otherwise>
+                    <logger level="WARN" doc:name="No Inventory Reservation Logger" 
+                            message='#["No inventory reservation to release - Order ID: " ++ vars.orderId]'/>
+                </otherwise>
+            </choice>
+            
+            <error-handler>
+                <on-error-continue doc:name="Enhanced Inventory Release Error">
+                    <set-variable value="#[vars.compensationResults ++ {compensationErrors: vars.compensationResults.compensationErrors + ['inventory-release-failed']}]" 
+                                  doc:name="Record Inventory Error" 
+                                  variableName="compensationResults"/>
+                    <logger level="ERROR" doc:name="Inventory Release Error Logger" 
+                            message='#["Failed to release inventory reservation - Order ID: " ++ vars.orderId ++ ", Error: " ++ error.description ++ ", Trace ID: " ++ vars.traceId]'/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+        
+        <!-- Void Payment Authorization with Enhanced Error Handling -->
+        <try doc:name="Enhanced Void Payment">
+            <choice doc:name="Check Payment Authorization Exists">
+                <when expression="#[vars.paymentAuth != null and (vars.paymentAuth.paymentId != null or vars.paymentAuth.authorizationId != null)]">
+                    <set-variable value="#[vars.paymentAuth.paymentId default vars.paymentAuth.authorizationId]" 
+                                  doc:name="Set Payment ID" 
+                                  variableName="paymentId"/>
+                    <http:request config-ref="Payment_System_API_Config" 
+                                  path="#['/payments/' ++ vars.paymentId ++ '/void']" 
+                                  method="POST" 
+                                  doc:name="Void Payment Authorization">
+                        <http:headers><![CDATA[#[{
+                            'Content-Type': 'application/json',
+                            'X-Correlation-ID': vars.correlationId,
+                            'X-Trace-ID': vars.traceId,
+                            'X-Compensation-Action': 'payment-void'
+                        }]]]></http:headers>
+                        <http:body><![CDATA[#[{
+                            "reason": "Order processing failed - compensation",
+                            "orderId": vars.orderId
+                        }]]]></http:body>
+                    </http:request>
+                    <set-variable value="#[vars.compensationResults ++ {paymentVoided: true}]" 
+                                  doc:name="Mark Payment Voided" 
+                                  variableName="compensationResults"/>
+                    <logger level="INFO" doc:name="Payment Void Success Logger" 
+                            message='#["Payment authorization voided successfully - Payment ID: " ++ vars.paymentId ++ ", Order ID: " ++ vars.orderId]'/>
+                </when>
+                <otherwise>
+                    <logger level="WARN" doc:name="No Payment Authorization Logger" 
+                            message='#["No payment authorization to void - Order ID: " ++ vars.orderId]'/>
+                </otherwise>
+            </choice>
+            
+            <error-handler>
+                <on-error-continue doc:name="Enhanced Payment Void Error">
+                    <set-variable value="#[vars.compensationResults ++ {compensationErrors: vars.compensationResults.compensationErrors + ['payment-void-failed']}]" 
+                                  doc:name="Record Payment Error" 
+                                  variableName="compensationResults"/>
+                    <logger level="ERROR" doc:name="Payment Void Error Logger" 
+                            message='#["Failed to void payment authorization - Order ID: " ++ vars.orderId ++ ", Error: " ++ error.description ++ ", Trace ID: " ++ vars.traceId]'/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+        
+        <!-- Cancel Shipment if Created -->
+        <try doc:name="Enhanced Cancel Shipment">
+            <choice doc:name="Check Shipment Exists">
+                <when expression="#[vars.shipmentInfo != null and vars.shipmentInfo.shipmentId != null]">
+                    <http:request config-ref="Shipping_System_API_Config" 
+                                  path="#['/shipments/' ++ vars.shipmentInfo.shipmentId ++ '/cancel']" 
+                                  method="POST" 
+                                  doc:name="Cancel Shipment">
+                        <http:headers><![CDATA[#[{
+                            'Content-Type': 'application/json',
+                            'X-Correlation-ID': vars.correlationId,
+                            'X-Trace-ID': vars.traceId,
+                            'X-Compensation-Action': 'shipment-cancel'
+                        }]]]></http:headers>
+                        <http:body><![CDATA[#[{
+                            "reason": "Order processing failed - compensation",
+                            "orderId": vars.orderId
+                        }]]]></http:body>
+                    </http:request>
+                    <set-variable value="#[vars.compensationResults ++ {shipmentCancelled: true}]" 
+                                  doc:name="Mark Shipment Cancelled" 
+                                  variableName="compensationResults"/>
+                    <logger level="INFO" doc:name="Shipment Cancel Success Logger" 
+                            message='#["Shipment cancelled successfully - Shipment ID: " ++ vars.shipmentInfo.shipmentId ++ ", Order ID: " ++ vars.orderId]'/>
+                </when>
+                <otherwise>
+                    <logger level="INFO" doc:name="No Shipment Logger" 
+                            message='#["No shipment to cancel - Order ID: " ++ vars.orderId]'/>
+                </otherwise>
+            </choice>
+            
+            <error-handler>
+                <on-error-continue doc:name="Enhanced Shipment Cancel Error">
+                    <set-variable value="#[vars.compensationResults ++ {compensationErrors: vars.compensationResults.compensationErrors + ['shipment-cancel-failed']}]" 
+                                  doc:name="Record Shipment Error" 
+                                  variableName="compensationResults"/>
+                    <logger level="ERROR" doc:name="Shipment Cancel Error Logger" 
+                            message='#["Failed to cancel shipment - Order ID: " ++ vars.orderId ++ ", Error: " ++ error.description ++ ", Trace ID: " ++ vars.traceId]'/>
+                </on-error-continue>
+            </error-handler>
+        </try>
+        
+        <!-- Log Compensation Summary -->
+        <logger level="INFO" doc:name="Enhanced Compensation Complete Logger" 
+                message='#["Enhanced compensation completed - Order ID: " ++ vars.orderId ++ ", Results: " ++ write(vars.compensationResults, "application/json") ++ ", Trace ID: " ++ vars.traceId]'/>
+        
+        <!-- Check if compensation was successful -->
+        <choice doc:name="Check Compensation Success">
+            <when expression="#[sizeOf(vars.compensationResults.compensationErrors) > 0]">
+                <raise-error type="COMPENSATION_ERROR" 
+                             description="#['Partial compensation failure - errors: ' ++ (vars.compensationResults.compensationErrors joinBy ', ')]"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <!-- Legacy Compensation Sub-flow (kept for backward compatibility) -->
     <sub-flow name="compensation-subflow" doc:id="compensation-subflow">
-        <logger level="ERROR" doc:name="Compensation Start Logger" message="Executing compensation logic for failed order processing: #[vars.orderId]"/>
-        
-        <!-- Release Inventory Reservations -->
-        <try doc:name="Release Inventory">
-            <http:request config-ref="Inventory_System_API_Config" path="#['/inventory/release/' ++ vars.inventoryReservation.reservationId]" method="DELETE" doc:name="Release Inventory">
-                <http:headers><![CDATA[#[{
-                    'X-Correlation-ID': vars.correlationId
-                }]]]></http:headers>
-            </http:request>
-            <logger level="INFO" doc:name="Inventory Release Success" message="Inventory reservation released successfully"/>
-            <error-handler>
-                <on-error-continue doc:name="Inventory Release Error">
-                    <logger level="WARN" doc:name="Inventory Release Warning" message="Failed to release inventory reservation"/>
-                </on-error-continue>
-            </error-handler>
-        </try>
-        
-        <!-- Void Payment Authorization -->
-        <try doc:name="Void Payment">
-            <http:request config-ref="Payment_System_API_Config" path="#['/payments/' ++ vars.paymentAuth.paymentId ++ '/void']" method="POST" doc:name="Void Payment">
-                <http:headers><![CDATA[#[{
-                    'X-Correlation-ID': vars.correlationId
-                }]]]></http:headers>
-            </http:request>
-            <logger level="INFO" doc:name="Payment Void Success" message="Payment authorization voided successfully"/>
-            <error-handler>
-                <on-error-continue doc:name="Payment Void Error">
-                    <logger level="WARN" doc:name="Payment Void Warning" message="Failed to void payment authorization"/>
-                </on-error-continue>
-            </error-handler>
-        </try>
-        
-        <logger level="INFO" doc:name="Compensation Complete Logger" message="Compensation logic completed for order: #[vars.orderId]"/>
+        <flow-ref name="enhanced-compensation-subflow" doc:name="Call Enhanced Compensation"/>
     </sub-flow>
 
 </mule>

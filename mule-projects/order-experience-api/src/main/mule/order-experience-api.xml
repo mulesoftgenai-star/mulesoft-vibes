@@ -14,8 +14,22 @@
     <flow name="order-experience-main-flow" doc:id="main-flow">
         <http:listener config-ref="HTTP_Listener_config" path="/orders" allowedMethods="POST,GET,PUT,DELETE" doc:name="Order Experience API Listener"/>
         
+        <!-- Initialize Request Context -->
+        <flow-ref name="generate-trace-id-subflow" doc:name="Generate Trace ID"/>
+        <flow-ref name="extract-error-context-subflow" doc:name="Extract Error Context"/>
         <set-variable value="#[correlationId]" doc:name="Set Correlation ID" variableName="correlationId"/>
-        <logger level="INFO" doc:name="Request Logger" message="Order Experience API - Method: #[attributes.method], Path: #[attributes.requestPath], Correlation ID: #[vars.correlationId]"/>
+        
+        <!-- Enhanced Request Logging -->
+        <logger level="INFO" doc:name="Request Logger" 
+                message='#["Order Experience API Request - Method: " ++ attributes.method ++ ", Path: " ++ attributes.requestPath ++ ", Trace ID: " ++ vars.traceId ++ ", Correlation ID: " ++ vars.correlationId ++ ", User-Agent: " ++ (attributes.headers."user-agent" default "N/A")]'/>
+        
+        <!-- Input Validation -->
+        <choice doc:name="Validate Request">
+            <when expression="#[attributes.method == 'POST' or attributes.method == 'PUT']">
+                <validation:is-not-null value="#[payload]" message="Request body is required for POST/PUT operations"/>
+                <validation:matches-regex value="#[payload as String]" regex="^(?=.*\S).+$" message="Request body cannot be empty or contain only whitespace"/>
+            </when>
+        </choice>
         
         <choice doc:name="HTTP Method Router">
             <when expression="#[attributes.method == 'POST']">
@@ -39,19 +53,37 @@
         </choice>
         
         <error-handler>
-            <on-error-propagate type="VALIDATION:INVALID_INPUT" doc:name="Validation Error">
-                <ee:transform doc:name="Validation Error Response">
+            <!-- Specific validation errors for this flow -->
+            <on-error-propagate type="VALIDATION:INVALID_INPUT" doc:name="Flow Validation Error">
+                <logger level="WARN" doc:name="Flow Validation Error Logger" 
+                        message='#["Order Experience Flow validation error - " ++ error.description ++ ", Trace ID: " ++ vars.traceId]' />
+                <ee:transform doc:name="Enhanced Validation Error Response">
                     <ee:message>
                         <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
     error: {
-        code: "VALIDATION_ERROR",
-        message: error.description,
-        details: error.detailedDescription,
+        code: "ORDER_VALIDATION_ERROR",
+        message: "Order request validation failed",
+        details: error.description,
         timestamp: now(),
-        correlationId: vars.correlationId
+        traceId: vars.traceId,
+        path: attributes.requestPath,
+        method: attributes.method,
+        statusCode: 400,
+        validationErrors: [{
+            field: "request",
+            message: error.description,
+            code: "INVALID_ORDER_REQUEST"
+        }],
+        context: {
+            service: "order-experience-api",
+            operation: "order-validation",
+            correlationId: vars.correlationId
+        },
+        retryable: false,
+        helpUrl: "https://docs.api.company.com/errors/order-validation"
     }
 }]]></ee:set-payload>
                     </ee:message>
@@ -60,39 +92,35 @@ output application/json
                     </ee:variables>
                 </ee:transform>
             </on-error-propagate>
-            <on-error-propagate type="HTTP:NOT_FOUND" doc:name="Not Found Error">
-                <ee:transform doc:name="Not Found Error Response">
+            
+            <!-- Handle Process API errors with context -->
+            <on-error-propagate type="HTTP:INTERNAL_SERVER_ERROR" doc:name="Process API Error">
+                <logger level="ERROR" doc:name="Process API Error Logger" 
+                        message='#["Process API returned server error - " ++ error.description ++ ", Trace ID: " ++ vars.traceId]' />
+                <ee:transform doc:name="Process API Error Response">
                     <ee:message>
                         <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
     error: {
-        code: "RESOURCE_NOT_FOUND",
-        message: "Requested resource not found",
+        code: "ORDER_PROCESSING_ERROR",
+        message: "Order processing failed",
+        details: "The order processing service encountered an error",
         timestamp: now(),
-        correlationId: vars.correlationId
-    }
-}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-            <on-error-propagate type="ANY" doc:name="Global Error Handler">
-                <logger level="ERROR" doc:name="Error Logger" message="Unexpected error: #[error.description]"/>
-                <ee:transform doc:name="Generic Error Response">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{
-    error: {
-        code: "INTERNAL_SERVER_ERROR",
-        message: "An unexpected error occurred",
-        timestamp: now(),
-        correlationId: vars.correlationId
+        traceId: vars.traceId,
+        path: attributes.requestPath,
+        method: attributes.method,
+        statusCode: 500,
+        context: {
+            service: "order-experience-api",
+            upstreamService: "order-process-api",
+            operation: flow.name,
+            correlationId: vars.correlationId
+        },
+        retryable: true,
+        retryAfter: 30,
+        helpUrl: "https://docs.api.company.com/errors/order-processing"
     }
 }]]></ee:set-payload>
                     </ee:message>

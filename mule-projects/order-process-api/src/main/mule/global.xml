@@ -2,12 +2,17 @@
 
 <mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
 	xmlns:http="http://www.mulesoft.org/schema/mule/http"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns="http://www.mulesoft.org/schema/mule/core" 
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="
 		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
-		http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+		http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+		http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
 
 	<!-- Configuration Properties -->
 	<configuration-properties doc:name="Configuration properties" doc:id="config-props" file="config.properties" />
@@ -54,15 +59,341 @@
 		</http:request-connection>
 	</http:request-config>
 	
-	<!-- Global Error Handler -->
-	<error-handler name="globalErrorHandler" doc:id="global-error-handler">
-		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="on-error-continue" type="ANY">
-			<logger level="ERROR" doc:name="Error Logger" doc:id="error-logger" message="#['Error occurred: ' ++ error.description ++ ' - ' ++ error.detailedDescription]" />
-			<set-payload value='#[{"error": "Internal Server Error", "message": error.description, "timestamp": now() as String}]' doc:name="Set Error Response" doc:id="set-error-response" />
-			<set-variable value="#[500]" doc:name="Set Status Code" doc:id="set-status-code" variableName="httpStatus" />
-		</on-error-continue>
+	<!-- Global Error Handler for Process API -->
+	<error-handler name="processApiGlobalErrorHandler" doc:id="process-api-global-error-handler">
+		
+		<!-- Business Logic Validation Errors -->
+		<on-error-propagate type="BUSINESS_VALIDATION_ERROR" doc:name="Business Validation Error" doc:id="business-validation-error">
+			<logger level="WARN" doc:name="Business Validation Logger" doc:id="business-validation-logger"
+					message='#["Business validation failed - " ++ error.description ++ ", Trace ID: " ++ (vars.traceId default correlationId) ++ ", Order ID: " ++ (vars.orderId default "N/A")]' />
+			<ee:transform doc:name="Business Validation Error Response" doc:id="business-validation-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "BUSINESS_VALIDATION_FAILED",
+		message: "Order business validation failed",
+		details: error.description,
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 422,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			orderId: vars.orderId default null,
+			correlationId: correlationId,
+			validationStep: error.additionalInfo.step default "unknown"
+		},
+		retryable: false,
+		helpUrl: "https://docs.api.company.com/errors/business-validation"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">422</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- Order Processing Transaction Errors -->
+		<on-error-propagate type="ORDER_PROCESSING_ERROR" doc:name="Order Processing Error" doc:id="order-processing-error">
+			<logger level="ERROR" doc:name="Order Processing Error Logger" doc:id="order-processing-error-logger"
+					message='#["Order processing transaction failed - " ++ error.description ++ ", Trace ID: " ++ (vars.traceId default correlationId) ++ ", Order ID: " ++ (vars.orderId default "N/A")]' />
+			<ee:transform doc:name="Order Processing Error Response" doc:id="order-processing-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "ORDER_PROCESSING_FAILED",
+		message: "Order processing transaction failed",
+		details: error.description,
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 500,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			orderId: vars.orderId default null,
+			correlationId: correlationId,
+			failurePoint: error.additionalInfo.failurePoint default "unknown",
+			compensationStatus: error.additionalInfo.compensationStatus default "not_executed"
+		},
+		retryable: true,
+		retryAfter: 60,
+		helpUrl: "https://docs.api.company.com/errors/order-processing"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- System API Connectivity Errors -->
+		<on-error-propagate type="HTTP:CONNECTIVITY" doc:name="System API Connectivity Error" doc:id="system-api-connectivity-error">
+			<logger level="ERROR" doc:name="System API Connectivity Logger" doc:id="system-api-connectivity-logger"
+					message='#["System API connectivity error - " ++ error.description ++ ", Trace ID: " ++ (vars.traceId default correlationId)]' />
+			<ee:transform doc:name="System API Connectivity Error Response" doc:id="system-api-connectivity-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "SYSTEM_API_UNAVAILABLE",
+		message: "System API connectivity error",
+		details: "Unable to connect to downstream system API",
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 502,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			upstreamError: error.description,
+			correlationId: correlationId
+		},
+		retryable: true,
+		retryAfter: 15,
+		helpUrl: "https://docs.api.company.com/errors/system-connectivity"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">502</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- System API Timeout Errors -->
+		<on-error-propagate type="HTTP:TIMEOUT" doc:name="System API Timeout Error" doc:id="system-api-timeout-error">
+			<logger level="ERROR" doc:name="System API Timeout Logger" doc:id="system-api-timeout-logger"
+					message='#["System API timeout error - " ++ error.description ++ ", Trace ID: " ++ (vars.traceId default correlationId)]' />
+			<ee:transform doc:name="System API Timeout Error Response" doc:id="system-api-timeout-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "SYSTEM_API_TIMEOUT",
+		message: "System API timeout",
+		details: "Timeout while waiting for system API response",
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 504,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			timeoutDuration: "30s",
+			correlationId: correlationId
+		},
+		retryable: true,
+		retryAfter: 30,
+		helpUrl: "https://docs.api.company.com/errors/system-timeout"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">504</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- Validation Errors -->
+		<on-error-propagate type="VALIDATION:INVALID_INPUT" doc:name="Process Validation Error" doc:id="process-validation-error">
+			<logger level="WARN" doc:name="Process Validation Logger" doc:id="process-validation-logger"
+					message='#["Process API validation error - " ++ error.description ++ ", Trace ID: " ++ (vars.traceId default correlationId)]' />
+			<ee:transform doc:name="Process Validation Error Response" doc:id="process-validation-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "PROCESS_VALIDATION_ERROR",
+		message: "Process request validation failed",
+		details: error.description,
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 400,
+		validationErrors: [{
+			field: "process_request",
+			message: error.description,
+			code: "INVALID_PROCESS_REQUEST"
+		}],
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			correlationId: correlationId
+		},
+		retryable: false,
+		helpUrl: "https://docs.api.company.com/errors/process-validation"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">400</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- Resource Not Found Errors -->
+		<on-error-propagate type="HTTP:NOT_FOUND" doc:name="Process Resource Not Found" doc:id="process-not-found-error">
+			<logger level="WARN" doc:name="Process Resource Not Found Logger" doc:id="process-not-found-logger"
+					message='#["Process API resource not found - Path: " ++ (attributes.requestPath default "UNKNOWN") ++ ", Trace ID: " ++ (vars.traceId default correlationId)]' />
+			<ee:transform doc:name="Process Resource Not Found Response" doc:id="process-not-found-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "PROCESS_RESOURCE_NOT_FOUND",
+		message: "Process resource not found",
+		details: "The requested order or process resource does not exist",
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 404,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			requestedResource: vars.orderId default "unknown",
+			correlationId: correlationId
+		},
+		retryable: false,
+		helpUrl: "https://docs.api.company.com/errors/process-not-found"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">404</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- Compensation Errors -->
+		<on-error-propagate type="COMPENSATION_ERROR" doc:name="Compensation Error" doc:id="compensation-error">
+			<logger level="ERROR" doc:name="Compensation Error Logger" doc:id="compensation-error-logger"
+					message='#["Compensation process failed - " ++ error.description ++ ", Trace ID: " ++ (vars.traceId default correlationId) ++ ", Order ID: " ++ (vars.orderId default "N/A")]' />
+			<ee:transform doc:name="Compensation Error Response" doc:id="compensation-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "COMPENSATION_FAILED",
+		message: "Order processing failed and compensation incomplete",
+		details: error.description,
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 500,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			orderId: vars.orderId default null,
+			correlationId: correlationId,
+			compensationStep: error.additionalInfo.step default "unknown",
+			manualIntervention: true
+		},
+		retryable: false,
+		helpUrl: "https://docs.api.company.com/errors/compensation-failed"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+		<!-- Generic System Errors -->
+		<on-error-propagate type="ANY" doc:name="Process System Error Handler" doc:id="process-system-error">
+			<logger level="ERROR" doc:name="Process System Error Logger" doc:id="process-system-error-logger"
+					message='#["Process API system error - " ++ error.description ++ ", Detail: " ++ (error.detailedDescription default "N/A") ++ ", Trace ID: " ++ (vars.traceId default correlationId)]' />
+			<ee:transform doc:name="Process System Error Response" doc:id="process-system-error-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: {
+		code: "PROCESS_INTERNAL_ERROR",
+		message: "Internal process error occurred",
+		details: "An unexpected error occurred in the order processing service",
+		timestamp: now(),
+		traceId: vars.traceId default correlationId,
+		path: attributes.requestPath default "",
+		method: attributes.method default "",
+		statusCode: 500,
+		context: {
+			service: "order-process-api",
+			operation: flow.name,
+			correlationId: correlationId,
+			errorType: error.errorType.identifier default "UNKNOWN"
+		},
+		retryable: true,
+		retryAfter: 30,
+		helpUrl: "https://docs.api.company.com/errors/process-internal"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
 	</error-handler>
 	
+	<!-- Process API Utility Sub-flows -->
+	<sub-flow name="generate-process-trace-id-subflow" doc:id="generate-process-trace-id-subflow">
+		<choice doc:name="Check Existing Trace ID">
+			<when expression="#[vars.traceId == null]">
+				<set-variable value="#[uuid()]" doc:name="Generate New Trace ID" variableName="traceId"/>
+			</when>
+		</choice>
+		<logger level="DEBUG" doc:name="Process Trace ID Logger" message='#["Process API Trace ID: " ++ vars.traceId]'/>
+	</sub-flow>
+	
+	<sub-flow name="extract-process-error-context-subflow" doc:id="extract-process-error-context-subflow">
+		<set-variable variableName="processErrorContext" doc:name="Set Process Error Context">
+			<![CDATA[#[{
+				"timestamp": now(),
+				"service": "order-process-api",
+				"operation": flow.name,
+				"correlationId": correlationId,
+				"traceId": vars.traceId default correlationId,
+				"orderId": vars.orderId default null,
+				"customerId": vars.customerId default null,
+				"processingStage": vars.processingStage default "initialization"
+			}]]]>
+		</set-variable>
+	</sub-flow>
+	
+	<sub-flow name="log-business-error-subflow" doc:id="log-business-error-subflow">
+		<logger level="ERROR" doc:name="Business Error Logger"
+				message='#["Business Error - Code: " ++ (payload.error.code default "UNKNOWN") ++ ", Message: " ++ (payload.error.message default "Unknown error") ++ ", Trace ID: " ++ vars.traceId ++ ", Order ID: " ++ (vars.orderId default "N/A")]'/>
+	</sub-flow>
+	
 	<!-- Common Configurations -->
-	<configuration defaultErrorHandler-ref="globalErrorHandler" doc:name="Configuration" doc:id="global-configuration" />
+	<configuration defaultErrorHandler-ref="processApiGlobalErrorHandler" doc:name="Process API Configuration" doc:id="process-global-configuration" />
 </mule>
