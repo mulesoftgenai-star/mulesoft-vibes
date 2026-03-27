@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+
+	<!-- Object Store for Cached Data -->
+	<os:object-store name="flight-cache-store" doc:name="Flight Cache Object Store" 
+		doc:id="flight-cache-os" persistent="true" maxEntries="10000" 
+		entryTtl="3600" expirationInterval="300"/>
+
+	<!-- Fallback for getAllFlights operation -->
+	<sub-flow name="fallback-get-all-flights" doc:id="fallback-get-all-flights">
+		<logger level="WARN" doc:name="Fallback Active" doc:id="log-fallback-all-flights" 
+			message="Database unavailable - using cached data for getAllFlights"/>
+		
+		<try doc:name="Try Get Cached Data" doc:id="try-cached-all-flights">
+			<os:retrieve doc:name="Get Cached Flights" doc:id="get-cached-flights" 
+				key="all-flights-cache" objectStore="flight-cache-store"/>
+			
+			<logger level="INFO" doc:name="Cache Hit" doc:id="cache-hit-all-flights" 
+				message="Serving getAllFlights from cache"/>
+			
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="false" doc:name="Cache Miss" 
+					doc:id="cache-miss-all-flights" type="OS:KEY_NOT_FOUND">
+					<logger level="WARN" doc:name="No Cache Available" doc:id="no-cache-all-flights" 
+						message="No cached data available for getAllFlights - returning default response"/>
+					
+					<!-- Return default/empty response when no cache available -->
+					<ee:transform doc:name="Default Response" doc:id="default-response-all-flights">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Service temporarily unavailable. Database is experiencing issues.",
+	flights: [],
+	cached: false,
+	fallbackActive: true,
+	timestamp: now(),
+	notice: "This is a fallback response. Some flights may not be displayed."
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		
+		<!-- Add fallback metadata to response -->
+		<ee:transform doc:name="Add Fallback Metadata" doc:id="add-fallback-metadata-all">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (payload.fallbackActive default false)
+	payload
+else
+	payload ++ {
+		cached: true,
+		fallbackActive: true,
+		cacheTimestamp: now(),
+		notice: "This data is served from cache due to database unavailability."
+	}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+
+	<!-- Fallback for getFlightById operation -->
+	<sub-flow name="fallback-get-flight-by-id" doc:id="fallback-get-flight-by-id">
+		<logger level="WARN" doc:name="Fallback Active" doc:id="log-fallback-flight-by-id" 
+			message="Database unavailable - using cached data for getFlightById: #[vars.flightId]"/>
+		
+		<try doc:name="Try Get Cached Flight" doc:id="try-cached-flight-by-id">
+			<os:retrieve doc:name="Get Cached Flight" doc:id="get-cached-flight-by-id" 
+				key="#['flight-' ++ vars.flightId]" objectStore="flight-cache-store"/>
+			
+			<logger level="INFO" doc:name="Cache Hit" doc:id="cache-hit-flight-by-id" 
+				message="Serving flight #[vars.flightId] from cache"/>
+			
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="false" doc:name="Cache Miss" 
+					doc:id="cache-miss-flight-by-id" type="OS:KEY_NOT_FOUND">
+					<logger level="WARN" doc:name="No Cache Available" doc:id="no-cache-flight-by-id" 
+						message="No cached data available for flight #[vars.flightId] - returning not found response"/>
+					
+					<!-- Return not found response when no cache available -->
+					<ee:transform doc:name="Flight Not Found Response" doc:id="flight-not-found-response">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "SERVICE_UNAVAILABLE",
+	message: "Flight information temporarily unavailable due to database issues.",
+	flightId: vars.flightId,
+	fallbackActive: true,
+	timestamp: now(),
+	suggestion: "Please try again later or contact support if the issue persists."
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					
+					<!-- Set 503 status for service unavailable -->
+					<set-variable value="503" doc:name="Set Service Unavailable Status" doc:id="set-503-status" variableName="httpStatus"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		
+		<!-- Add fallback metadata to response if data was found in cache -->
+		<choice doc:name="Check if Data Found" doc:id="check-data-found">
+			<when expression="#[vars.httpStatus == null]">
+				<ee:transform doc:name="Add Cache Metadata" doc:id="add-cache-metadata-flight">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload ++ {
+	cached: true,
+	fallbackActive: true,
+	cacheTimestamp: now(),
+	notice: "This flight data is served from cache due to database unavailability."
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+		</choice>
+	</sub-flow>
+
+	<!-- Fallback for update operations - Queue for later processing -->
+	<sub-flow name="fallback-queue-update-operation" doc:id="fallback-queue-update">
+		<logger level="WARN" doc:name="Fallback Active" doc:id="log-fallback-update" 
+			message="Database unavailable - queueing update operation for later processing"/>
+		
+		<!-- Store update operation in queue for later processing -->
+		<ee:transform doc:name="Prepare Queued Operation" doc:id="prepare-queued-operation">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	operationType: "UPDATE",
+	operation: vars.operation,
+	flightId: vars.flightId,
+	updatePayload: vars.updatePayload,
+	timestamp: now(),
+	retryCount: 0,
+	status: "QUEUED"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<os:store doc:name="Queue Update Operation" doc:id="queue-update-operation" 
+			key="#['queued-update-' ++ uuid()]" objectStore="flight-cache-store">
+			<os:value>#[payload]</os:value>
+		</os:store>
+		
+		<logger level="INFO" doc:name="Operation Queued" doc:id="operation-queued" 
+			message="Update operation queued for flight #[vars.flightId]"/>
+		
+		<!-- Return accepted response -->
+		<ee:transform doc:name="Queued Response" doc:id="queued-response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Update request received and queued for processing",
+	flightId: vars.flightId,
+	status: "QUEUED",
+	fallbackActive: true,
+	timestamp: now(),
+	notice: "Your update will be processed once database connectivity is restored."
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Set 202 Accepted status -->
+		<set-variable value="202" doc:name="Set Accepted Status" doc:id="set-accepted-status" variableName="httpStatus"/>
+	</sub-flow>
+
+	<!-- Fallback for delete operations - Queue for later processing -->
+	<sub-flow name="fallback-queue-delete-operation" doc:id="fallback-queue-delete">
+		<logger level="WARN" doc:name="Fallback Active" doc:id="log-fallback-delete" 
+			message="Database unavailable - queueing delete operation for later processing"/>
+		
+		<!-- Store delete operation in queue for later processing -->
+		<ee:transform doc:name="Prepare Queued Delete" doc:id="prepare-queued-delete">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	operationType: "DELETE",
+	operation: vars.operation,
+	flightId: vars.flightId,
+	timestamp: now(),
+	retryCount: 0,
+	status: "QUEUED"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<os:store doc:name="Queue Delete Operation" doc:id="queue-delete-operation" 
+			key="#['queued-delete-' ++ uuid()]" objectStore="flight-cache-store">
+			<os:value>#[payload]</os:value>
+		</os:store>
+		
+		<logger level="INFO" doc:name="Delete Queued" doc:id="delete-queued" 
+			message="Delete operation queued for flight #[vars.flightId]"/>
+		
+		<!-- Return accepted response -->
+		<ee:transform doc:name="Delete Queued Response" doc:id="delete-queued-response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Delete request received and queued for processing",
+	flightId: vars.flightId,
+	status: "QUEUED",
+	fallbackActive: true,
+	timestamp: now(),
+	notice: "Your delete operation will be processed once database connectivity is restored."
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Set 202 Accepted status -->
+		<set-variable value="202" doc:name="Set Delete Accepted Status" doc:id="set-delete-accepted-status" variableName="httpStatus"/>
+	</sub-flow>
+
+	<!-- Fallback for batch processing - Store batch for later processing -->
+	<sub-flow name="fallback-queue-batch-operation" doc:id="fallback-queue-batch">
+		<logger level="WARN" doc:name="Fallback Active" doc:id="log-fallback-batch" 
+			message="Database unavailable - queueing batch operation for later processing"/>
+		
+		<!-- Store batch operation for later processing -->
+		<ee:transform doc:name="Prepare Queued Batch" doc:id="prepare-queued-batch">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	operationType: "BATCH",
+	operation: vars.operation,
+	batchId: vars.batchId,
+	batchData: vars.batchData,
+	timestamp: now(),
+	retryCount: 0,
+	status: "QUEUED",
+	recordCount: sizeOf(vars.batchData.flights default [])
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<os:store doc:name="Queue Batch Operation" doc:id="queue-batch-operation" 
+			key="#['queued-batch-' ++ vars.batchId]" objectStore="flight-cache-store">
+			<os:value>#[payload]</os:value>
+		</os:store>
+		
+		<logger level="INFO" doc:name="Batch Queued" doc:id="batch-queued" 
+			message="Batch operation queued: #[vars.batchId] with #[sizeOf(vars.batchData.flights default [])] records"/>
+		
+		<!-- Return accepted response -->
+		<ee:transform doc:name="Batch Queued Response" doc:id="batch-queued-response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Batch processing request received and queued",
+	batchId: vars.batchId,
+	recordCount: sizeOf(vars.batchData.flights default []),
+	status: "QUEUED",
+	fallbackActive: true,
+	timestamp: now(),
+	notice: "Your batch will be processed once database connectivity is restored."
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Set 202 Accepted status -->
+		<set-variable value="202" doc:name="Set Batch Accepted Status" doc:id="set-batch-accepted-status" variableName="httpStatus"/>
+	</sub-flow>
+
+	<!-- Cache Management Sub-flows -->
+	<sub-flow name="cache-successful-response" doc:id="cache-successful-response">
+		<logger level="DEBUG" doc:name="Caching Response" doc:id="log-cache-response" 
+			message="Caching successful response for operation: #[vars.operation]"/>
+		
+		<choice doc:name="Choose Cache Strategy" doc:id="choose-cache-strategy">
+			
+			<!-- Cache all flights -->
+			<when expression='#[vars.operation == "getAllFlights"]'>
+				<os:store doc:name="Cache All Flights" doc:id="cache-all-flights" 
+					key="all-flights-cache" objectStore="flight-cache-store">
+					<os:value>#[payload]</os:value>
+				</os:store>
+				<logger level="DEBUG" doc:name="All Flights Cached" doc:id="all-flights-cached" 
+					message="All flights data cached successfully"/>
+			</when>
+			
+			<!-- Cache individual flight -->
+			<when expression='#[vars.operation == "getFlightById"]'>
+				<os:store doc:name="Cache Individual Flight" doc:id="cache-individual-flight" 
+					key="#['flight-' ++ vars.flightId]" objectStore="flight-cache-store">
+					<os:value>#[payload]</os:value>
+				</os:store>
+				<logger level="DEBUG" doc:name="Flight Cached" doc:id="flight-cached" 
+					message="Flight #[vars.flightId] cached successfully"/>
+			</when>
+			
+			<!-- For update operations, update cache if available -->
+			<when expression='#[vars.operation == "updateFlight"]'>
+				<try doc:name="Try Update Cache" doc:id="try-update-cache">
+					<!-- Update individual flight cache -->
+					<os:store doc:name="Update Flight Cache" doc:id="update-flight-cache" 
+						key="#['flight-' ++ vars.flightId]" objectStore="flight-cache-store">
+						<os:value>#[payload.updatedFlight default payload]</os:value>
+					</os:store>
+					
+					<!-- Invalidate all flights cache as it's now stale -->
+					<try doc:name="Try Invalidate All Cache" doc:id="try-invalidate-all-cache">
+						<os:remove doc:name="Invalidate All Flights Cache" doc:id="invalidate-all-cache" 
+							key="all-flights-cache" objectStore="flight-cache-store"/>
+						<error-handler>
+							<on-error-continue enableNotifications="true" logException="false" doc:name="Cache Not Found" 
+								doc:id="cache-not-found-invalidate" type="OS:KEY_NOT_FOUND"/>
+						</error-handler>
+					</try>
+					
+					<logger level="DEBUG" doc:name="Cache Updated" doc:id="cache-updated" 
+						message="Flight cache updated for flight #[vars.flightId]"/>
+					
+					<error-handler>
+						<on-error-continue enableNotifications="true" logException="true" doc:name="Cache Update Failed" 
+							doc:id="cache-update-failed" type="ANY">
+							<logger level="WARN" doc:name="Cache Update Failed" doc:id="log-cache-update-failed" 
+								message="Failed to update cache for flight #[vars.flightId]: #[error.description]"/>
+						</on-error-continue>
+					</error-handler>
+				</try>
+			</when>
+			
+			<!-- For delete operations, remove from cache -->
+			<when expression='#[vars.operation == "deleteFlight"]'>
+				<try doc:name="Try Remove from Cache" doc:id="try-remove-cache">
+					<!-- Remove individual flight from cache -->
+					<os:remove doc:name="Remove Flight from Cache" doc:id="remove-flight-cache" 
+						key="#['flight-' ++ vars.flightId]" objectStore="flight-cache-store"/>
+					
+					<!-- Invalidate all flights cache as it's now stale -->
+					<try doc:name="Try Invalidate All on Delete" doc:id="try-invalidate-all-delete">
+						<os:remove doc:name="Invalidate All on Delete" doc:id="invalidate-all-delete" 
+							key="all-flights-cache" objectStore="flight-cache-store"/>
+						<error-handler>
+							<on-error-continue enableNotifications="true" logException="false" doc:name="All Cache Not Found" 
+								doc:id="all-cache-not-found-delete" type="OS:KEY_NOT_FOUND"/>
+						</error-handler>
+					</try>
+					
+					<logger level="DEBUG" doc:name="Cache Removed" doc:id="cache-removed" 
+						message="Flight #[vars.flightId] removed from cache"/>
+					
+					<error-handler>
+						<on-error-continue enableNotifications="true" logException="false" doc:name="Cache Remove Failed" 
+							doc:id="cache-remove-failed" type="OS:KEY_NOT_FOUND">
+							<logger level="DEBUG" doc:name="Flight Not in Cache" doc:id="flight-not-in-cache" 
+								message="Flight #[vars.flightId] was not in cache"/>
+						</on-error-continue>
+					</error-handler>
+				</try>
+			</when>
+		</choice>
+	</sub-flow>
+
+	<!-- Process Queued Operations when Database is Available -->
+	<sub-flow name="process-queued-operations" doc:id="process-queued-operations">
+		<logger level="INFO" doc:name="Processing Queued Operations" doc:id="log-process-queued" 
+			message="Processing queued database operations"/>
+		
+		<!-- This would typically be called by a scheduled job -->
+		<ee:transform doc:name="Get Queue Keys Pattern" doc:id="get-queue-keys">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Queue processing initiated",
+	timestamp: now()
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<logger level="INFO" doc:name="Queue Processing Complete" doc:id="queue-processing-complete" 
+			message="Queued operations processing completed"/>
+		
+		<!-- Note: Full implementation would retrieve all queued operations from object store
+			 and process them one by one, updating their status and removing successful ones -->
+	</sub-flow>
+
+</mule>

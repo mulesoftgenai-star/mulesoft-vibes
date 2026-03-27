@@ -1,0 +1,253 @@
+#%RAML 1.0 Library
+
+usage: Order Management data types for Experience API layer
+
+types:
+  Order:
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Unique order identifier
+        pattern: ^ORD-\d{4}-\d{3}$
+        example: ORD-2026-001
+      customerId:
+        type: string
+        description: Customer identifier
+        example: CUST-12345
+      orderDate:
+        type: date-only
+        description: Order creation date
+      status:
+        type: string
+        enum: [pending, processing, confirmed, shipped, delivered, cancelled]
+        description: Current order status
+      totalAmount:
+        type: number
+        description: Total order amount including tax and shipping
+        minimum: 0
+        example: 299.99
+      currency:
+        type: string
+        description: Currency code (ISO 4217)
+        pattern: ^[A-Z]{3}$
+        example: USD
+      items:
+        type: OrderItem[]
+        description: List of order items
+        minItems: 1
+      shippingAddress:
+        type: Address
+        description: Delivery address
+      billingAddress?:
+        type: Address
+        description: Billing address (defaults to shipping if not provided)
+      paymentMethod?:
+        type: PaymentMethod
+        description: Payment method information
+      trackingNumber?:
+        type: string
+        description: Shipping tracking number
+        example: TRK123456789
+      estimatedDeliveryDate?:
+        type: date-only
+        description: Estimated delivery date
+      actualDeliveryDate?:
+        type: date-only
+        description: Actual delivery date
+      specialInstructions?:
+        type: string
+        description: Special delivery instructions
+        maxLength: 500
+      createdAt:
+        type: datetime
+        description: Order creation timestamp
+      updatedAt:
+        type: datetime
+        description: Last update timestamp
+
+  OrderItem:
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier
+        example: PROD-001
+      productName:
+        type: string
+        description: Product display name
+        example: Wireless Headphones
+      quantity:
+        type: integer
+        description: Quantity ordered
+        minimum: 1
+      unitPrice:
+        type: number
+        description: Price per unit
+        minimum: 0
+      totalPrice:
+        type: number
+        description: Total price for this line item (quantity × unit price)
+        minimum: 0
+      discount?:
+        type: number
+        description: Discount amount applied
+        minimum: 0
+      tax?:
+        type: number
+        description: Tax amount for this item
+        minimum: 0
+      sku?:
+        type: string
+        description: Stock keeping unit
+      category?:
+        type: string
+        description: Product category
+
+  OrderRequest:
+    type: object
+    properties:
+      customerId:
+        type: string
+        description: Customer identifier
+        example: CUST-12345
+      items:
+        type: OrderItemRequest[]
+        description: Items to include in the order
+        minItems: 1
+      shippingAddress:
+        type: Address
+        description: Delivery address
+      billingAddress?:
+        type: Address
+        description: Billing address (optional, defaults to shipping address)
+      paymentMethod:
+        type: PaymentMethod
+        description: Payment method details
+      promotionCode?:
+        type: string
+        description: Promotion or coupon code
+        pattern: ^[A-Z0-9]{4,20}$
+      specialInstructions?:
+        type: string
+        description: Special delivery instructions
+        maxLength: 500
+
+  OrderItemRequest:
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier to order
+        example: PROD-001
+      quantity:
+        type: integer
+        description: Quantity to order
+        minimum: 1
+      requestedPrice?:
+        type: number
+        description: Customer's expected price (for price matching)
+        minimum: 0
+
+  OrderUpdateRequest:
+    type: object
+    properties:
+      shippingAddress?:
+        type: Address
+        description: Updated shipping address
+      billingAddress?:
+        type: Address
+        description: Updated billing address
+      specialInstructions?:
+        type: string
+        description: Updated delivery instructions
+        maxLength: 500
+      paymentMethod?:
+        type: PaymentMethod
+        description: Updated payment method (if allowed)
+
+  OrderList:
+    type: object
+    properties:
+      orders:
+        type: Order[]
+        description: List of orders
+      pagination:
+        type: Pagination
+        description: Pagination metadata
+
+  Address:
+    type: object
+    properties:
+      street:
+        type: string
+        description: Street address
+        example: 123 Main St
+      city:
+        type: string
+        description: City
+        example: New York
+      state:
+        type: string
+        description: State/Province
+        example: NY
+      zipCode:
+        type: string
+        description: ZIP/Postal code
+        example: "10001"
+      country:
+        type: string
+        description: Country code
+        pattern: ^[A-Z]{2,3}$
+        example: USA
+
+  PaymentMethod:
+    type: object
+    properties:
+      type:
+        type: string
+        enum: [credit_card, debit_card, paypal, bank_transfer, cash_on_delivery]
+        description: Payment method type
+      cardNumber?:
+        type: string
+        description: Masked card number
+        example: "****-****-****-1234"
+      expiryMonth?:
+        type: integer
+        minimum: 1
+        maximum: 12
+      expiryYear?:
+        type: integer
+        minimum: 2024
+      cardHolderName?:
+        type: string
+        description: Card holder name
+      paypalEmail?:
+        type: string
+        description: PayPal email address
+      bankAccount?:
+        type: string
+        description: Bank account number (masked)
+
+  Pagination:
+    type: object
+    properties:
+      total:
+        type: integer
+        description: Total number of items
+        minimum: 0
+      limit:
+        type: integer
+        description: Items per page
+        minimum: 1
+        maximum: 100
+      offset:
+        type: integer
+        description: Number of items skipped
+        minimum: 0
+      hasNext:
+        type: boolean
+        description: Whether there are more items
+      hasPrevious:
+        type: boolean
+        description: Whether there are previous items

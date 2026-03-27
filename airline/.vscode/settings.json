@@ -1,0 +1,20 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    ".mule": true,
+    ".classpath": true,
+    ".project": true,
+    "target": true
+  },
+  "testing.coverageBarThresholds": {
+    "red": 0,
+    "yellow": 60,
+    "green": 90
+  },
+  "testing.displayedCoveragePercent": "statement",
+  "java.configuration.updateBuildConfiguration": "interactive"
+}

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+    
+    <apikit:config name="american-airlines-info-api-config" api="american-airlines-info-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+	<flow name="american-airlines-info-api-main">
+ <http:listener config-ref="american-airlines-info-api-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="american-airlines-info-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="delete:\flights\(ID):american-airlines-info-api-config">
+		<flow-ref doc:name="deleteFlightById" doc:id="26de530b-6b3e-453e-89f1-fe0763fea7af" name="deleteFlightById"/>
+    </flow>
+    <flow name="get:\flights:american-airlines-info-api-config">
+		<flow-ref doc:name="getAllFlights" doc:id="9170ba55-fefb-4dd7-8bc5-76be41f4fc43" name="getAllFlights"/>
+    </flow>
+    <flow name="get:\flights\(ID):american-airlines-info-api-config">
+		<flow-ref doc:name="getFlightById" doc:id="417ab227-bec2-423c-a1f2-a48cd546da18" name="getFlightById"/>
+    </flow>
+    <flow name="post:\flights:application\json:american-airlines-info-api-config">
+		<flow-ref doc:name="postFlights" doc:id="af6136e0-a88f-4f58-bc3c-634f5cabe97e" name="postFlights"/>
+    </flow>
+    
+    <flow name="put:\flights\(ID):application\json:american-airlines-info-api-config">
+		<flow-ref doc:name="updateFlightById" doc:id="update-flight-ref" name="updateFlightById"/>
+    </flow>
+    
+    <!-- Batch Processing Endpoint -->
+    <!-- [STUDIO:"batch-flights-processing-api"]<flow name="batch-flights-processing-api" doc:id="batch-flights-processing-api-flow">
+		<http:listener doc:name="Batch processing endpoint" doc:id="batch-listener" config-ref="american-airlines-info-api-httpListenerConfig" path="/api/flights/batch" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Log batch request" doc:id="log-batch-request" message="Received batch processing request"/>
+		<flow-ref doc:name="Process flight batch" doc:id="process-flight-batch-api-ref" name="process-flight-batch"/>
+		<ee:transform doc:name="Batch response" doc:id="batch-response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+&#45;&#45;-
+{
+	message: "Batch processing completed",
+	summary: {
+		totalRecords: vars.totalCount,
+		successfulRecords: vars.successCount,
+		failedRecords: vars.failureCount,
+		processedAt: now() as String {format: "yyyy-MM-dd HH:mm:ss"}
+	}
+}&#93;&#93;></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow> [STUDIO] -->
+</mule>

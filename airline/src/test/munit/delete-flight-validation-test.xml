@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" 
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core" 
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+		http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+		
+	<munit:config name="delete-flight-validation-test.xml" />
+	
+	<!-- Test: Delete flight with no active bookings - should succeed -->
+	<munit:test name="delete-flight-no-active-bookings-test" doc:id="no-active-bookings-test">
+		<munit:behavior>
+			<set-variable value="FL123" doc:name="Set Test Flight ID" doc:id="set-test-flight-id" variableName="flightId"/>
+			<!-- Mock database response with 0 active bookings -->
+			<munit-tools:mock-when doc:name="Mock DB Select - No Bookings" doc:id="mock-db-no-bookings" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="Check Active Bookings" attributeName="doc:name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{booking_count: 0}]]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="validateActiveBookings" doc:id="call-validate-bookings" name="validateActiveBookings"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert No Error Raised" doc:id="assert-no-error" expression="#[vars.activeBookingCount]" is="#[MunitTools::equalTo(0)]"/>
+		</munit:validation>
+	</munit:test>
+	
+	<!-- Test: Delete flight with active bookings - should raise business validation error -->
+	<munit:test name="delete-flight-with-active-bookings-test" doc:id="active-bookings-test" expectedErrorType="AIRLINE:BUSINESS_VALIDATION_ERROR">
+		<munit:behavior>
+			<set-variable value="FL456" doc:name="Set Test Flight ID" doc:id="set-test-flight-id-2" variableName="flightId"/>
+			<!-- Mock database response with 2 active bookings -->
+			<munit-tools:mock-when doc:name="Mock DB Select - Active Bookings" doc:id="mock-db-active-bookings" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="Check Active Bookings" attributeName="doc:name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[[{booking_count: 2}]]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="validateActiveBookings" doc:id="call-validate-bookings-2" name="validateActiveBookings"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:fail doc:name="Should not reach here" doc:id="should-not-reach"/>
+		</munit:validation>
+	</munit:test>
+	
+	<!-- Test: Database error during validation - should raise database error -->
+	<munit:test name="delete-flight-database-error-test" doc:id="database-error-test" expectedErrorType="AIRLINE:DATABASE_ERROR">
+		<munit:behavior>
+			<set-variable value="FL789" doc:name="Set Test Flight ID" doc:id="set-test-flight-id-3" variableName="flightId"/>
+			<!-- Mock database error -->
+			<munit-tools:mock-when doc:name="Mock DB Error" doc:id="mock-db-error" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="Check Active Bookings" attributeName="doc:name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="DB:CONNECTIVITY" description="Connection timeout"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="validateActiveBookings" doc:id="call-validate-bookings-3" name="validateActiveBookings"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:fail doc:name="Should not reach here" doc:id="should-not-reach-2"/>
+		</munit:validation>
+	</munit:test>
+	
+</mule>

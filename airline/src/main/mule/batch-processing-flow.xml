@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule.xsd">
+
+	<!-- Batch Processing Flow for Flight Records -->
+	<flow name="batch-process-flight-records-flow" doc:id="d1e8f2a3-4b5c-6d7e-8f9a-0b1c2d3e4f5a">
+		<http:listener doc:name="Batch Process Flight Records" doc:id="a1b2c3d4-e5f6-7890-1234-567890abcdef" config-ref="american-airlines-info-api-httpListenerConfig" path="/api/flights/batch-process"/>
+		
+		<!-- Validate Input -->
+		<ee:transform doc:name="Validate Input" doc:id="b2c3d4e5-f6a7-8901-2345-678901bcdefg">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (payload.flights != null and sizeOf(payload.flights) > 0) 
+	payload
+else 
+	error("INVALID_INPUT", "Flight records array is required and must not be empty")]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Initialize batch processing variables -->
+		<set-variable value="#[now()]" doc:name="Set Processing Start Time" doc:id="c3d4e5f6-a7b8-9012-3456-789012cdefgh" variableName="processingStartTime"/>
+		<set-variable value="#[correlationId]" doc:name="Set Batch ID" doc:id="d4e5f6a7-b8c9-0123-4567-890123defghi" variableName="batchId"/>
+		
+		<!-- Start Batch Job -->
+		<batch:job jobName="flight-records-batch-job" doc:id="e5f6a7b8-c9d0-1234-5678-901234efghij">
+			
+			<!-- Input Phase: Split flight records -->
+			<batch:input doc:id="f6a7b8c9-d0e1-2345-6789-012345fghijk">
+				<ee:transform doc:name="Split Flight Records" doc:id="a7b8c9d0-e1f2-3456-7890-123456ghijkl">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload.flights map ((flight, index) -> 
+	flight ++ {
+		batchId: vars.batchId,
+		recordIndex: index + 1,
+		processingTimestamp: now()
+	}
+)]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</batch:input>
+			
+			<!-- Process Phase: Handle each flight record -->
+			<batch:process-records doc:id="b8c9d0e1-f2a3-4567-8901-234567hijklm">
+				
+				<!-- Batch Step 1: Validate and Transform Flight Record -->
+				<batch:step name="validate-and-transform-flight" doc:id="c9d0e1f2-a3b4-5678-9012-345678ijklmn" acceptPolicy="ALL">
+					<logger level="INFO" doc:name="Log Processing Start" doc:id="d0e1f2a3-b4c5-6789-0123-456789jklmno" message="Processing flight record: #[payload.flightNumber default 'UNKNOWN'] - Record Index: #[payload.recordIndex]"/>
+					
+					<try doc:name="Try Validate Record" doc:id="try-validate-record">
+						<ee:transform doc:name="Validate Flight Data" doc:id="e1f2a3b4-c5d6-7890-1234-567890klmnop">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	flightId: if (payload.flightId != null and payload.flightId != "") payload.flightId else uuid(),
+	flightNumber: payload.flightNumber default error("VALIDATION_ERROR", "Flight number is required"),
+	airline: payload.airline default "American Airlines",
+	departure: {
+		airport: payload.departure.airport default error("VALIDATION_ERROR", "Departure airport is required"),
+		city: payload.departure.city default "",
+		scheduledTime: payload.departure.scheduledTime default error("VALIDATION_ERROR", "Departure scheduled time is required"),
+		actualTime: payload.departure.actualTime default null,
+		gate: payload.departure.gate default null,
+		terminal: payload.departure.terminal default null
+	},
+	arrival: {
+		airport: payload.arrival.airport default error("VALIDATION_ERROR", "Arrival airport is required"),
+		city: payload.arrival.city default "",
+		scheduledTime: payload.arrival.scheduledTime default error("VALIDATION_ERROR", "Arrival scheduled time is required"),
+		actualTime: payload.arrival.actualTime default null,
+		gate: payload.arrival.gate default null,
+		terminal: payload.arrival.terminal default null
+	},
+	aircraft: {
+		'type': payload.aircraft.'type' default "",
+		registration: payload.aircraft.registration default "",
+		capacity: payload.aircraft.capacity default 0
+	},
+	status: upper(payload.status default "SCHEDULED"),
+	price: payload.price default 0.0,
+	currency: upper(payload.currency default "USD"),
+	duration: payload.duration default "",
+	distance: payload.distance default 0,
+	batchId: payload.batchId,
+	recordIndex: payload.recordIndex,
+	processingTimestamp: payload.processingTimestamp,
+	processedAt: now()
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						
+						<logger level="INFO" doc:name="Log Validation Success" doc:id="f2a3b4c5-d6e7-8901-2345-678901lmnopq" message="Flight record validated successfully"/>
+						
+						<error-handler>
+							<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="validation-error-handler" type="ANY">
+								<set-variable value="#[vars.batchSummary.summary.failedRecords + 1]" doc:name="Increment Failed Count" doc:id="increment-failed-validation" variableName="batchSummary.summary.failedRecords"/>
+								<logger level="ERROR" doc:name="Log Validation Error" doc:id="log-validation-error" message="Flight record validation failed: #[error.description]"/>
+								
+								<!-- Store failed record details -->
+								<db:insert doc:name="Insert Failed Record" doc:id="insert-failed-record" config-ref="Database_Config">
+									<db:sql><![CDATA[INSERT INTO batch_errors (
+										batch_id, record_index, flight_number, departure_airport, arrival_airport, 
+										error_type, error_reason, failed_at, record_data
+									) VALUES (
+										:batchId, :recordIndex, :flightNumber, :departureAirport, :arrivalAirport,
+										:errorType, :errorReason, NOW(), :recordData
+									)]]></db:sql>
+									<db:input-parameters><![CDATA[#[{
+										batchId: payload.batchId,
+										recordIndex: payload.recordIndex,
+										flightNumber: payload.flightNumber default "UNKNOWN",
+										departureAirport: payload.departure.airport default "UNKNOWN", 
+										arrivalAirport: payload.arrival.airport default "UNKNOWN",
+										errorType: error.errorType.asString(),
+										errorReason: error.description,
+										recordData: write(payload, "application/json")
+									}]]]></db:input-parameters>
+								</db:insert>
+							</on-error-continue>
+						</error-handler>
+					</try>
+				</batch:step>
+				
+				<!-- Batch Step 2: Store Flight Record in Database -->
+				<batch:step name="store-flight-record" doc:id="a3b4c5d6-e7f8-9012-3456-789012mnopqr" acceptPolicy="NO_FAILURES">
+					<db:insert doc:name="Insert Flight Record" doc:id="b4c5d6e7-f8a9-0123-4567-890123nopqrs" config-ref="Database_Config">
+						<db:sql><![CDATA[INSERT INTO flights (
+							flight_id, flight_number, airline, 
+							departure_airport, departure_city, departure_scheduled_time, departure_actual_time, departure_gate, departure_terminal,
+							arrival_airport, arrival_city, arrival_scheduled_time, arrival_actual_time, arrival_gate, arrival_terminal,
+							aircraft_type, aircraft_registration, aircraft_capacity,
+							status, price, currency, duration, distance,
+							batch_id, record_index, processing_timestamp, processed_at, created_at, updated_at
+						) VALUES (
+							:flightId, :flightNumber, :airline,
+							:departureAirport, :departureCity, :departureScheduledTime, :departureActualTime, :departureGate, :departureTerminal,
+							:arrivalAirport, :arrivalCity, :arrivalScheduledTime, :arrivalActualTime, :arrivalGate, :arrivalTerminal,
+							:aircraftType, :aircraftRegistration, :aircraftCapacity,
+							:status, :price, :currency, :duration, :distance,
+							:batchId, :recordIndex, :processingTimestamp, :processedAt, NOW(), NOW()
+						)]]></db:sql>
+						<db:input-parameters><![CDATA[#[{
+							flightId: payload.flightId,
+							flightNumber: payload.flightNumber,
+							airline: payload.airline,
+							departureAirport: payload.departure.airport,
+							departureCity: payload.departure.city,
+							departureScheduledTime: payload.departure.scheduledTime,
+							departureActualTime: payload.departure.actualTime,
+							departureGate: payload.departure.gate,
+							departureTerminal: payload.departure.terminal,
+							arrivalAirport: payload.arrival.airport,
+							arrivalCity: payload.arrival.city,
+							arrivalScheduledTime: payload.arrival.scheduledTime,
+							arrivalActualTime: payload.arrival.actualTime,
+							arrivalGate: payload.arrival.gate,
+							arrivalTerminal: payload.arrival.terminal,
+							aircraftType: payload.aircraft.'type',
+							aircraftRegistration: payload.aircraft.registration,
+							aircraftCapacity: payload.aircraft.capacity,
+							status: payload.status,
+							price: payload.price,
+							currency: payload.currency,
+							duration: payload.duration,
+							distance: payload.distance,
+							batchId: payload.batchId,
+							recordIndex: payload.recordIndex,
+							processingTimestamp: payload.processingTimestamp as String {format: "yyyy-MM-dd HH:mm:ss"},
+							processedAt: payload.processedAt as String {format: "yyyy-MM-dd HH:mm:ss"}
+						}]]]></db:input-parameters>
+					</db:insert>
+					
+					<logger level="INFO" doc:name="Log Database Insert Success" doc:id="c5d6e7f8-a9b0-1234-5678-901234opqrst" message="Flight record stored successfully: #[payload.flightNumber] with ID: #[payload.flightId]"/>
+				</batch:step>
+			</batch:process-records>
+			
+			<!-- On Complete Phase: Send Email Notification -->
+			<batch:on-complete doc:id="d6e7f8a9-b0c1-2345-6789-012345pqrstu">
+				<logger level="INFO" doc:name="Log Batch Completion" doc:id="e7f8a9b0-c1d2-3456-7890-123456qrstuv" message="Batch processing completed. Batch ID: #[vars.batchId]"/>
+				
+				<!-- Collect batch results -->
+				<ee:transform doc:name="Prepare Batch Summary" doc:id="f8a9b0c1-d2e3-4567-8901-234567rstuvw">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var batchJobResult = payload
+var totalRecords = batchJobResult.totalRecords
+var successfulRecords = batchJobResult.successfulRecords  
+var failedRecords = batchJobResult.failedRecords
+var processingTimeMs = ((now() - vars.processingStartTime) as Number)
+var processingTimeSeconds = processingTimeMs / 1000
+---
+{
+	batchId: vars.batchId,
+	processingStartTime: vars.processingStartTime,
+	processingEndTime: now(),
+	processingDurationSeconds: processingTimeSeconds,
+	summary: {
+		totalRecords: totalRecords,
+		successfulRecords: successfulRecords,
+		failedRecords: failedRecords,
+		successRate: if (totalRecords > 0) ((successfulRecords / totalRecords) * 100) as Number {format: "##.##"} else 0
+	},
+	status: if (failedRecords == 0) "COMPLETED_SUCCESS" else if (successfulRecords > 0) "COMPLETED_WITH_FAILURES" else "COMPLETED_ALL_FAILED"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="batchSummary"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				
+				<!-- Store Batch Summary -->
+				<db:insert doc:name="Insert Batch Summary" doc:id="insert-batch-summary" config-ref="Database_Config">
+					<db:sql><![CDATA[INSERT INTO batch_summary (
+						batch_id, processing_start_time, processing_end_time, total_records, 
+						successful_records, failed_records, processing_duration_seconds, success_rate, status, created_at
+					) VALUES (
+						:batchId, :processingStartTime, :processingEndTime, :totalRecords,
+						:successfulRecords, :failedRecords, :processingDuration, :successRate, :status, NOW()
+					)]]></db:sql>
+					<db:input-parameters><![CDATA[#[{
+						batchId: vars.batchSummary.batchId,
+						processingStartTime: vars.batchSummary.processingStartTime as String {format: "yyyy-MM-dd HH:mm:ss"},
+						processingEndTime: vars.batchSummary.processingEndTime as String {format: "yyyy-MM-dd HH:mm:ss"},
+						totalRecords: vars.batchSummary.summary.totalRecords,
+						successfulRecords: vars.batchSummary.summary.successfulRecords,
+						failedRecords: vars.batchSummary.summary.failedRecords,
+						processingDuration: vars.batchSummary.processingDurationSeconds,
+						successRate: vars.batchSummary.summary.successRate,
+						status: vars.batchSummary.status
+					}]]]></db:input-parameters>
+				</db:insert>
+
+				<!-- Get Failed Records Details if any -->
+				<choice doc:name="Check for Failed Records" doc:id="a9b0c1d2-e3f4-5678-9012-345678stuvwx">
+					<when expression="#[vars.batchSummary.summary.failedRecords > 0]">
+						<flow-ref doc:name="Get Failed Records Details" doc:id="b0c1d2e3-f4a5-6789-0123-456789tuvwxy" name="get-failed-records-details-flow"/>
+					</when>
+					<otherwise>
+						<set-variable value="#[[]]" doc:name="Set Empty Failed Records" doc:id="c1d2e3f4-a5b6-7890-1234-567890uvwxyz" variableName="failedRecordsDetails"/>
+					</otherwise>
+				</choice>
+				
+				<!-- Send Email Notification -->
+				<flow-ref doc:name="Send Batch Completion Email" doc:id="d2e3f4a5-b6c7-8901-2345-678901vwxyza" name="send-batch-completion-email-flow"/>
+				
+				<!-- Prepare Final Response -->
+				<ee:transform doc:name="Prepare Final Response" doc:id="e3f4a5b6-c7d8-9012-3456-789012wxyzab">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Batch processing completed successfully",
+	batchId: vars.batchSummary.batchId,
+	processingDuration: vars.batchSummary.processingDurationSeconds ++ " seconds",
+	summary: vars.batchSummary.summary,
+	status: vars.batchSummary.status,
+	emailNotificationSent: true,
+	timestamp: now()
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</batch:on-complete>
+		</batch:job>
+		
+		<!-- Error Handling -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="f4a5b6c7-d8e9-0123-4567-890123xyzabc" type="ANY">
+				<logger level="ERROR" doc:name="Log Batch Processing Error" doc:id="a5b6c7d8-e9f0-1234-5678-901234yzabcd" message="Batch processing failed: #[error.description]"/>
+				
+				<ee:transform doc:name="Error Response" doc:id="b6c7d8e9-f0a1-2345-6789-012345zabcde">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "BATCH_PROCESSING_FAILED",
+	message: "Failed to process flight records batch",
+	details: error.description,
+	batchId: vars.batchId default null,
+	timestamp: now()
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				
+				<set-variable value="500" doc:name="Set Error Status" doc:id="c7d8e9f0-a1b2-3456-7890-123456abcdef" variableName="httpStatus"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	
+	<!-- Sub-flow to get failed records details -->
+	<sub-flow name="get-failed-records-details-flow" doc:id="d8e9f0a1-b2c3-4567-8901-234567bcdefg">
+		<db:select doc:name="Query Failed Records" doc:id="e9f0a1b2-c3d4-5678-9012-345678cdefgh" config-ref="Database_Config">
+			<db:sql><![CDATA[SELECT 
+				flight_number, record_index, 
+				departure_airport, arrival_airport, 
+				status, processing_timestamp,
+				'Validation or processing error during batch execution' as error_reason
+			FROM batch_errors 
+			WHERE batch_id = :batchId 
+			ORDER BY record_index]]></db:sql>
+			<db:input-parameters><![CDATA[#[{
+				batchId: vars.batchSummary.batchId
+			}]]]></db:input-parameters>
+		</db:select>
+		
+		<set-variable value="#[payload]" doc:name="Set Failed Records Details" doc:id="f0a1b2c3-d4e5-6789-0123-456789defghi" variableName="failedRecordsDetails"/>
+	</sub-flow>
+	
+	<!-- Sub-flow to send batch completion email -->
+	<sub-flow name="send-batch-completion-email-flow" doc:id="a1b2c3d4-e5f6-7890-1234-567890efghij">
+		<ee:transform doc:name="Prepare Email Content" doc:id="b2c3d4e5-f6a7-8901-2345-678901fghijk">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output text/html
+var summary = vars.batchSummary.summary
+var failedDetails = vars.failedRecordsDetails default []
+var statusColor = if (summary.failedRecords == 0) "green" else if (summary.successfulRecords > 0) "orange" else "red"
+---
+"<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background-color: #f0f0f0; padding: 15px; border-radius: 5px; }
+        .summary { margin: 20px 0; }
+        .summary table { border-collapse: collapse; width: 100%; }
+        .summary th, .summary td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .summary th { background-color: #f2f2f2; }
+        .status { color: " ++ statusColor ++ "; font-weight: bold; }
+        .failed-records { margin-top: 20px; }
+        .failed-records table { border-collapse: collapse; width: 100%; }
+        .failed-records th, .failed-records td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .failed-records th { background-color: #ffe6e6; }
+    </style>
+</head>
+<body>
+    <div class='header'>
+        <h2>Flight Records Batch Processing Complete</h2>
+        <p><strong>Batch ID:</strong> " ++ vars.batchSummary.batchId ++ "</p>
+        <p><strong>Processing Time:</strong> " ++ vars.batchSummary.processingDurationSeconds ++ " seconds</p>
+        <p><strong>Status:</strong> <span class='status'>" ++ vars.batchSummary.status ++ "</span></p>
+    </div>
+    
+    <div class='summary'>
+        <h3>Processing Summary</h3>
+        <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Total Records</td><td>" ++ summary.totalRecords ++ "</td></tr>
+            <tr><td>Successfully Processed</td><td>" ++ summary.successfulRecords ++ "</td></tr>
+            <tr><td>Failed Records</td><td>" ++ summary.failedRecords ++ "</td></tr>
+            <tr><td>Success Rate</td><td>" ++ summary.successRate ++ "%</td></tr>
+        </table>
+    </div>
+    
+    " ++ (if (sizeOf(failedDetails) > 0) 
+        "<div class='failed-records'>
+            <h3>Failed Records Details</h3>
+            <table>
+                <tr><th>Record #</th><th>Flight Number</th><th>Route</th><th>Error Reason</th></tr>" 
+                ++ (failedDetails reduce ((item, accumulator="") -> 
+                    accumulator ++ "<tr><td>" ++ item.record_index ++ "</td><td>" ++ item.flight_number ++ "</td><td>" ++ item.departure_airport ++ " → " ++ item.arrival_airport ++ "</td><td>" ++ item.error_reason ++ "</td></tr>"
+                )) ++
+            "</table>
+        </div>"
+    else "")
+    ++
+    "
+    <div style='margin-top: 30px; font-size: 12px; color: #666;'>
+        <p>This is an automated notification from the American Airlines API Batch Processing System.</p>
+        <p>Generated at: " ++ (now() as String {format: "yyyy-MM-dd HH:mm:ss z"}) ++ "</p>
+    </div>
+</body>
+</html>"]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="emailSubject"><![CDATA[%dw 2.0
+output text/plain
+---
+"Flight Records Batch Processing Complete - " ++ 
+vars.batchSummary.summary.totalRecords ++ " records processed (" ++
+vars.batchSummary.summary.successfulRecords ++ " success, " ++
+vars.batchSummary.summary.failedRecords ++ " failed)"]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		
+		<email:send doc:name="Send Email Notification" doc:id="c3d4e5f6-a7b8-9012-3456-789012ghijkl" config-ref="Email_SMTP_Config">
+			<email:to-addresses>
+				<email:to-address value="${batch.notification.email}"/>
+			</email:to-addresses>
+			<email:subject>#[vars.emailSubject]</email:subject>
+			<email:content type="text/html" charset="UTF-8">
+				<email:body>#[payload]</email:body>
+			</email:content>
+		</email:send>
+		
+		<logger level="INFO" doc:name="Log Email Sent" doc:id="d4e5f6a7-b8c9-0123-4567-890123hijklm" message="Batch completion email notification sent successfully for batch: #[vars.batchSummary.batchId]"/>
+	</sub-flow>
+
+</mule>

@@ -1,0 +1,701 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" 
+	xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core" 
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+		http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+		http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	
+	<munit:config name="american-airlines-api-test-suite.xml" />
+	
+	
+	<!-- =============================================== -->
+	<!-- getAllFlights Flow Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="getAllFlights-success-complete-data" doc:id="getAllFlights-success-complete-data" description="Test getAllFlights flow with complete data set and verify DataWeave transformation">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database Select Success" doc:id="mock-db-select-success" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA101",
+							"price": 299.99,
+							"takeOffDate": "2024-12-25T10:30:00",
+							"fromAirport": "LAX",
+							"toAirport": "NYC",
+							"seatsAvailable": 150,
+							"planeType": "Boeing 737",
+							"totalSeats": 180
+						},
+						{
+							"ID": 2,
+							"code1": "AA102", 
+							"price": 450.50,
+							"takeOffDate": "2024-12-26T14:15:00",
+							"fromAirport": "NYC",
+							"toAirport": "LAX",
+							"seatsAvailable": 120,
+							"planeType": "Airbus A320",
+							"totalSeats": 160
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="getAllFlights" doc:id="call-getAllFlights-success" name="getAllFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert payload not null" doc:id="assert-payload-not-null" expression="#[payload]" is="#[MunitTools::notNullValue()]" />
+			<munit-tools:assert-that doc:name="Assert payload size is 2" doc:id="assert-payload-size-2" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(2)]" />
+			<munit-tools:assert-that doc:name="Assert first flight ID" doc:id="assert-first-flight-id" expression="#[payload[0].ID]" is="#[MunitTools::equalTo(1)]" />
+			<munit-tools:assert-that doc:name="Assert first flight code" doc:id="assert-first-flight-code" expression="#[payload[0].code]" is="#[MunitTools::equalTo('AA101')]" />
+			<munit-tools:assert-that doc:name="Assert first flight price" doc:id="assert-first-flight-price" expression="#[payload[0].price]" is="#[MunitTools::equalTo(299.99)]" />
+			<munit-tools:assert-that doc:name="Assert first flight origin" doc:id="assert-first-flight-origin" expression="#[payload[0].origin]" is="#[MunitTools::equalTo('LAX')]" />
+			<munit-tools:assert-that doc:name="Assert first flight destination" doc:id="assert-first-flight-dest" expression="#[payload[0].destination]" is="#[MunitTools::equalTo('NYC')]" />
+			<munit-tools:assert-that doc:name="Assert second flight transformations" doc:id="assert-second-flight" expression="#[payload[1].code]" is="#[MunitTools::equalTo('AA102')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="getAllFlights-default-values-applied" doc:id="getAllFlights-default-values-applied" description="Test getAllFlights flow with null/missing values to verify default values in DataWeave transformation">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database with Nulls" doc:id="mock-db-nulls" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA100",
+							"price": null,
+							"takeOffDate": null,
+							"fromAirport": null,
+							"toAirport": null,
+							"seatsAvailable": null,
+							"planeType": null,
+							"totalSeats": null
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="getAllFlights" doc:id="call-getAllFlights-nulls" name="getAllFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert default price" doc:id="assert-default-price" expression="#[payload[0].price]" is="#[MunitTools::equalTo(0)]" />
+			<munit-tools:assert-that doc:name="Assert default departureDate" doc:id="assert-default-date" expression="#[payload[0].departureDate]" is="#[MunitTools::equalTo('')]" />
+			<munit-tools:assert-that doc:name="Assert default origin" doc:id="assert-default-origin" expression="#[payload[0].origin]" is="#[MunitTools::equalTo('')]" />
+			<munit-tools:assert-that doc:name="Assert default destination" doc:id="assert-default-dest" expression="#[payload[0].destination]" is="#[MunitTools::equalTo('')]" />
+			<munit-tools:assert-that doc:name="Assert default emptySeats" doc:id="assert-default-seats" expression="#[payload[0].emptySeats]" is="#[MunitTools::equalTo(0)]" />
+			<munit-tools:assert-that doc:name="Assert default plane type" doc:id="assert-default-plane-type" expression="#[payload[0].plane.'type']" is="#[MunitTools::equalTo('')]" />
+			<munit-tools:assert-that doc:name="Assert default totalSeats" doc:id="assert-default-total-seats" expression="#[payload[0].plane.totalSeats]" is="#[MunitTools::equalTo(0)]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="getAllFlights-empty-result" doc:id="getAllFlights-empty-result" description="Test getAllFlights flow with empty database result">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Empty Database" doc:id="mock-db-empty" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="getAllFlights" doc:id="call-getAllFlights-empty" name="getAllFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert empty array" doc:id="assert-empty-array" expression="#[payload]" is="#[MunitTools::equalTo([])]" />
+			<munit-tools:assert-that doc:name="Assert size zero" doc:id="assert-size-zero" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(0)]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="getAllFlights-database-error" doc:id="getAllFlights-database-error" description="Test getAllFlights flow with database connectivity error" expectedErrorType="DB:CONNECTIVITY">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database Error" doc:id="mock-db-error" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="DB:CONNECTIVITY" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="getAllFlights" doc:id="call-getAllFlights-error" name="getAllFlights" />
+		</munit:execution>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- getFlightById Flow Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="getFlightById-success-valid-id" doc:id="getFlightById-success-valid-id" description="Test getFlightById flow with valid ID parameter">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database Select By ID" doc:id="mock-db-select-by-id" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA101",
+							"price": 299.99,
+							"takeOffDate": "2024-12-25T10:30:00",
+							"fromAirport": "LAX",
+							"toAirport": "NYC",
+							"seatsAvailable": 150,
+							"planeType": "Boeing 737",
+							"totalSeats": 180
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with ID" doc:id="set-event-with-id">
+				<munit:attributes value='#[{uriParams: {ID: 1}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="getFlightById" doc:id="call-getFlightById-success" name="getFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert result not empty" doc:id="assert-result-not-empty" expression="#[payload]" is="#[MunitTools::notNullValue()]" />
+			<munit-tools:assert-that doc:name="Assert single result" doc:id="assert-single-result" expression="#[sizeOf(payload)]" is="#[MunitTools::equalTo(1)]" />
+			<munit-tools:assert-that doc:name="Assert correct ID" doc:id="assert-correct-id" expression="#[payload[0].ID]" is="#[MunitTools::equalTo(1)]" />
+			<munit-tools:assert-that doc:name="Assert code transformation" doc:id="assert-code-transformation" expression="#[payload[0].code]" is="#[MunitTools::equalTo('AA101')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="getFlightById-not-found" doc:id="getFlightById-not-found" description="Test getFlightById flow when ID is not found">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database Not Found" doc:id="mock-db-not-found" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with NonExistent ID" doc:id="set-event-nonexistent">
+				<munit:attributes value='#[{uriParams: {ID: 999}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="getFlightById" doc:id="call-getFlightById-notfound" name="getFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert empty result" doc:id="assert-empty-result" expression="#[payload]" is="#[MunitTools::equalTo([])]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="getFlightById-database-error" doc:id="getFlightById-database-error" description="Test getFlightById flow with database error" expectedErrorType="DB:CONNECTIVITY">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database Error" doc:id="mock-db-error-byid" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="DB:CONNECTIVITY" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with ID for Error" doc:id="set-event-id-error">
+				<munit:attributes value='#[{uriParams: {ID: 1}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="getFlightById" doc:id="call-getFlightById-error" name="getFlightById" />
+		</munit:execution>
+	</munit:test>
+	
+	<munit:test name="getFlightById-boundary-values" doc:id="getFlightById-boundary-values" description="Test getFlightById with boundary values like zero and negative IDs">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database Boundary Response" doc:id="mock-db-boundary" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with Zero ID" doc:id="set-event-zero-id">
+				<munit:attributes value='#[{uriParams: {ID: 0}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="getFlightById" doc:id="call-getFlightById-boundary" name="getFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert boundary result" doc:id="assert-boundary-result" expression="#[payload]" is="#[MunitTools::equalTo([])]" />
+		</munit:validation>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- postFlights Flow Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="postFlights-valid-json-payload" doc:id="postFlights-valid-json-payload" description="Test postFlights flow with valid JSON flight data">
+		<munit:behavior>
+			<set-payload doc:name="Set Valid Flight Payload" doc:id="set-valid-payload" value='#[{
+				"code": "AA103",
+				"price": 450.00,
+				"departureDate": "2024-12-27",
+				"origin": "DFW", 
+				"destination": "MIA",
+				"emptySeats": 100,
+				"plane": {
+					"type": "Boeing 777",
+					"totalSeats": 200
+				}
+			}]' />
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="postFlights" doc:id="call-postFlights-valid" name="postFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert success message" doc:id="assert-post-success" expression="#[payload.message]" is="#[MunitTools::equalTo('Flights added successfully (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="postFlights-empty-payload" doc:id="postFlights-empty-payload" description="Test postFlights flow with empty payload">
+		<munit:behavior>
+			<set-payload doc:name="Set Empty Payload" doc:id="set-empty-payload" value='#[{}]' />
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="postFlights" doc:id="call-postFlights-empty" name="postFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert message with empty payload" doc:id="assert-post-empty" expression="#[payload.message]" is="#[MunitTools::equalTo('Flights added successfully (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="postFlights-array-payload" doc:id="postFlights-array-payload" description="Test postFlights flow with array of flight objects">
+		<munit:behavior>
+			<set-payload doc:name="Set Array Payload" doc:id="set-array-payload" value='#[[
+				{
+					"code": "AA104",
+					"price": 350.00,
+					"departureDate": "2024-12-28",
+					"origin": "ORD",
+					"destination": "SEA"
+				},
+				{
+					"code": "AA105", 
+					"price": 425.00,
+					"departureDate": "2024-12-29",
+					"origin": "SEA",
+					"destination": "ORD"
+				}
+			]]' />
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="postFlights" doc:id="call-postFlights-array" name="postFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert array success message" doc:id="assert-post-array" expression="#[payload.message]" is="#[MunitTools::equalTo('Flights added successfully (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="postFlights-null-payload" doc:id="postFlights-null-payload" description="Test postFlights flow with null payload">
+		<munit:behavior>
+			<set-payload doc:name="Set Null Payload" doc:id="set-null-payload" value="#[null]" />
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="postFlights" doc:id="call-postFlights-null" name="postFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert message with null payload" doc:id="assert-post-null" expression="#[payload.message]" is="#[MunitTools::equalTo('Flights added successfully (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- deleteFlightById Flow Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="deleteFlightById-valid-id" doc:id="deleteFlightById-valid-id" description="Test deleteFlightById flow with valid ID">
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with Valid ID" doc:id="set-event-valid-delete">
+				<munit:attributes value='#[{uriParams: {ID: 1}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="deleteFlightById" doc:id="call-deleteFlightById-valid" name="deleteFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert delete success message" doc:id="assert-delete-success" expression="#[payload.message]" is="#[MunitTools::equalTo('Flight deleted by ID (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="deleteFlightById-zero-id" doc:id="deleteFlightById-zero-id" description="Test deleteFlightById flow with ID zero">
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with Zero ID" doc:id="set-event-zero-delete">
+				<munit:attributes value='#[{uriParams: {ID: 0}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="deleteFlightById" doc:id="call-deleteFlightById-zero" name="deleteFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert delete message for zero" doc:id="assert-delete-zero" expression="#[payload.message]" is="#[MunitTools::equalTo('Flight deleted by ID (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="deleteFlightById-negative-id" doc:id="deleteFlightById-negative-id" description="Test deleteFlightById flow with negative ID">
+		<munit:execution>
+			<munit:set-event doc:name="Set Event with Negative ID" doc:id="set-event-negative-delete">
+				<munit:attributes value='#[{uriParams: {ID: -1}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="deleteFlightById" doc:id="call-deleteFlightById-negative" name="deleteFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert delete message for negative" doc:id="assert-delete-negative" expression="#[payload.message]" is="#[MunitTools::equalTo('Flight deleted by ID (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- API Interface Layer Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="api-getAllFlights-integration" doc:id="api-getAllFlights-integration" description="Integration test for GET /flights API endpoint">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database for API" doc:id="mock-db-api-getall" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA101",
+							"price": 299.99,
+							"takeOffDate": "2024-12-25T10:30:00",
+							"fromAirport": "LAX",
+							"toAirport": "NYC",
+							"seatsAvailable": 150,
+							"planeType": "Boeing 737",
+							"totalSeats": 180
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="API Get All Flights" doc:id="api-call-getall" name="get:\flights:american-airlines-info-api-config" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert API response" doc:id="assert-api-getall" expression="#[payload]" is="#[MunitTools::notNullValue()]" />
+			<munit-tools:assert-that doc:name="Assert API flight data" doc:id="assert-api-flight-data" expression="#[payload[0].ID]" is="#[MunitTools::equalTo(1)]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="api-getFlightById-integration" doc:id="api-getFlightById-integration" description="Integration test for GET /flights/{ID} API endpoint">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Database for API By ID" doc:id="mock-db-api-getbyid" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA101",
+							"price": 299.99,
+							"takeOffDate": "2024-12-25T10:30:00",
+							"fromAirport": "LAX",
+							"toAirport": "NYC",
+							"seatsAvailable": 150,
+							"planeType": "Boeing 737",
+							"totalSeats": 180
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set Event for API By ID" doc:id="set-event-api-byid">
+				<munit:attributes value='#[{uriParams: {ID: 1}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="API Get Flight By ID" doc:id="api-call-getbyid" name="get:\flights\(ID):american-airlines-info-api-config" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert API by ID response" doc:id="assert-api-byid" expression="#[payload]" is="#[MunitTools::notNullValue()]" />
+			<munit-tools:assert-that doc:name="Assert API by ID data" doc:id="assert-api-byid-data" expression="#[payload[0].ID]" is="#[MunitTools::equalTo(1)]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="api-postFlights-integration" doc:id="api-postFlights-integration" description="Integration test for POST /flights API endpoint">
+		<munit:behavior>
+			<set-payload doc:name="Set POST API Payload" doc:id="set-post-api-payload" value='#[{
+				"code": "AA106",
+				"price": 500.00,
+				"departureDate": "2024-12-30",
+				"origin": "SFO",
+				"destination": "LAX"
+			}]' />
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="API Post Flights" doc:id="api-call-post" name="post:\flights:application\json:american-airlines-info-api-config" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert API POST response" doc:id="assert-api-post" expression="#[payload.message]" is="#[MunitTools::equalTo('Flights added successfully (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="api-deleteFlightById-integration" doc:id="api-deleteFlightById-integration" description="Integration test for DELETE /flights/{ID} API endpoint">
+		<munit:execution>
+			<munit:set-event doc:name="Set Event for API Delete" doc:id="set-event-api-delete">
+				<munit:attributes value='#[{uriParams: {ID: 1}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="API Delete Flight By ID" doc:id="api-call-delete" name="delete:\flights\(ID):american-airlines-info-api-config" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert API DELETE response" doc:id="assert-api-delete" expression="#[payload.message]" is="#[MunitTools::equalTo('Flight deleted by ID (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- Main Flow and Console Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="api-main-flow-router-success" doc:id="api-main-flow-router-success" description="Test main API flow with APIKit router success">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock APIKit Router Success" doc:id="mock-router-success" processor="apikit:router">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="american-airlines-info-api-config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[{status: "success", data: "router executed"}]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set HTTP Request Event" doc:id="set-http-event">
+				<munit:attributes value='#[{
+					method: "GET",
+					requestPath: "/api/flights",
+					headers: {},
+					queryParams: {},
+					uriParams: {}
+				}]' />
+			</munit:set-event>
+			<flow-ref doc:name="API Main Flow" doc:id="call-api-main" name="american-airlines-info-api-main" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert main flow success" doc:id="assert-main-success" expression="#[payload.status]" is="#[MunitTools::equalTo('success')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- Error Handler Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="api-main-bad-request-error" doc:id="api-main-bad-request-error" description="Test main API flow BAD_REQUEST error handling" expectedErrorType="APIKIT:BAD_REQUEST">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock APIKit Bad Request" doc:id="mock-bad-request" processor="apikit:router">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="american-airlines-info-api-config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="APIKIT:BAD_REQUEST" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="API Main Flow Bad Request" doc:id="call-main-bad-request" name="american-airlines-info-api-main" />
+		</munit:execution>
+	</munit:test>
+	
+	<munit:test name="api-main-not-found-error" doc:id="api-main-not-found-error" description="Test main API flow NOT_FOUND error handling" expectedErrorType="APIKIT:NOT_FOUND">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock APIKit Not Found" doc:id="mock-not-found" processor="apikit:router">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="american-airlines-info-api-config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="APIKIT:NOT_FOUND" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="API Main Flow Not Found" doc:id="call-main-not-found" name="american-airlines-info-api-main" />
+		</munit:execution>
+	</munit:test>
+	
+	<munit:test name="api-main-method-not-allowed-error" doc:id="api-main-method-not-allowed-error" description="Test main API flow METHOD_NOT_ALLOWED error handling" expectedErrorType="APIKIT:METHOD_NOT_ALLOWED">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock APIKit Method Not Allowed" doc:id="mock-method-not-allowed" processor="apikit:router">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="american-airlines-info-api-config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:error typeId="APIKIT:METHOD_NOT_ALLOWED" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="API Main Flow Method Not Allowed" doc:id="call-main-method-not-allowed" name="american-airlines-info-api-main" />
+		</munit:execution>
+	</munit:test>
+	
+	<!-- =============================================== -->
+	<!-- Additional Coverage Test Cases -->
+	<!-- =============================================== -->
+	
+	<munit:test name="getAllFlights-special-characters-data" doc:id="getAllFlights-special-characters-data" description="Test getAllFlights with special characters and unicode in data">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Special Characters Data" doc:id="mock-special-chars" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA-101@#*",
+							"price": 299.99,
+							"takeOffDate": "2024-12-25T10:30:00+05:30",
+							"fromAirport": "LAX/Los Angeles",
+							"toAirport": "NYC-JFK",
+							"seatsAvailable": 150,
+							"planeType": "Boeing 737-800 MAX",
+							"totalSeats": 180
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="getAllFlights" doc:id="call-getAllFlights-special" name="getAllFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert special chars in code" doc:id="assert-special-code" expression="#[payload[0].code]" is="#[MunitTools::equalTo('AA-101@#*')]" />
+			<munit-tools:assert-that doc:name="Assert special chars in airports" doc:id="assert-special-airports" expression="#[payload[0].origin]" is="#[MunitTools::equalTo('LAX/Los Angeles')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="getFlightById-large-id-values" doc:id="getFlightById-large-id-values" description="Test getFlightById with large ID values">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Large ID Response" doc:id="mock-large-id" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 2147483647,
+							"code1": "AA999",
+							"price": 9999.99,
+							"takeOffDate": "2099-12-31T23:59:59",
+							"fromAirport": "LAX",
+							"toAirport": "NYC", 
+							"seatsAvailable": 0,
+							"planeType": "Boeing 787",
+							"totalSeats": 400
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<munit:set-event doc:name="Set Large ID Event" doc:id="set-large-id-event">
+				<munit:attributes value='#[{uriParams: {ID: 2147483647}}]' />
+			</munit:set-event>
+			<flow-ref doc:name="getFlightById" doc:id="call-getFlightById-large" name="getFlightById" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert large ID handled" doc:id="assert-large-id" expression="#[payload[0].ID]" is="#[MunitTools::equalTo(2147483647)]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="postFlights-complex-nested-payload" doc:id="postFlights-complex-nested-payload" description="Test postFlights with complex nested JSON structure">
+		<munit:behavior>
+			<set-payload doc:name="Set Complex Nested Payload" doc:id="set-complex-payload" value='#[{
+				"flights": [
+					{
+						"code": "AA107",
+						"price": 750.00,
+						"departureDate": "2024-12-31",
+						"origin": "SFO",
+						"destination": "LAX",
+						"plane": {
+							"type": "Boeing 777-300ER",
+							"totalSeats": 400,
+							"configuration": {
+								"firstClass": 12,
+								"business": 52,
+								"economy": 336
+							}
+						},
+						"schedule": {
+							"departureTime": "08:00:00",
+							"arrivalTime": "09:30:00",
+							"duration": "1h 30m"
+						}
+					}
+				],
+				"metadata": {
+					"requestId": "12345",
+					"timestamp": "2024-12-25T10:30:00Z"
+				}
+			}]' />
+		</munit:behavior>
+		<munit:execution>
+			<flow-ref doc:name="postFlights" doc:id="call-postFlights-complex" name="postFlights" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert complex payload processed" doc:id="assert-complex-processed" expression="#[payload.message]" is="#[MunitTools::equalTo('Flights added successfully (but not really)')]" />
+		</munit:validation>
+	</munit:test>
+	
+	<munit:test name="performance-getAllFlights-timing" doc:id="performance-getAllFlights-timing" description="Performance test for getAllFlights with timing validation">
+		<munit:behavior>
+			<munit-tools:mock-when doc:name="Mock Performance Response" doc:id="mock-performance" processor="db:select">
+				<munit-tools:with-attributes>
+					<munit-tools:with-attribute whereValue="MySql_Database_Config" attributeName="config-ref" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return>
+					<munit-tools:payload value='#[[
+						{
+							"ID": 1,
+							"code1": "AA101",
+							"price": 299.99,
+							"takeOffDate": "2024-12-25T10:30:00",
+							"fromAirport": "LAX",
+							"toAirport": "NYC",
+							"seatsAvailable": 150,
+							"planeType": "Boeing 737",
+							"totalSeats": 180
+						}
+					]]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution>
+			<set-variable doc:name="Set Start Time" doc:id="set-start-time" variableName="startTime" value="#[now()]" />
+			<flow-ref doc:name="getAllFlights" doc:id="call-getAllFlights-performance" name="getAllFlights" />
+			<set-variable doc:name="Set End Time" doc:id="set-end-time" variableName="endTime" value="#[now()]" />
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert performance acceptable" doc:id="assert-performance" expression="#[(vars.endTime - vars.startTime) as Number]" is="#[MunitTools::lessThan(5000)]" />
+			<munit-tools:assert-that doc:name="Assert performance result valid" doc:id="assert-performance-valid" expression="#[payload[0].ID]" is="#[MunitTools::equalTo(1)]" />
+		</munit:validation>
+	</munit:test>
+	
+</mule>

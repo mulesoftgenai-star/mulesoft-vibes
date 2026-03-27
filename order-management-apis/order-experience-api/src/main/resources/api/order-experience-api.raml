@@ -1,0 +1,453 @@
+#%RAML 1.0
+title: Order Experience API
+version: v1
+description: Experience API for Order Management providing customer-facing order operations with simplified interface
+baseUri: https://api.company.com/order/v1
+protocols: [HTTPS]
+
+uses:
+  orderTypes: libraries/order-types.raml
+  commonTypes: libraries/common-types.raml
+
+securitySchemes:
+  oauth_2_0:
+    description: OAuth 2.0 for API access
+    type: OAuth 2.0
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [authorization_code, client_credentials]
+
+securedBy: [oauth_2_0]
+
+/orders:
+  displayName: Orders Management
+  description: Order lifecycle management operations
+  
+  get:
+    displayName: Get Orders
+    description: Retrieve customer orders with filtering and pagination
+    queryParameters:
+      customerId?:
+        type: string
+        description: Filter by customer ID
+      status?:
+        type: string
+        enum: [pending, processing, confirmed, shipped, delivered, cancelled]
+        description: Filter by order status
+      fromDate?:
+        type: date-only
+        description: Filter orders from this date
+      toDate?:
+        type: date-only
+        description: Filter orders until this date
+      limit?:
+        type: integer
+        default: 20
+        maximum: 100
+        description: Maximum number of orders to return
+      offset?:
+        type: integer
+        default: 0
+        description: Number of orders to skip for pagination
+    responses:
+      200:
+        description: Orders retrieved successfully
+        body:
+          application/json:
+            type: orderTypes.OrderList
+            example: |
+              {
+                "orders": [
+                  {
+                    "orderId": "ORD-2026-001",
+                    "customerId": "CUST-12345",
+                    "orderDate": "2026-03-24",
+                    "status": "processing",
+                    "totalAmount": 299.99,
+                    "currency": "USD",
+                    "items": [
+                      {
+                        "productId": "PROD-001",
+                        "productName": "Wireless Headphones",
+                        "quantity": 1,
+                        "unitPrice": 299.99,
+                        "totalPrice": 299.99
+                      }
+                    ],
+                    "shippingAddress": {
+                      "street": "123 Main St",
+                      "city": "New York",
+                      "state": "NY",
+                      "zipCode": "10001",
+                      "country": "USA"
+                    }
+                  }
+                ],
+                "pagination": {
+                  "total": 1,
+                  "limit": 20,
+                  "offset": 0,
+                  "hasNext": false,
+                  "hasPrevious": false
+                }
+              }
+      400:
+        description: Bad Request - Invalid query parameters
+        body:
+          application/json:
+            type: commonTypes.Error
+      401:
+        description: Unauthorized - Invalid or missing authentication
+        body:
+          application/json:
+            type: commonTypes.Error
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: commonTypes.Error
+
+  post:
+    displayName: Create Order
+    description: Create a new customer order with validation and processing
+    body:
+      application/json:
+        type: orderTypes.OrderRequest
+        example: |
+          {
+            "customerId": "CUST-12345",
+            "items": [
+              {
+                "productId": "PROD-001",
+                "quantity": 1
+              },
+              {
+                "productId": "PROD-002", 
+                "quantity": 2
+              }
+            ],
+            "shippingAddress": {
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "billingAddress": {
+              "street": "123 Main St",
+              "city": "New York", 
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "paymentMethod": {
+              "type": "credit_card",
+              "cardNumber": "****-****-****-1234",
+              "expiryMonth": 12,
+              "expiryYear": 2028,
+              "cardHolderName": "John Doe"
+            },
+            "specialInstructions": "Leave at front door"
+          }
+    responses:
+      201:
+        description: Order created successfully
+        body:
+          application/json:
+            type: orderTypes.Order
+            example: |
+              {
+                "orderId": "ORD-2026-001",
+                "customerId": "CUST-12345",
+                "orderDate": "2026-03-24",
+                "status": "pending",
+                "totalAmount": 399.97,
+                "currency": "USD",
+                "items": [
+                  {
+                    "productId": "PROD-001",
+                    "productName": "Wireless Headphones",
+                    "quantity": 1,
+                    "unitPrice": 299.99,
+                    "totalPrice": 299.99
+                  },
+                  {
+                    "productId": "PROD-002",
+                    "productName": "Phone Case",
+                    "quantity": 2,
+                    "unitPrice": 49.99,
+                    "totalPrice": 99.98
+                  }
+                ],
+                "shippingAddress": {
+                  "street": "123 Main St",
+                  "city": "New York",
+                  "state": "NY",
+                  "zipCode": "10001",
+                  "country": "USA"
+                },
+                "estimatedDeliveryDate": "2026-03-28",
+                "createdAt": "2026-03-24T10:30:00Z",
+                "updatedAt": "2026-03-24T10:30:00Z"
+              }
+      400:
+        description: Bad Request - Invalid order data
+        body:
+          application/json:
+            type: commonTypes.ValidationError
+      409:
+        description: Conflict - Order creation failed due to business rules
+        body:
+          application/json:
+            type: commonTypes.Error
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: commonTypes.Error
+
+  /{orderId}:
+    displayName: Order Operations
+    uriParameters:
+      orderId:
+        type: string
+        description: Unique order identifier
+        pattern: ^ORD-\d{4}-\d{3}$
+        example: ORD-2026-001
+    
+    get:
+      displayName: Get Order Details
+      description: Retrieve detailed order information by order ID
+      responses:
+        200:
+          description: Order details retrieved successfully
+          body:
+            application/json:
+              type: orderTypes.Order
+              example: |
+                {
+                  "orderId": "ORD-2026-001",
+                  "customerId": "CUST-12345",
+                  "orderDate": "2026-03-24",
+                  "status": "shipped",
+                  "totalAmount": 299.99,
+                  "currency": "USD",
+                  "items": [
+                    {
+                      "productId": "PROD-001",
+                      "productName": "Wireless Headphones",
+                      "quantity": 1,
+                      "unitPrice": 299.99,
+                      "totalPrice": 299.99
+                    }
+                  ],
+                  "shippingAddress": {
+                    "street": "123 Main St",
+                    "city": "New York",
+                    "state": "NY",
+                    "zipCode": "10001",
+                    "country": "USA"
+                  },
+                  "trackingNumber": "TRK123456789",
+                  "estimatedDeliveryDate": "2026-03-28",
+                  "createdAt": "2026-03-24T10:30:00Z",
+                  "updatedAt": "2026-03-25T14:22:00Z"
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: commonTypes.Error
+        500:
+          description: Internal Server Error
+          body:
+            application/json:
+              type: commonTypes.Error
+    
+    patch:
+      displayName: Update Order
+      description: Update order information (limited updates allowed based on order status)
+      body:
+        application/json:
+          type: orderTypes.OrderUpdateRequest
+          example: |
+            {
+              "shippingAddress": {
+                "street": "456 Updated St",
+                "city": "New York",
+                "state": "NY", 
+                "zipCode": "10002",
+                "country": "USA"
+              },
+              "specialInstructions": "Updated delivery instructions"
+            }
+      responses:
+        200:
+          description: Order updated successfully
+          body:
+            application/json:
+              type: orderTypes.Order
+        400:
+          description: Bad Request - Invalid update data
+          body:
+            application/json:
+              type: commonTypes.ValidationError
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: commonTypes.Error
+        409:
+          description: Conflict - Order cannot be updated in current state
+          body:
+            application/json:
+              type: commonTypes.Error
+        500:
+          description: Internal Server Error
+          body:
+            application/json:
+              type: commonTypes.Error
+    
+    delete:
+      displayName: Cancel Order
+      description: Cancel an existing order (soft delete with business rules)
+      responses:
+        200:
+          description: Order cancelled successfully
+          body:
+            application/json:
+              example: |
+                {
+                  "message": "Order cancelled successfully",
+                  "orderId": "ORD-2026-001",
+                  "status": "cancelled",
+                  "cancelledAt": "2026-03-24T15:30:00Z",
+                  "refundStatus": "processing"
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: commonTypes.Error
+        409:
+          description: Conflict - Order cannot be cancelled
+          body:
+            application/json:
+              type: commonTypes.Error
+        500:
+          description: Internal Server Error
+          body:
+            application/json:
+              type: commonTypes.Error
+
+    /status:
+      displayName: Order Status Management
+      patch:
+        displayName: Update Order Status
+        description: Update the status of an existing order
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [pending, processing, confirmed, shipped, delivered, cancelled]
+                description: New order status
+              reason?:
+                type: string
+                description: Reason for status change
+              trackingNumber?:
+                type: string
+                description: Shipping tracking number (for shipped status)
+            example: |
+              {
+                "status": "shipped",
+                "reason": "Order dispatched from warehouse",
+                "trackingNumber": "TRK123456789"
+              }
+        responses:
+          200:
+            description: Order status updated successfully
+            body:
+              application/json:
+                example: |
+                  {
+                    "orderId": "ORD-2026-001",
+                    "previousStatus": "confirmed",
+                    "newStatus": "shipped",
+                    "updatedAt": "2026-03-24T16:45:00Z",
+                    "trackingNumber": "TRK123456789"
+                  }
+          400:
+            description: Bad Request - Invalid status or transition
+            body:
+              application/json:
+                type: commonTypes.ValidationError
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: commonTypes.Error
+          409:
+            description: Invalid status transition
+            body:
+              application/json:
+                type: commonTypes.Error
+          500:
+            description: Internal Server Error
+            body:
+              application/json:
+                type: commonTypes.Error
+
+/health:
+  displayName: Health Check
+  description: API health monitoring endpoint
+  get:
+    displayName: Health Status
+    description: Check API health and dependency status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2026-03-24T10:00:00Z",
+                "version": "v1.0.0",
+                "environment": "production",
+                "dependencies": {
+                  "orderProcessAPI": "UP",
+                  "database": "UP",
+                  "objectStore": "UP"
+                },
+                "metrics": {
+                  "responseTime": "150ms",
+                  "memoryUsage": "65%",
+                  "cpuUsage": "45%"
+                }
+              }
+      503:
+        description: Service Unavailable - API or dependencies unhealthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2026-03-24T10:00:00Z",
+                "version": "v1.0.0",
+                "environment": "production",
+                "dependencies": {
+                  "orderProcessAPI": "DOWN",
+                  "database": "UP",
+                  "objectStore": "UP"
+                },
+                "errors": [
+                  {
+                    "component": "orderProcessAPI",
+                    "error": "Connection timeout",
+                    "lastSuccessful": "2026-03-24T09:55:00Z"
+                  }
+                ]
+              }

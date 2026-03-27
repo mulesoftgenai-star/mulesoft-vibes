@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+	http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+	<!-- Object Store Configuration for Circuit Breaker State Management -->
+	<os:object-store name="circuit-breaker-store" doc:name="Circuit Breaker Object Store" 
+		doc:id="circuit-breaker-os" persistent="true" maxEntries="1000" 
+		entryTtl="300" expirationInterval="60"/>
+	
+	<!-- Circuit Breaker Configuration Properties File -->
+	<configuration-properties doc:name="Application Properties" doc:id="cb-properties" 
+		file="application.properties"/>
+
+	<!-- Enhanced Database Configuration with Circuit Breaker Support -->
+	<db:config name="DB_Config_With_Circuit_Breaker" doc:name="Database Config with Circuit Breaker" 
+		doc:id="db-config-cb">
+		<db:generic-connection driverClassName="${db.driver}"
+			url="${db.url}"
+			user="${db.user}"
+			password="${db.password}">
+			<db:pooling-profile maxPoolSize="${db.pool.max.size}" 
+				minPoolSize="${db.pool.min.size}"
+				acquireIncrement="1" 
+				preparedStatementCacheSize="20"
+				maxWait="${db.connection.timeout}"/>
+			<db:column-types>
+				<!-- Custom column type mappings if needed -->
+			</db:column-types>
+		</db:generic-connection>
+	</db:config>
+
+	<!-- Circuit Breaker State Management Sub-flows -->
+	<sub-flow name="check-circuit-breaker-state" doc:id="check-cb-state">
+		<logger level="DEBUG" doc:name="Log Circuit Check" doc:id="log-circuit-check" 
+			message="Checking circuit breaker state for operation: #[vars.operation]"/>
+		
+		<try doc:name="Try Get Circuit State" doc:id="try-get-circuit-state">
+			<os:retrieve doc:name="Get Circuit State" doc:id="get-circuit-state" 
+				key="#[vars.operation]" objectStore="circuit-breaker-store"/>
+			
+			<set-variable value="#[payload]" doc:name="Set Circuit State" doc:id="set-circuit-state" variableName="circuitState"/>
+			
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="false" doc:name="Circuit Not Found" 
+					doc:id="circuit-not-found" type="OS:KEY_NOT_FOUND">
+					<!-- Initialize new circuit breaker state -->
+					<ee:transform doc:name="Initialize Circuit State" doc:id="init-circuit-state">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+	state: "CLOSED",
+	failureCount: 0,
+	successCount: 0,
+	lastFailureTime: null,
+	lastSuccessTime: null,
+	halfOpenStartTime: null
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<set-variable value="#[payload]" doc:name="Set Initial State" doc:id="set-initial-state" variableName="circuitState"/>
+					
+					<!-- Store the initial state -->
+					<os:store doc:name="Store Initial State" doc:id="store-initial-state" 
+						key="#[vars.operation]" objectStore="circuit-breaker-store">
+						<os:value>#[vars.circuitState]</os:value>
+					</os:store>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		
+		<!-- Evaluate Circuit Breaker State Logic -->
+		<choice doc:name="Evaluate Circuit State" doc:id="evaluate-circuit-state">
+			
+			<!-- OPEN State - Circuit is broken, reject requests -->
+			<when expression='#[vars.circuitState.state == "OPEN"]'>
+				<logger level="WARN" doc:name="Circuit Open Warning" doc:id="circuit-open-warning" 
+					message="Circuit breaker OPEN for operation: #[vars.operation]. Last failure: #[vars.circuitState.lastFailureTime]"/>
+				
+				<!-- Check if half-open timeout has passed -->
+				<choice doc:name="Check Half-Open Timeout" doc:id="check-half-open-timeout">
+					<when expression="#[vars.circuitState.lastFailureTime != null and ((now() as Number) - (vars.circuitState.lastFailureTime as Number)) > (${circuit.breaker.half.open.timeout} as Number)]">
+						<!-- Transition to HALF_OPEN -->
+						<ee:transform doc:name="Transition to Half-Open" doc:id="transition-half-open">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.circuitState ++ {
+	state: "HALF_OPEN",
+	halfOpenStartTime: now()
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<set-variable value="#[payload]" doc:name="Update Circuit State" doc:id="update-half-open-state" variableName="circuitState"/>
+						
+						<os:store doc:name="Store Half-Open State" doc:id="store-half-open-state" 
+							key="#[vars.operation]" objectStore="circuit-breaker-store">
+							<os:value>#[vars.circuitState]</os:value>
+						</os:store>
+						
+						<logger level="INFO" doc:name="Circuit Half-Open" doc:id="circuit-half-open" 
+							message="Circuit breaker transitioned to HALF_OPEN for operation: #[vars.operation]"/>
+						
+						<set-variable value="HALF_OPEN" doc:name="Set Action" doc:id="set-half-open-action" variableName="circuitAction"/>
+					</when>
+					<otherwise>
+						<!-- Stay OPEN - reject request -->
+						<set-variable value="REJECT" doc:name="Set Reject Action" doc:id="set-reject-action" variableName="circuitAction"/>
+						<raise-error doc:name="Circuit Open Error" doc:id="circuit-open-error" type="CIRCUIT_BREAKER:OPEN" 
+							description="Circuit breaker is OPEN for operation #[vars.operation]. Database may be experiencing issues."/>
+					</otherwise>
+				</choice>
+			</when>
+			
+			<!-- HALF_OPEN State - Allow limited requests -->
+			<when expression='#[vars.circuitState.state == "HALF_OPEN"]'>
+				<logger level="INFO" doc:name="Circuit Half-Open Info" doc:id="circuit-half-open-info" 
+					message="Circuit breaker HALF_OPEN for operation: #[vars.operation]. Testing database connectivity."/>
+				<set-variable value="ALLOW" doc:name="Set Allow Action" doc:id="set-half-open-allow-action" variableName="circuitAction"/>
+			</when>
+			
+			<!-- CLOSED State - Normal operation -->
+			<otherwise>
+				<logger level="DEBUG" doc:name="Circuit Closed Debug" doc:id="circuit-closed-debug" 
+					message="Circuit breaker CLOSED for operation: #[vars.operation]. Normal operation."/>
+				<set-variable value="ALLOW" doc:name="Set Allow Action" doc:id="set-allow-action" variableName="circuitAction"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+	<sub-flow name="record-circuit-breaker-success" doc:id="record-cb-success">
+		<logger level="DEBUG" doc:name="Log Success" doc:id="log-cb-success" 
+			message="Recording success for operation: #[vars.operation]"/>
+		
+		<ee:transform doc:name="Update Success State" doc:id="update-success-state">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+if (vars.circuitState.state == "HALF_OPEN") 
+	vars.circuitState ++ {
+		state: if ((vars.circuitState.successCount + 1) >= (${circuit.breaker.success.threshold} as Number)) "CLOSED" else "HALF_OPEN",
+		successCount: vars.circuitState.successCount + 1,
+		failureCount: 0,
+		lastSuccessTime: now()
+	}
+else if (vars.circuitState.state == "CLOSED")
+	vars.circuitState ++ {
+		failureCount: 0,
+		lastSuccessTime: now()
+	}
+else vars.circuitState]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Update Circuit State" doc:id="update-success-circuit-state" variableName="circuitState"/>
+		
+		<os:store doc:name="Store Success State" doc:id="store-success-state" 
+			key="#[vars.operation]" objectStore="circuit-breaker-store">
+			<os:value>#[vars.circuitState]</os:value>
+		</os:store>
+		
+		<logger level="INFO" doc:name="Log State Transition" doc:id="log-success-transition" 
+			message="Circuit breaker state updated to: #[vars.circuitState.state] for operation: #[vars.operation]"/>
+	</sub-flow>
+
+	<sub-flow name="record-circuit-breaker-failure" doc:id="record-cb-failure">
+		<logger level="WARN" doc:name="Log Failure" doc:id="log-cb-failure" 
+			message="Recording failure for operation: #[vars.operation]. Error: #[error.description]"/>
+		
+		<ee:transform doc:name="Update Failure State" doc:id="update-failure-state">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.circuitState ++ {
+	state: if ((vars.circuitState.failureCount + 1) >= (${circuit.breaker.failure.threshold} as Number)) "OPEN" else vars.circuitState.state,
+	failureCount: vars.circuitState.failureCount + 1,
+	successCount: 0,
+	lastFailureTime: now()
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Update Circuit State" doc:id="update-failure-circuit-state" variableName="circuitState"/>
+		
+		<os:store doc:name="Store Failure State" doc:id="store-failure-state" 
+			key="#[vars.operation]" objectStore="circuit-breaker-store">
+			<os:value>#[vars.circuitState]</os:value>
+		</os:store>
+		
+		<choice doc:name="Check if Circuit Opened" doc:id="check-circuit-opened">
+			<when expression='#[vars.circuitState.state == "OPEN"]'>
+				<logger level="ERROR" doc:name="Circuit Opened" doc:id="circuit-opened-error" 
+					message="Circuit breaker OPENED for operation: #[vars.operation] after #[vars.circuitState.failureCount] failures"/>
+				
+				<!-- Trigger alert mechanism -->
+				<async doc:name="Async Alert" doc:id="async-alert">
+					<flow-ref doc:name="Send Circuit Breaker Alert" doc:id="send-cb-alert" name="send-circuit-breaker-alert"/>
+				</async>
+			</when>
+			<otherwise>
+				<logger level="WARN" doc:name="Failure Recorded" doc:id="failure-recorded" 
+					message="Failure recorded. Circuit breaker state: #[vars.circuitState.state], failure count: #[vars.circuitState.failureCount]"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+	<!-- Database Operation Wrapper with Circuit Breaker -->
+	<sub-flow name="execute-with-circuit-breaker" doc:id="execute-with-cb">
+		<logger level="DEBUG" doc:name="Start Circuit Breaker Execution" doc:id="start-cb-execution" 
+			message="Executing database operation: #[vars.operation] with circuit breaker protection"/>
+		
+		<!-- Check Circuit Breaker State -->
+		<flow-ref doc:name="Check Circuit State" doc:id="check-cb-state-ref" name="check-circuit-breaker-state"/>
+		
+		<!-- Execute if allowed -->
+		<choice doc:name="Circuit Action Decision" doc:id="circuit-action-decision">
+			<when expression='#[vars.circuitAction == "REJECT"]'>
+				<!-- This should not happen as error is raised in check, but safety net -->
+				<raise-error doc:name="Circuit Rejected" doc:id="circuit-rejected" type="CIRCUIT_BREAKER:OPEN" 
+					description="Circuit breaker rejected request for operation #[vars.operation]"/>
+			</when>
+			<otherwise>
+				<!-- Execute the database operation with retry mechanism -->
+				<try doc:name="Try Database Operation" doc:id="try-db-operation">
+					
+					<!-- Retry mechanism for transient failures -->
+					<until-successful maxRetries="${db.retry.count}" millisBetweenRetries="${db.retry.delay}" doc:name="Until Successful" doc:id="until-successful-db">
+						<try doc:name="Try Individual Operation" doc:id="try-individual-operation">
+							
+							<!-- Set query timeout -->
+							<set-variable value="${db.query.timeout}" doc:name="Set Query Timeout" doc:id="set-query-timeout" variableName="queryTimeout"/>
+							
+							<!-- Execute the actual database operation passed as flowVar -->
+							<flow-ref doc:name="Execute Database Operation" doc:id="execute-db-operation" name="#[vars.dbOperationFlow]"/>
+							
+							<error-handler>
+								<on-error-propagate enableNotifications="true" logException="true" doc:name="DB Operation Error" 
+									doc:id="db-operation-error" type="DB:CONNECTIVITY, DB:QUERY_EXECUTION, EXPRESSION">
+									<logger level="ERROR" doc:name="Database Error" doc:id="log-db-error" 
+										message="Database operation failed: #[error.description]"/>
+									<raise-error doc:name="Propagate DB Error" doc:id="propagate-db-error" type="#[error.errorType]" 
+										description="#[error.description]"/>
+								</on-error-propagate>
+							</error-handler>
+						</try>
+					</until-successful>
+					
+					<!-- Record success -->
+					<flow-ref doc:name="Record Success" doc:id="record-success-ref" name="record-circuit-breaker-success"/>
+					
+					<logger level="DEBUG" doc:name="Operation Successful" doc:id="operation-successful" 
+						message="Database operation completed successfully: #[vars.operation]"/>
+					
+					<error-handler>
+						<on-error-propagate enableNotifications="true" logException="true" doc:name="Operation Failed" 
+							doc:id="operation-failed" type="DB:CONNECTIVITY, DB:QUERY_EXECUTION, EXPRESSION">
+							
+							<!-- Record failure -->
+							<flow-ref doc:name="Record Failure" doc:id="record-failure-ref" name="record-circuit-breaker-failure"/>
+							
+							<!-- Execute fallback if available -->
+							<choice doc:name="Check Fallback Available" doc:id="check-fallback-available">
+								<when expression="#[vars.fallbackFlow != null]">
+									<logger level="INFO" doc:name="Executing Fallback" doc:id="executing-fallback" 
+										message="Executing fallback for operation: #[vars.operation]"/>
+									<flow-ref doc:name="Execute Fallback" doc:id="execute-fallback" name="#[vars.fallbackFlow]"/>
+								</when>
+								<otherwise>
+									<logger level="ERROR" doc:name="No Fallback Available" doc:id="no-fallback-available" 
+										message="No fallback available for operation: #[vars.operation]"/>
+									<raise-error doc:name="Propagate Original Error" doc:id="propagate-original-error" type="#[error.errorType]" 
+										description="Database operation failed: #[error.description]"/>
+								</otherwise>
+							</choice>
+						</on-error-propagate>
+					</error-handler>
+				</try>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+	<!-- Circuit Breaker Alert System -->
+	<sub-flow name="send-circuit-breaker-alert" doc:id="send-cb-alert-flow">
+		<logger level="WARN" doc:name="Sending Circuit Breaker Alert" doc:id="log-sending-cb-alert" 
+			message="Sending circuit breaker alert for operation: #[vars.operation]"/>
+		
+		<ee:transform doc:name="Prepare Alert Payload" doc:id="prepare-alert-payload">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	alertType: "CIRCUIT_BREAKER_OPEN",
+	operation: vars.operation,
+	timestamp: now(),
+	circuitState: vars.circuitState,
+	message: "Circuit breaker has opened for database operation: " ++ vars.operation,
+	severity: "HIGH",
+	failureCount: vars.circuitState.failureCount,
+	lastFailureTime: vars.circuitState.lastFailureTime
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Log the alert (in production, this would send to monitoring system) -->
+		<logger level="ERROR" doc:name="Circuit Breaker Alert" doc:id="circuit-breaker-alert" 
+			message="ALERT: Circuit breaker OPEN for operation #[vars.operation]. Failure count: #[vars.circuitState.failureCount]"/>
+		
+		<!-- Store alert for monitoring -->
+		<try doc:name="Try Store Alert" doc:id="try-store-alert">
+			<os:store doc:name="Store Alert" doc:id="store-alert" 
+				key="#['alert_' ++ vars.operation ++ '_' ++ (now() as String {format: 'yyyyMMdd_HHmmss'})]" 
+				objectStore="circuit-breaker-store">
+				<os:value>#[payload]</os:value>
+			</os:store>
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="true" doc:name="Alert Store Failed" 
+					doc:id="alert-store-failed" type="ANY">
+					<logger level="ERROR" doc:name="Failed to Store Alert" doc:id="failed-store-alert" 
+						message="Failed to store circuit breaker alert: #[error.description]"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</sub-flow>
+
+	<!-- Circuit Breaker Status Monitoring Flow -->
+	<flow name="circuit-breaker-status" doc:id="circuit-breaker-status-flow">
+		<http:listener doc:name="Circuit Breaker Status" doc:id="cb-status-listener" 
+			config-ref="american-airlines-info-api-httpListenerConfig" path="/api/circuit-breaker/status"/>
+		
+		<logger level="INFO" doc:name="Status Request" doc:id="cb-status-request" 
+			message="Circuit breaker status requested"/>
+		
+		<try doc:name="Try Get All Circuit States" doc:id="try-get-all-states">
+			<!-- This is a simplified version - in production you'd iterate through known operations -->
+			<ee:transform doc:name="Get Circuit States" doc:id="get-circuit-states">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var operations = ["getAllFlights", "getFlightById", "updateFlight", "deleteFlight", "batchProcessing"]
+---
+{
+	timestamp: now(),
+	circuitBreakers: operations map ((operation) -> {
+		operation: operation,
+		// Note: In a real implementation, you'd retrieve actual states from object store
+		status: "UNKNOWN - Use individual operation endpoints for detailed status"
+	}),
+	configuration: {
+		failureThreshold: "${circuit.breaker.failure.threshold}",
+		successThreshold: "${circuit.breaker.success.threshold}",
+		timeout: "${circuit.breaker.timeout}",
+		halfOpenTimeout: "${circuit.breaker.half.open.timeout}"
+	}
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="true" doc:name="Status Error" 
+					doc:id="cb-status-error" type="ANY">
+					<ee:transform doc:name="Error Response" doc:id="cb-status-error-response">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "Failed to retrieve circuit breaker status",
+	message: error.description,
+	timestamp: now()
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</flow>
+	
+	<!-- Circuit Breaker Reset Flow -->
+	<flow name="circuit-breaker-reset" doc:id="circuit-breaker-reset-flow">
+		<http:listener doc:name="Reset Circuit Breaker" doc:id="cb-reset-listener" 
+			config-ref="american-airlines-info-api-httpListenerConfig" path="/api/circuit-breaker/reset/{operation}"/>
+		
+		<set-variable value="#[attributes.uriParams.operation]" doc:name="Set Operation" doc:id="set-reset-operation" variableName="operation"/>
+		
+		<logger level="INFO" doc:name="Reset Request" doc:id="cb-reset-request" 
+			message="Circuit breaker reset requested for operation: #[vars.operation]"/>
+		
+		<try doc:name="Try Reset Circuit" doc:id="try-reset-circuit">
+			<!-- Initialize/Reset circuit state -->
+			<ee:transform doc:name="Reset Circuit State" doc:id="reset-circuit-state">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+	state: "CLOSED",
+	failureCount: 0,
+	successCount: 0,
+	lastFailureTime: null,
+	lastSuccessTime: now(),
+	halfOpenStartTime: null
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			
+			<os:store doc:name="Store Reset State" doc:id="store-reset-state" 
+				key="#[vars.operation]" objectStore="circuit-breaker-store">
+				<os:value>#[payload]</os:value>
+			</os:store>
+			
+			<logger level="INFO" doc:name="Reset Successful" doc:id="cb-reset-successful" 
+				message="Circuit breaker reset successful for operation: #[vars.operation]"/>
+			
+			<ee:transform doc:name="Reset Response" doc:id="cb-reset-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Circuit breaker reset successfully",
+	operation: vars.operation,
+	newState: "CLOSED",
+	timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="true" doc:name="Reset Error" 
+					doc:id="cb-reset-error" type="ANY">
+					<logger level="ERROR" doc:name="Reset Failed" doc:id="cb-reset-failed" 
+						message="Failed to reset circuit breaker for operation: #[vars.operation]"/>
+					
+					<ee:transform doc:name="Reset Error Response" doc:id="cb-reset-error-response">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "Failed to reset circuit breaker",
+	operation: vars.operation,
+	message: error.description,
+	timestamp: now()
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</flow>
+
+</mule>

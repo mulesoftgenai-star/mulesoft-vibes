@@ -1,0 +1,482 @@
+#%RAML 1.0 Library
+
+usage: Order Processing data types for Process API layer
+
+types:
+  OrderProcessRequest:
+    type: object
+    properties:
+      correlationId:
+        type: string
+        description: Correlation ID for tracking
+        example: corr-123456
+      customerId:
+        type: string
+        description: Customer identifier
+        example: CUST-12345
+      items:
+        type: OrderItemRequest[]
+        description: Items to process
+        minItems: 1
+      shippingAddress:
+        type: Address
+        description: Shipping address
+      billingAddress?:
+        type: Address
+        description: Billing address (defaults to shipping if not provided)
+      paymentMethod:
+        type: PaymentMethod
+        description: Payment method details
+      specialInstructions?:
+        type: string
+        description: Special processing instructions
+        maxLength: 500
+      promotionCode?:
+        type: string
+        description: Promotion or discount code
+      requestTimestamp:
+        type: datetime
+        description: Request timestamp
+
+  OrderProcessResponse:
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Generated order identifier
+        pattern: ^ORD-\d{4}-\d{3}$
+        example: ORD-2026-001
+      orderNumber:
+        type: string
+        description: Human-readable order number
+        example: ON-20260324-001
+      customerId:
+        type: string
+        description: Customer identifier
+      orderDate:
+        type: date-only
+        description: Order creation date
+      status:
+        type: string
+        enum: [pending, processing, confirmed, shipped, delivered, cancelled, failed]
+        description: Current order status
+      totalAmount:
+        type: number
+        description: Total order amount
+        minimum: 0
+      currency:
+        type: string
+        description: Currency code
+        pattern: ^[A-Z]{3}$
+        example: USD
+      items:
+        type: ProcessedOrderItem[]
+        description: Processed order items
+      workflow:
+        type: WorkflowStatus
+        description: Processing workflow status
+      shippingAddress:
+        type: Address
+        description: Shipping address
+      billingAddress?:
+        type: Address
+        description: Billing address
+      paymentData?:
+        type: PaymentProcessingResult
+        description: Payment processing results
+      estimatedDeliveryDate?:
+        type: date-only
+        description: Estimated delivery date
+      trackingNumber?:
+        type: string
+        description: Shipping tracking number
+      processMetadata:
+        type: ProcessMetadata
+        description: Processing metadata
+      createdAt:
+        type: datetime
+        description: Creation timestamp
+      updatedAt:
+        type: datetime
+        description: Last update timestamp
+
+  ProcessedOrderItem:
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier
+      productName:
+        type: string
+        description: Product name
+      quantity:
+        type: integer
+        description: Quantity ordered
+        minimum: 1
+      unitPrice:
+        type: number
+        description: Price per unit
+        minimum: 0
+      totalPrice:
+        type: number
+        description: Total price for this item
+        minimum: 0
+      availability:
+        type: ItemAvailability
+        description: Inventory availability information
+      discount?:
+        type: number
+        description: Applied discount
+        minimum: 0
+      tax?:
+        type: number
+        description: Tax amount
+        minimum: 0
+
+  OrderItemRequest:
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier
+        example: PROD-001
+      quantity:
+        type: integer
+        description: Quantity to order
+        minimum: 1
+      unitPrice?:
+        type: number
+        description: Expected unit price
+        minimum: 0
+
+  WorkflowStatus:
+    type: object
+    properties:
+      status:
+        type: string
+        enum: [pending, running, completed, failed, compensating, compensated]
+        description: Overall workflow status
+      currentStage?:
+        type: string
+        description: Current processing stage
+      completedStages?:
+        type: string[]
+        description: List of completed stages
+      nextStage?:
+        type: string
+        description: Next stage to execute
+      stages:
+        type: WorkflowStages
+        description: Individual stage statuses
+
+  WorkflowStages:
+    type: object
+    properties:
+      customerValidation?:
+        type: StageStatus
+        description: Customer validation stage
+      inventoryValidation?:
+        type: StageStatus
+        description: Inventory validation stage
+      paymentProcessing?:
+        type: StageStatus
+        description: Payment processing stage
+      orderCreation?:
+        type: StageStatus
+        description: Order creation stage
+      fulfillmentInitiation?:
+        type: StageStatus
+        description: Fulfillment initiation stage
+
+  StageStatus:
+    type: object
+    properties:
+      status:
+        type: string
+        enum: [pending, running, completed, failed, skipped]
+        description: Stage execution status
+      startedAt?:
+        type: datetime
+        description: Stage start time
+      completedAt?:
+        type: datetime
+        description: Stage completion time
+      error?:
+        type: string
+        description: Error message if failed
+      retryCount?:
+        type: integer
+        description: Number of retry attempts
+        minimum: 0
+      data?:
+        type: object
+        description: Stage-specific data
+
+  PaymentProcessingResult:
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Payment transaction ID
+      status:
+        type: string
+        enum: [pending, authorized, captured, failed, refunded]
+        description: Payment status
+      amount:
+        type: number
+        description: Payment amount
+        minimum: 0
+      currency:
+        type: string
+        description: Payment currency
+      gatewayResponse?:
+        type: object
+        description: Gateway-specific response
+      processedAt:
+        type: datetime
+        description: Processing timestamp
+
+  ProcessMetadata:
+    type: object
+    properties:
+      correlationId:
+        type: string
+        description: Correlation ID for tracking
+      processingStartTime:
+        type: datetime
+        description: Processing start time
+      processingEndTime?:
+        type: datetime
+        description: Processing end time
+      totalProcessingTime?:
+        type: string
+        description: Total processing time in milliseconds
+      retryCount?:
+        type: integer
+        description: Number of retries
+        minimum: 0
+      processedBy?:
+        type: string
+        description: Processing instance ID
+
+  ItemAvailability:
+    type: object
+    properties:
+      inStock:
+        type: boolean
+        description: Whether item is in stock
+      availableQuantity?:
+        type: integer
+        description: Available quantity
+        minimum: 0
+      reservationId?:
+        type: string
+        description: Inventory reservation ID
+      warehouseLocation?:
+        type: string
+        description: Warehouse location
+      estimatedRestockDate?:
+        type: date-only
+        description: Estimated restock date
+
+  OrderProcessList:
+    type: object
+    properties:
+      orders:
+        type: OrderProcessSummary[]
+        description: List of order summaries
+      pagination:
+        type: Pagination
+        description: Pagination information
+
+  OrderProcessSummary:
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Order identifier
+        pattern: ^ORD-\d{4}-\d{3}$
+      orderNumber:
+        type: string
+        description: Order number
+      customerId:
+        type: string
+        description: Customer identifier
+      orderDate:
+        type: date-only
+        description: Order date
+      status:
+        type: string
+        enum: [pending, processing, confirmed, shipped, delivered, cancelled, failed]
+        description: Order status
+      totalAmount:
+        type: number
+        description: Total amount
+        minimum: 0
+      currency:
+        type: string
+        description: Currency code
+      workflow:
+        type: WorkflowSummary
+        description: Workflow summary
+      processMetadata:
+        type: ProcessMetadata
+        description: Processing metadata
+
+  WorkflowSummary:
+    type: object
+    properties:
+      currentStage:
+        type: string
+        description: Current workflow stage
+      completedStages:
+        type: string[]
+        description: Completed stages
+      nextStage?:
+        type: string
+        description: Next stage
+      progress:
+        type: integer
+        description: Completion percentage
+        minimum: 0
+        maximum: 100
+
+  CompensationRequest:
+    type: object
+    properties:
+      correlationId:
+        type: string
+        description: Correlation ID for tracking
+      orderId:
+        type: string
+        description: Order ID to compensate
+        pattern: ^ORD-\d{4}-\d{3}$
+      failureStage:
+        type: string
+        description: Stage where failure occurred
+      reason:
+        type: string
+        description: Reason for compensation
+      actionsToReverse:
+        type: string[]
+        description: List of actions to reverse
+        minItems: 1
+
+  CompensationResponse:
+    type: object
+    properties:
+      compensationId:
+        type: string
+        description: Compensation process ID
+      correlationId:
+        type: string
+        description: Original correlation ID
+      orderId:
+        type: string
+        description: Order ID
+      status:
+        type: string
+        enum: [pending, running, completed, failed]
+        description: Compensation status
+      actionsReversed:
+        type: CompensationAction[]
+        description: Actions that were reversed
+      startedAt:
+        type: datetime
+        description: Compensation start time
+      completedAt?:
+        type: datetime
+        description: Compensation completion time
+
+  CompensationAction:
+    type: object
+    properties:
+      action:
+        type: string
+        description: Action that was reversed
+      status:
+        type: string
+        enum: [pending, completed, failed, skipped]
+        description: Reversal status
+      completedAt?:
+        type: datetime
+        description: Action completion time
+      error?:
+        type: string
+        description: Error if reversal failed
+
+  Address:
+    type: object
+    properties:
+      street:
+        type: string
+        description: Street address
+        example: 123 Main St
+      city:
+        type: string
+        description: City
+        example: New York
+      state:
+        type: string
+        description: State/Province
+        example: NY
+      zipCode:
+        type: string
+        description: ZIP/Postal code
+        example: "10001"
+      country:
+        type: string
+        description: Country code
+        pattern: ^[A-Z]{2,3}$
+        example: USA
+
+  PaymentMethod:
+    type: object
+    properties:
+      type:
+        type: string
+        enum: [credit_card, debit_card, paypal, bank_transfer, cash_on_delivery]
+        description: Payment method type
+      cardNumber?:
+        type: string
+        description: Masked card number
+        example: "****-****-****-1234"
+      expiryMonth?:
+        type: integer
+        minimum: 1
+        maximum: 12
+      expiryYear?:
+        type: integer
+        minimum: 2024
+      cardHolderName?:
+        type: string
+        description: Card holder name
+      paypalEmail?:
+        type: string
+        description: PayPal email address
+      bankAccount?:
+        type: string
+        description: Bank account number (masked)
+
+  Pagination:
+    type: object
+    properties:
+      total:
+        type: integer
+        description: Total number of items
+        minimum: 0
+      limit:
+        type: integer
+        description: Items per page
+        minimum: 1
+        maximum: 100
+      offset:
+        type: integer
+        description: Number of items skipped
+        minimum: 0
+      hasNext:
+        type: boolean
+        description: Whether there are more items
+      hasPrevious:
+        type: boolean
+        description: Whether there are previous items

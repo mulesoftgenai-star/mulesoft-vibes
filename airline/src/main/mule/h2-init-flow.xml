@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<!-- H2 Database Initialization Flow -->
+	<flow name="h2-database-init-flow" doc:id="h2-database-init-flow">
+		<!-- [STUDIO:"Init Database Endpoint"]<http:listener doc:name="Init Database Endpoint" doc:id="init-db-listener" 
+			config-ref="american-airlines-info-api-httpListenerConfig" path="/api/admin/init-database"/> [STUDIO] -->
+		
+		<scheduler doc:name="Scheduler" doc:id="a1a5eb6b-2529-434b-ad14-f3bb4be6da81" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="15" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Log Init Start" doc:id="log-init-start" 
+			message="Starting H2 database initialization..."/>
+		
+		<!-- Drop existing tables if they exist -->
+		<try doc:name="Try Drop Tables" doc:id="try-drop-tables">
+			<db:execute-ddl doc:name="Drop american table" doc:id="drop-american" config-ref="H2_Database_Config">
+				<db:sql>DROP TABLE IF EXISTS american</db:sql>
+			</db:execute-ddl>
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="false" doc:name="On Error Continue" doc:id="ignore-drop-errors">
+					<logger level="WARN" doc:name="Log Drop Warning" doc:id="log-drop-warning" 
+						message="Some tables may not exist during drop operation - this is normal for first-time initialization"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		
+		<!-- Create american table (legacy compatibility) -->
+		<db:execute-ddl doc:name="Create american table" doc:id="create-american-table" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[CREATE TABLE american (
+				ID INTEGER AUTO_INCREMENT PRIMARY KEY,
+				code1 VARCHAR(20) NOT NULL,
+				price DECIMAL(10,2) DEFAULT 0.00,
+				takeOffDate TIMESTAMP NOT NULL,
+				fromAirport VARCHAR(10) NOT NULL,
+				toAirport VARCHAR(10) NOT NULL,
+				seatsAvailable INTEGER DEFAULT 0,
+				planeType VARCHAR(50) DEFAULT 'Unknown',
+				totalSeats INTEGER DEFAULT 0,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)]]></db:sql>
+		</db:execute-ddl>
+		
+		<!-- Create flights table for batch processing -->
+		<db:execute-ddl doc:name="Create flights table" doc:id="create-flights-batch-table" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[CREATE TABLE IF NOT EXISTS flights (
+				flight_id VARCHAR(36) PRIMARY KEY,
+				flight_number VARCHAR(20) NOT NULL,
+				airline VARCHAR(100) DEFAULT 'American Airlines',
+				departure_airport VARCHAR(10) NOT NULL,
+				departure_city VARCHAR(100),
+				departure_scheduled_time TIMESTAMP NOT NULL,
+				departure_actual_time TIMESTAMP NULL,
+				departure_gate VARCHAR(10) NULL,
+				departure_terminal VARCHAR(10) NULL,
+				arrival_airport VARCHAR(10) NOT NULL,
+				arrival_city VARCHAR(100),
+				arrival_scheduled_time TIMESTAMP NOT NULL,
+				arrival_actual_time TIMESTAMP NULL,
+				arrival_gate VARCHAR(10) NULL,
+				arrival_terminal VARCHAR(10) NULL,
+				aircraft_type VARCHAR(50),
+				aircraft_registration VARCHAR(20),
+				aircraft_capacity INTEGER DEFAULT 0,
+				status VARCHAR(20) DEFAULT 'SCHEDULED',
+				price DECIMAL(10,2) DEFAULT 0.00,
+				currency VARCHAR(3) DEFAULT 'USD',
+				duration VARCHAR(10),
+				distance INTEGER DEFAULT 0,
+				batch_id VARCHAR(36),
+				record_index INTEGER,
+				processing_timestamp TIMESTAMP,
+				processed_at TIMESTAMP,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)]]></db:sql>
+		</db:execute-ddl>
+		
+		<!-- Create batch_errors table -->
+		<db:execute-ddl doc:name="Create batch_errors table" doc:id="create-batch-errors-table" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[CREATE TABLE IF NOT EXISTS batch_errors (
+				id INTEGER AUTO_INCREMENT PRIMARY KEY,
+				batch_id VARCHAR(36) NOT NULL,
+				record_index INTEGER,
+				flight_number VARCHAR(20),
+				departure_airport VARCHAR(10),
+				arrival_airport VARCHAR(10),
+				error_type VARCHAR(50),
+				error_reason CLOB,
+				failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				record_data CLOB
+			)]]></db:sql>
+		</db:execute-ddl>
+		
+		<!-- Create batch_summary table -->
+		<db:execute-ddl doc:name="Create batch_summary table" doc:id="create-batch-summary-table" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[CREATE TABLE IF NOT EXISTS batch_summary (
+				id INTEGER AUTO_INCREMENT PRIMARY KEY,
+				batch_id VARCHAR(36) UNIQUE NOT NULL,
+				processing_start_time TIMESTAMP,
+				processing_end_time TIMESTAMP,
+				total_records INTEGER DEFAULT 0,
+				successful_records INTEGER DEFAULT 0,
+				failed_records INTEGER DEFAULT 0,
+				processing_duration_seconds DECIMAL(10,2),
+				success_rate DECIMAL(5,2),
+				status VARCHAR(50),
+				email_sent BOOLEAN DEFAULT FALSE,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)]]></db:sql>
+		</db:execute-ddl>
+		
+		<!-- Create indexes -->
+		<db:execute-ddl doc:name="Create indexes" doc:id="create-indexes" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[CREATE INDEX idx_american_code ON american(code1);
+CREATE INDEX idx_american_fromAirport ON american(fromAirport);
+CREATE INDEX idx_american_toAirport ON american(toAirport)]]></db:sql>
+		</db:execute-ddl>
+		
+		<!-- Insert sample data -->
+		<db:insert doc:name="Insert sample flight data" doc:id="insert-sample-data" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[INSERT INTO american (code1, price, takeOffDate, fromAirport, toAirport, seatsAvailable, planeType, totalSeats) VALUES 
+				(?, ?, ?, ?, ?, ?, ?, ?)]]></db:sql>
+			<db:input-parameters><![CDATA[#[['AA101', 299.99, '2024-12-25 08:00:00', 'LAX', 'JFK', 150, 'Boeing 737', 180]]]]></db:input-parameters>
+		</db:insert>
+		
+		<db:insert doc:name="Insert more sample data" doc:id="insert-more-sample-data" config-ref="H2_Database_Config">
+			<db:sql><![CDATA[INSERT INTO american (code1, price, takeOffDate, fromAirport, toAirport, seatsAvailable, planeType, totalSeats) VALUES 
+				(?, ?, ?, ?, ?, ?, ?, ?),
+				(?, ?, ?, ?, ?, ?, ?, ?),
+				(?, ?, ?, ?, ?, ?, ?, ?),
+				(?, ?, ?, ?, ?, ?, ?, ?)]]></db:sql>
+			<db:input-parameters><![CDATA[#[['AA102', 349.99, '2024-12-25 14:30:00', 'JFK', 'LAX', 120, 'Boeing 737', 180,
+				'AA201', 199.99, '2024-12-26 09:15:00', 'ORD', 'DFW', 200, 'Airbus A320', 220,
+				'AA202', 229.99, '2024-12-26 16:45:00', 'DFW', 'ORD', 180, 'Airbus A320', 220,
+				'AA301', 399.99, '2024-12-27 07:00:00', 'MIA', 'SEA', 100, 'Boeing 777', 300]]]]></db:input-parameters>
+		</db:insert>
+		
+		<!-- Verify data insertion -->
+		<db:select doc:name="Count inserted records" doc:id="count-records" config-ref="H2_Database_Config">
+			<db:sql>SELECT COUNT(*) as record_count FROM american</db:sql>
+		</db:select>
+		
+		<logger level="INFO" doc:name="Log Initialization Complete" doc:id="log-init-complete" 
+			message="H2 database initialization completed successfully. Sample records inserted: #[payload[0].record_count]"/>
+		
+		<!-- Prepare response -->
+		<ee:transform doc:name="Prepare Success Response" doc:id="prepare-success-response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": "SUCCESS",
+	"message": "H2 in-memory database initialized successfully",
+	"database": {
+		"type": "H2",
+		"mode": "In-Memory",
+		"url": "jdbc:h2:mem:airline_db",
+		"schema": "airline"
+	},
+	"tablesCreated": [
+		"american"
+	],
+	"sampleDataInserted": payload[0].record_count,
+	"h2Console": {
+		"enabled": true,
+		"url": "http://localhost:8082/h2-console",
+		"jdbcUrl": "jdbc:h2:mem:airline_db",
+		"username": "sa",
+		"password": ""
+	},
+	"timestamp": now()
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="init-error-handler" type="ANY">
+				<logger level="ERROR" doc:name="Log Init Error" doc:id="log-init-error" 
+					message="H2 database initialization failed: #[error.description]"/>
+				
+				<ee:transform doc:name="Error Response" doc:id="error-response">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": "ERROR",
+	"message": "H2 database initialization failed",
+	"error": error.description,
+	"errorType": error.errorType.asString(),
+	"timestamp": now()
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				
+				<set-variable value="500" doc:name="Set Error Status" doc:id="set-error-status" variableName="httpStatus"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	
+	<!-- H2 Database Status Check Flow -->
+	<flow name="h2-database-status-flow" doc:id="h2-database-status-flow">
+		<http:listener doc:name="Database Status Endpoint" doc:id="db-status-listener" 
+			config-ref="american-airlines-info-api-httpListenerConfig" path="/api/admin/database-status"/>
+		
+		<try doc:name="Try Query Database" doc:id="try-query-db">
+			<db:select doc:name="Check Database Connection" doc:id="check-db-connection" config-ref="H2_Database_Config">
+				<db:sql>SELECT COUNT(*) as total_flights FROM american</db:sql>
+			</db:select>
+			
+			<ee:transform doc:name="Prepare Status Response" doc:id="prepare-status-response">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": "CONNECTED",
+	"message": "H2 in-memory database is running and accessible",
+	"database": {
+		"type": "H2",
+		"mode": "In-Memory", 
+		"url": "jdbc:h2:mem:airline_db",
+		"connected": true
+	},
+	"statistics": {
+		"totalFlights": payload[0].total_flights
+	},
+	"h2Console": {
+		"enabled": true,
+		"url": "http://localhost:8082/h2-console",
+		"jdbcUrl": "jdbc:h2:mem:airline_db",
+		"username": "sa",
+		"password": ""
+	},
+	"timestamp": now()
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			
+			<error-handler>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="status-error-handler" type="ANY">
+					<ee:transform doc:name="Database Error Response" doc:id="db-error-response">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"status": "DISCONNECTED",
+	"message": "H2 database connection failed",
+	"database": {
+		"type": "H2",
+		"mode": "In-Memory",
+		"url": "jdbc:h2:mem:airline_db",
+		"connected": false
+	},
+	"error": error.description,
+	"suggestion": "Try calling /api/admin/init-database to initialize the database",
+	"timestamp": now()
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					
+					<set-variable value="503" doc:name="Set Service Unavailable Status" doc:id="set-unavailable-status" variableName="httpStatus"/>
+				</on-error-propagate>
+			</error-handler>
+		</try>
+	</flow>
+
+</mule>

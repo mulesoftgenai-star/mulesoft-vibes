@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" 
+	xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	
+	<!-- Enhanced getAllFlights with Circuit Breaker -->
+	<flow name="getAllFlights-with-circuit-breaker" doc:id="get-all-flights-cb" >
+		<!-- Set operation context -->
+		<set-variable value="getAllFlights" doc:name="Set Operation" doc:id="set-op-get-all" variableName="operation"/>
+		<set-variable value="db-operation-get-all-flights" doc:name="Set DB Operation Flow" doc:id="set-db-op-get-all" variableName="dbOperationFlow"/>
+		<set-variable value="fallback-get-all-flights" doc:name="Set Fallback Flow" doc:id="set-fallback-get-all" variableName="fallbackFlow"/>
+		
+		<!-- Execute with Circuit Breaker -->
+		<flow-ref doc:name="Execute with Circuit Breaker" doc:id="execute-cb-get-all" name="execute-with-circuit-breaker"/>
+		
+		<!-- Cache successful response -->
+		<flow-ref doc:name="Cache Response" doc:id="cache-response-get-all" name="cache-successful-response"/>
+		
+		<logger level="INFO" doc:name="Logger" doc:id="log-success-get-all" message="GetAllFlights executed successfully with circuit breaker protection."/>
+		
+		<!-- Error handler for circuit breaker failures -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Circuit Breaker Error" 
+				doc:id="cb-error-get-all" type="CIRCUIT_BREAKER:OPEN">
+				<logger level="ERROR" doc:name="Circuit Open" doc:id="log-circuit-open-get-all" 
+					message="Circuit breaker is OPEN for getAllFlights - executing fallback"/>
+				
+				<!-- Execute fallback directly -->
+				<flow-ref doc:name="Execute Fallback" doc:id="execute-fallback-get-all" name="fallback-get-all-flights"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+
+	<!-- Database operation sub-flow for getAllFlights -->
+	<sub-flow name="db-operation-get-all-flights" doc:id="db-op-get-all-flights">
+		<db:select doc:name="Select All Flights" doc:id="select-all-flights" config-ref="DB_Config_With_Circuit_Breaker">
+			<db:sql ><![CDATA[select * from american]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="transform-get-all-flights" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	ID: payload01.ID,
+	code: payload01.code1,
+	price: payload01.price default 0,
+	departureDate: payload01.takeOffDate as String default "",
+	origin: payload01.fromAirport default "",
+	destination: payload01.toAirport default "",
+	emptySeats: payload01.seatsAvailable default 0,
+	plane: {
+		"type": payload01.planeType default "",
+		totalSeats: payload01.totalSeats default 0
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	
+	<!-- Enhanced getFlightById with Circuit Breaker -->
+	<flow name="getFlightById-with-circuit-breaker" doc:id="get-flight-by-id-cb" >
+		<!-- Set operation context -->
+		<set-variable value="getFlightById" doc:name="Set Operation" doc:id="set-op-get-by-id" variableName="operation"/>
+		<set-variable value="#[attributes.uriParams.ID]" doc:name="Set Flight ID" doc:id="set-flight-id-get" variableName="flightId"/>
+		<set-variable value="db-operation-get-flight-by-id" doc:name="Set DB Operation Flow" doc:id="set-db-op-get-by-id" variableName="dbOperationFlow"/>
+		<set-variable value="fallback-get-flight-by-id" doc:name="Set Fallback Flow" doc:id="set-fallback-get-by-id" variableName="fallbackFlow"/>
+		
+		<!-- Execute with Circuit Breaker -->
+		<flow-ref doc:name="Execute with Circuit Breaker" doc:id="execute-cb-get-by-id" name="execute-with-circuit-breaker"/>
+		
+		<!-- Cache successful response -->
+		<flow-ref doc:name="Cache Response" doc:id="cache-response-get-by-id" name="cache-successful-response"/>
+		
+		<logger level="INFO" doc:name="Logger" doc:id="log-success-get-by-id" message="GetFlightById execution completed with circuit breaker protection"/>
+		
+		<!-- Error handler for circuit breaker failures -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Circuit Breaker Error" 
+				doc:id="cb-error-get-by-id" type="CIRCUIT_BREAKER:OPEN">
+				<logger level="ERROR" doc:name="Circuit Open" doc:id="log-circuit-open-get-by-id" 
+					message="Circuit breaker is OPEN for getFlightById - executing fallback"/>
+				
+				<!-- Execute fallback directly -->
+				<flow-ref doc:name="Execute Fallback" doc:id="execute-fallback-get-by-id" name="fallback-get-flight-by-id"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+
+	<!-- Database operation sub-flow for getFlightById -->
+	<sub-flow name="db-operation-get-flight-by-id" doc:id="db-op-get-flight-by-id">
+		<db:select doc:name="Select Flight by ID" doc:id="select-flight-by-id" config-ref="DB_Config_With_Circuit_Breaker">
+			<db:sql ><![CDATA[select * from american where ID = :id]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{'id' : vars.flightId}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="transform-get-flight-by-id" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	ID: payload01.ID,
+	code: payload01.code1,
+	price: payload01.price default 0,
+	departureDate: payload01.takeOffDate as String default "",
+	origin: payload01.fromAirport default "",
+	destination: payload01.toAirport default "",
+	emptySeats: payload01.seatsAvailable default 0,
+	plane: {
+		"type": payload01.planeType default "",
+		totalSeats: payload01.totalSeats default 0
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	
+	<!-- Enhanced updateFlightById with Circuit Breaker -->
+	<flow name="updateFlightById-with-circuit-breaker" doc:id="update-flight-main-flow-cb">
+		<logger level="INFO" doc:name="Log update request" doc:id="update-flight-start-cb" message="Processing flight update for ID: #[attributes.uriParams.ID] with circuit breaker protection"/>
+		
+		<!-- Set operation context -->
+		<set-variable value="updateFlight" doc:name="Set Operation" doc:id="set-op-update" variableName="operation"/>
+		<set-variable value="#[attributes.uriParams.ID]" doc:name="Set flightId" doc:id="set-flight-id-update" variableName="flightId"/>
+		<set-variable value="#[payload]" doc:name="Set updatePayload" doc:id="set-update-payload-cb" variableName="updatePayload"/>
+		<set-variable value="db-operation-update-flight" doc:name="Set DB Operation Flow" doc:id="set-db-op-update" variableName="dbOperationFlow"/>
+		<set-variable value="fallback-queue-update-operation" doc:name="Set Fallback Flow" doc:id="set-fallback-update" variableName="fallbackFlow"/>
+		
+		<!-- Use Scatter-Gather for parallel processing of flight update and notifications -->
+		<scatter-gather doc:name="Scatter-Gather: Flight Update and Notifications" doc:id="scatter-gather-parallel-processing-cb">
+			
+			<!-- Route 1: Main flight update with circuit breaker -->
+			<route>
+				<logger level="DEBUG" doc:name="Route 1: Database Update with CB" doc:id="route1-logger-cb" message="Starting database update route for flight #[vars.flightId] with circuit breaker"/>
+				
+				<!-- Execute with Circuit Breaker -->
+				<flow-ref doc:name="Execute with Circuit Breaker" doc:id="execute-cb-update" name="execute-with-circuit-breaker"/>
+				
+				<!-- Cache successful response -->
+				<flow-ref doc:name="Cache Response" doc:id="cache-response-update" name="cache-successful-response"/>
+			</route>
+			
+			<!-- Route 2: Passenger notifications -->
+			<route>
+				<logger level="DEBUG" doc:name="Route 2: Notifications" doc:id="route2-logger-cb" message="Starting notification route for flight #[vars.flightId]"/>
+				<flow-ref doc:name="Trigger passenger notifications" doc:id="call-passenger-notifications-cb" name="trigger-passenger-notifications"/>
+			</route>
+			
+		</scatter-gather>
+		
+		<!-- Process Scatter-Gather results -->
+		<ee:transform doc:name="Extract flight update response" doc:id="extract-flight-response-cb">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+// Extract the flight update response from Route 1 (index 0)
+payload[0].payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="notificationResults"><![CDATA[%dw 2.0
+output application/json
+---
+// Extract notification results from Route 2 (index 1) 
+payload[1].payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		
+		<logger level="INFO" doc:name="Log parallel processing completion" doc:id="log-parallel-completion-cb" message="Parallel processing completed - Flight updated and notifications processed for flight #[vars.flightId] with circuit breaker protection"/>
+		
+		<!-- Error Handler for the main flow -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Circuit Breaker Error" 
+				doc:id="cb-error-update" type="CIRCUIT_BREAKER:OPEN">
+				<logger level="ERROR" doc:name="Circuit Open" doc:id="log-circuit-open-update" 
+					message="Circuit breaker is OPEN for updateFlight - executing fallback"/>
+				
+				<!-- Execute fallback directly -->
+				<flow-ref doc:name="Execute Fallback" doc:id="execute-fallback-update" name="fallback-queue-update-operation"/>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Flight Not Found Handler" 
+				doc:id="update-flight-not-found-handler-cb" type="FLIGHT:NOT_FOUND">
+				<ee:transform doc:name="Flight Not Found Response" doc:id="update-flight-not-found-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "FLIGHT_NOT_FOUND",
+	message: "Flight with ID " ++ (vars.flightId as String) ++ " does not exist",
+	flightId: vars.flightId,
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+	status: "ERROR"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">404</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Database Error Handler" 
+				doc:id="update-database-error-handler-cb" type="DB:CONNECTIVITY, DB:QUERY_EXECUTION">
+				<logger level="ERROR" doc:name="Log Database Error" doc:id="update-log-database-error-cb" 
+					message="Database error during flight update: #[error.description]"/>
+				<ee:transform doc:name="Database Error Response" doc:id="update-database-error-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "DATABASE_ERROR",
+	message: "An error occurred while updating the flight. Please try again later.",
+	flightId: vars.flightId,
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+	status: "ERROR"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+
+	<!-- Database operation sub-flow for update flight -->
+	<sub-flow name="db-operation-update-flight" doc:id="db-op-update-flight">
+		<flow-ref doc:name="Update flight in database" doc:id="call-update-flight-cb" name="update-flight-in-database-with-cb"/>
+	</sub-flow>
+
+	<!-- Flight update database operation with circuit breaker config -->
+	<sub-flow name="update-flight-in-database-with-cb" doc:id="update-flight-subflow-cb">
+		<logger level="INFO" doc:name="Log update operation" doc:id="log-update-db-cb" message="Updating flight #[vars.flightId] in database with circuit breaker protection"/>
+		
+		<!-- Check if flight exists -->
+		<db:select doc:name="Check flight exists" doc:id="update-check-flight-exists-cb" config-ref="DB_Config_With_Circuit_Breaker">
+			<db:sql><![CDATA[SELECT * FROM american WHERE ID = :id]]></db:sql>
+			<db:input-parameters><![CDATA[#[{'id' : vars.flightId}]]]></db:input-parameters>
+		</db:select>
+		
+		<choice doc:name="Flight exists check" doc:id="update-flight-exists-check-cb">
+			<when expression="#[sizeOf(payload) == 0]">
+				<logger level="WARN" doc:name="Flight not found" doc:id="update-log-flight-not-found-cb" message="Flight #[vars.flightId] not found for update"/>
+				<raise-error doc:name="Flight not found error" doc:id="update-flight-not-found-error-cb" type="FLIGHT:NOT_FOUND" description="Flight with ID #[vars.flightId] does not exist"/>
+			</when>
+			<otherwise>
+				<!-- Store original flight data -->
+				<set-variable value="#[payload[0]]" doc:name="Set originalFlight" doc:id="set-original-flight-cb" variableName="originalFlight"/>
+				
+				<!-- Update flight with provided data -->
+				<db:update doc:name="Update flight" doc:id="update-flight-db-cb" config-ref="DB_Config_With_Circuit_Breaker">
+					<db:sql><![CDATA[UPDATE american 
+						SET 
+							toAirport = CASE WHEN :destination IS NOT NULL THEN :destination ELSE toAirport END,
+							price = CASE WHEN :price IS NOT NULL THEN :price ELSE price END,
+							planeType = CASE WHEN :planeType IS NOT NULL THEN :planeType ELSE planeType END,
+							takeOffDate = CASE WHEN :departureDate IS NOT NULL THEN :departureDate ELSE takeOffDate END,
+							code1 = CASE WHEN :code IS NOT NULL THEN :code ELSE code1 END,
+							seatsAvailable = CASE WHEN :emptySeats IS NOT NULL THEN :emptySeats ELSE seatsAvailable END,
+							totalSeats = CASE WHEN :totalSeats IS NOT NULL THEN :totalSeats ELSE totalSeats END
+						WHERE ID = :id]]></db:sql>
+					<db:input-parameters><![CDATA[#[{
+						'id': vars.flightId,
+						'destination': vars.updatePayload.destination,
+						'price': vars.updatePayload.price,
+						'planeType': vars.updatePayload.plane.type,
+						'departureDate': vars.updatePayload.departureDate,
+						'code': vars.updatePayload.code,
+						'emptySeats': vars.updatePayload.emptySeats,
+						'totalSeats': vars.updatePayload.plane.totalSeats
+					}]]]></db:input-parameters>
+				</db:update>
+				
+				<!-- Get updated flight data -->
+				<db:select doc:name="Get updated flight" doc:id="get-updated-flight-cb" config-ref="DB_Config_With_Circuit_Breaker">
+					<db:sql><![CDATA[SELECT * FROM american WHERE ID = :id]]></db:sql>
+					<db:input-parameters><![CDATA[#[{'id' : vars.flightId}]]]></db:input-parameters>
+				</db:select>
+				
+				<ee:transform doc:name="Format update response" doc:id="format-update-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Flight " ++ (vars.flightId as String) ++ " updated successfully",
+	updatedFlight: {
+		ID: payload[0].ID,
+		code: payload[0].code1,
+		price: payload[0].price default 0,
+		departureDate: payload[0].takeOffDate as String default "",
+		origin: payload[0].fromAirport default "",
+		destination: payload[0].toAirport default "",
+		emptySeats: payload[0].seatsAvailable default 0,
+		plane: {
+			"type": payload[0].planeType default "",
+			totalSeats: payload[0].totalSeats default 0
+		}
+	},
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				
+				<logger level="INFO" doc:name="Log successful update" doc:id="log-successful-update-cb" message="Flight #[vars.flightId] updated successfully with circuit breaker protection"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+	<!-- Enhanced deleteFlightById with Circuit Breaker -->
+	<flow name="deleteFlightById-with-circuit-breaker" doc:id="delete-flight-cb" >
+		<logger level="INFO" doc:name="Log Delete Request" doc:id="log-delete-request-cb" message="Processing delete request for flight ID: #[attributes.uriParams.ID] with circuit breaker protection"/>
+		
+		<!-- Set operation context -->
+		<set-variable value="deleteFlight" doc:name="Set Operation" doc:id="set-op-delete" variableName="operation"/>
+		<set-variable value="#[attributes.uriParams.ID]" doc:name="Set Flight ID" doc:id="set-flight-id-delete" variableName="flightId"/>
+		<set-variable value="db-operation-delete-flight" doc:name="Set DB Operation Flow" doc:id="set-db-op-delete" variableName="dbOperationFlow"/>
+		<set-variable value="fallback-queue-delete-operation" doc:name="Set Fallback Flow" doc:id="set-fallback-delete" variableName="fallbackFlow"/>
+		
+		<!-- Execute with Circuit Breaker -->
+		<flow-ref doc:name="Execute with Circuit Breaker" doc:id="execute-cb-delete" name="execute-with-circuit-breaker"/>
+		
+		<!-- Cache successful response (removal) -->
+		<flow-ref doc:name="Cache Response" doc:id="cache-response-delete" name="cache-successful-response"/>
+		
+		<logger level="INFO" doc:name="Log Successful Deletion" doc:id="log-successful-deletion-cb" 
+			message="Flight ID #[vars.flightId] successfully deleted with circuit breaker protection"/>
+		
+		<!-- Error Handler for the flow -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Circuit Breaker Error" 
+				doc:id="cb-error-delete" type="CIRCUIT_BREAKER:OPEN">
+				<logger level="ERROR" doc:name="Circuit Open" doc:id="log-circuit-open-delete" 
+					message="Circuit breaker is OPEN for deleteFlight - executing fallback"/>
+				
+				<!-- Execute fallback directly -->
+				<flow-ref doc:name="Execute Fallback" doc:id="execute-fallback-delete" name="fallback-queue-delete-operation"/>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Flight Not Found Handler" 
+				doc:id="flight-not-found-handler-cb" type="FLIGHT:NOT_FOUND">
+				<ee:transform doc:name="Flight Not Found Response" doc:id="flight-not-found-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "FLIGHT_NOT_FOUND",
+	message: "Flight with ID " ++ (vars.flightId as String) ++ " does not exist",
+	flightId: vars.flightId,
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+	status: "ERROR"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">404</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Active Bookings Handler" 
+				doc:id="active-bookings-handler-cb" type="FLIGHT:ACTIVE_BOOKINGS">
+				<ee:transform doc:name="Active Bookings Response" doc:id="active-bookings-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: "ACTIVE_BOOKINGS_EXIST",
+	message: "Cannot delete flight: active bookings exist. Please cancel all bookings before deleting the flight.",
+	flightId: vars.flightId,
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+	status: "BUSINESS_VALIDATION_ERROR"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">409</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Database Error Handler" 
+				doc:id="database-error-handler-cb" type="DB:CONNECTIVITY, DB:QUERY_EXECUTION">
+				<logger level="ERROR" doc:name="Log Database Error" doc:id="log-database-error-cb" 
+					message="Database error during flight deletion: #[error.description]"/>
+				<ee:transform doc:name="Database Error Response" doc:id="database-error-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+							output application/json
+							---
+							{
+								error: "DATABASE_ERROR",
+								message: "An error occurred while processing the delete request. Please try again later.",
+								flightId: vars.flightId,
+								timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+								status: "ERROR"
+							}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+
+	<!-- Database operation sub-flow for delete flight -->
+	<sub-flow name="db-operation-delete-flight" doc:id="db-op-delete-flight">
+		<flow-ref doc:name="Delete flight from database" doc:id="call-delete-flight-cb" name="delete-flight-from-database-with-cb"/>
+	</sub-flow>
+
+	<!-- Delete flight database operation with circuit breaker config -->
+	<sub-flow name="delete-flight-from-database-with-cb" doc:id="delete-flight-subflow-cb">
+		<!-- Step 1: Validate that the flight exists -->
+		<db:select doc:name="Check Flight Exists" doc:id="check-flight-exists-cb" config-ref="DB_Config_With_Circuit_Breaker">
+			<db:sql><![CDATA[SELECT ID FROM american WHERE ID = :flightId]]></db:sql>
+			<db:input-parameters><![CDATA[#[{'flightId': vars.flightId}]]]></db:input-parameters>
+		</db:select>
+		
+		<choice doc:name="Flight Exists Check" doc:id="flight-exists-check-cb">
+			<when expression="#[sizeOf(payload) == 0]">
+				<!-- Flight doesn't exist -->
+				<raise-error doc:name="Flight Not Found Error" doc:id="flight-not-found-error-cb" 
+					type="FLIGHT:NOT_FOUND" description="Flight with ID #[vars.flightId] does not exist"/>
+			</when>
+			<otherwise>
+				<!-- Step 2: Check for active bookings -->
+				<db:select doc:name="Check Active Bookings" doc:id="check-active-bookings-cb" config-ref="DB_Config_With_Circuit_Breaker">
+					<db:sql><![CDATA[SELECT COUNT(*) as booking_count FROM bookings 
+						WHERE flight_id = :flightId AND status = 'ACTIVE']]></db:sql>
+					<db:input-parameters><![CDATA[#[{'flightId': vars.flightId}]]]></db:input-parameters>
+				</db:select>
+				
+				<choice doc:name="Active Bookings Check" doc:id="active-bookings-check-cb">
+					<when expression="#[payload[0].booking_count > 0]">
+						<!-- Active bookings exist - raise business validation error -->
+						<logger level="WARN" doc:name="Log Active Bookings Found" doc:id="log-active-bookings-cb" 
+							message="Cannot delete flight ID #[vars.flightId]: #[payload[0].booking_count] active booking(s) found"/>
+						<raise-error doc:name="Active Bookings Error" doc:id="active-bookings-error-cb" 
+							type="FLIGHT:ACTIVE_BOOKINGS" 
+							description="Cannot delete flight #[vars.flightId]: #[payload[0].booking_count] active booking(s) exist. Please cancel all bookings before deleting the flight."/>
+					</when>
+					<otherwise>
+						<!-- No active bookings - proceed with deletion -->
+						<logger level="INFO" doc:name="Log No Active Bookings" doc:id="log-no-bookings-cb" 
+							message="No active bookings found for flight ID #[vars.flightId]. Proceeding with deletion."/>
+						
+						<!-- Step 3: Delete the flight -->
+						<db:delete doc:name="Delete Flight" doc:id="delete-flight-cb" config-ref="DB_Config_With_Circuit_Breaker">
+							<db:sql><![CDATA[DELETE FROM american WHERE ID = :flightId]]></db:sql>
+							<db:input-parameters><![CDATA[#[{'flightId': vars.flightId}]]]></db:input-parameters>
+						</db:delete>
+						
+						<!-- Step 4: Return success response -->
+						<ee:transform doc:name="Success Response" doc:id="success-response-cb">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Flight with ID " ++ (vars.flightId as String) ++ " has been successfully deleted",
+	"flightId": vars.flightId as String,
+	"timestamp": now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+	"status": "SUCCESS"
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						
+						<logger level="INFO" doc:name="Log Successful Deletion" doc:id="log-successful-deletion-db-cb" 
+							message="Flight ID #[vars.flightId] successfully deleted from database with circuit breaker protection"/>
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
+</mule>

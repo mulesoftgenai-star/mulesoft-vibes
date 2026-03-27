@@ -1,0 +1,484 @@
+{
+	"info": {
+		"_postman_id": "american-airlines-api-collection",
+		"name": "American Airlines Info API",
+		"description": "Complete API collection for American Airlines Info API with local and production environments",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Local Environment",
+			"item": [
+				{
+					"name": "Get All Flights",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{local_base_url}}/api/flights",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							]
+						},
+						"description": "Retrieve all flights without any filter"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flights by Destination - CLE",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{local_base_url}}/api/flights?destination=CLE",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							],
+							"query": [
+								{
+									"key": "destination",
+									"value": "CLE"
+								}
+							]
+						},
+						"description": "Retrieve flights to Cleveland (CLE)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flights by Destination - SFO",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{local_base_url}}/api/flights?destination=SFO",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							],
+							"query": [
+								{
+									"key": "destination",
+									"value": "SFO"
+								}
+							]
+						},
+						"description": "Retrieve flights to San Francisco (SFO)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flights by Destination - LAX",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{local_base_url}}/api/flights?destination=LAX",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							],
+							"query": [
+								{
+									"key": "destination",
+									"value": "LAX"
+								}
+							]
+						},
+						"description": "Retrieve flights to Los Angeles (LAX)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flight by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{local_base_url}}/api/flights/1",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights",
+								"1"
+							]
+						},
+						"description": "Retrieve a specific flight by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Create New Flight",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"ID\": 2,\n    \"code\": \"AA123\",\n    \"price\": 500,\n    \"departureDate\": \"2024/08/15\",\n    \"origin\": \"LAX\",\n    \"destination\": \"SFO\",\n    \"emptySeats\": 25,\n    \"plane\": {\n        \"type\": \"Boeing 737\",\n        \"totalSeats\": 150\n    }\n}"
+						},
+						"url": {
+							"raw": "{{local_base_url}}/api/flights",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							]
+						},
+						"description": "Create a new flight record"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Flight by ID",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{local_base_url}}/api/flights/1",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights",
+								"1"
+							]
+						},
+						"description": "Delete a specific flight by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "API Console",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{local_base_url}}/console/",
+							"host": [
+								"{{local_base_url}}"
+							],
+							"path": [
+								"console",
+								""
+							]
+						},
+						"description": "Access the API console for documentation and testing"
+					},
+					"response": []
+				}
+			],
+			"description": "All API endpoints configured for local development environment"
+		},
+		{
+			"name": "Production Environment",
+			"item": [
+				{
+					"name": "Get All Flights",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							]
+						},
+						"description": "Retrieve all flights without any filter"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flights by Destination - CLE",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights?destination=CLE",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							],
+							"query": [
+								{
+									"key": "destination",
+									"value": "CLE"
+								}
+							]
+						},
+						"description": "Retrieve flights to Cleveland (CLE)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flights by Destination - SFO",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights?destination=SFO",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							],
+							"query": [
+								{
+									"key": "destination",
+									"value": "SFO"
+								}
+							]
+						},
+						"description": "Retrieve flights to San Francisco (SFO)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flights by Destination - LAX",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights?destination=LAX",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							],
+							"query": [
+								{
+									"key": "destination",
+									"value": "LAX"
+								}
+							]
+						},
+						"description": "Retrieve flights to Los Angeles (LAX)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Flight by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights/1",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights",
+								"1"
+							]
+						},
+						"description": "Retrieve a specific flight by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Create New Flight",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"ID\": 2,\n    \"code\": \"AA123\",\n    \"price\": 500,\n    \"departureDate\": \"2024/08/15\",\n    \"origin\": \"LAX\",\n    \"destination\": \"SFO\",\n    \"emptySeats\": 25,\n    \"plane\": {\n        \"type\": \"Boeing 737\",\n        \"totalSeats\": 150\n    }\n}"
+						},
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights"
+							]
+						},
+						"description": "Create a new flight record"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Flight by ID",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{prod_base_url}}/api/flights/1",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"api",
+								"flights",
+								"1"
+							]
+						},
+						"description": "Delete a specific flight by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "API Console",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{prod_base_url}}/console/",
+							"host": [
+								"{{prod_base_url}}"
+							],
+							"path": [
+								"console",
+								""
+							]
+						},
+						"description": "Access the API console for documentation and testing"
+					},
+					"response": []
+				}
+			],
+			"description": "All API endpoints configured for production environment"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "local_base_url",
+			"value": "http://localhost:8081",
+			"type": "string"
+		},
+		{
+			"key": "prod_base_url",
+			"value": "https://your-production-domain.com",
+			"type": "string"
+		}
+	]
+}

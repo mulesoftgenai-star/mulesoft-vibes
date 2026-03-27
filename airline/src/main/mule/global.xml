@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" 
+	xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	
+	
+	
+	<db:config name="H2_Database_Config" doc:name="H2 Database Config" doc:id="a05e160a-1bfc-412f-922e-5d570ea83313" >
+		<db:generic-connection driverClassName="org.h2.Driver" 
+			url="jdbc:h2:file:./data/airline_db;MODE=MySQL;AUTO_SERVER=TRUE;INIT=CREATE SCHEMA IF NOT EXISTS airline" 
+			user="sa" />
+	</db:config>
+	
+	
+	       <http:listener-config name="american-airlines-info-api-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8083" />
+    </http:listener-config>
+    
+    <!-- Unified H2 Database Configuration for all operations -->
+	<db:config name="Database_Config" doc:name="H2 Database Config" doc:id="db-config-batch">
+		<db:generic-connection driverClassName="org.h2.Driver" 
+			url="jdbc:h2:file:./data/airline_db;MODE=MySQL;AUTO_SERVER=TRUE;INIT=CREATE SCHEMA IF NOT EXISTS airline" 
+			user="sa" />
+	</db:config>
+	
+	<!-- Email Configuration -->
+	<email:smtp-config name="Email_SMTP_Config" doc:name="Email SMTP Config" doc:id="email-smtp-config">
+		<email:smtp-connection host="smtp.gmail.com" port="587" user="${email.user:test@example.com}" password="${email.password:password}">
+			<email:properties>
+				<email:property key="mail.smtp.starttls.enable" value="true"/>
+				<email:property key="mail.smtp.auth" value="true"/>
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	
+	<!-- File Configuration for batch input -->
+	<file:config name="File_Config" doc:name="File Config" doc:id="file-config">
+		<file:connection workingDir="${batch.input.directory:/tmp/flights}" />
+	</file:config>
+	
+	<!-- HTTP Configuration for Notification System API -->
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="http-request-config">
+		<http:request-connection host="${notification.api.host}" port="${notification.api.port}" />
+	</http:request-config>
+        
+	</mule>

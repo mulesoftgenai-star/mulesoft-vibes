@@ -1,0 +1,420 @@
+#%RAML 1.0
+title: Order Process API
+version: v1
+description: Process API for Order Management System - Business logic orchestration and workflow management
+baseUri: https://api.company.com/process/v1
+protocols: [HTTPS]
+
+uses:
+  processTypes: libraries/process-types.raml
+  commonTypes: libraries/common-types.raml
+
+securitySchemes:
+  oauth_2_0:
+    description: OAuth 2.0 for internal API access
+    type: OAuth 2.0
+    settings:
+      authorizationUri: https://auth.company.com/oauth/authorize
+      accessTokenUri: https://auth.company.com/oauth/token
+      authorizationGrants: [client_credentials]
+
+securedBy: [oauth_2_0]
+
+/orders:
+  displayName: Order Processing
+  description: Order processing workflow operations
+  
+  get:
+    displayName: Get Orders
+    description: Retrieve orders from the system with business logic processing
+    queryParameters:
+      customerId?:
+        type: string
+        description: Filter by customer ID
+      status?:
+        type: string
+        enum: [pending, processing, confirmed, shipped, delivered, cancelled]
+        description: Filter by order status
+      fromDate?:
+        type: date-only
+        description: Filter orders from this date
+      toDate?:
+        type: date-only
+        description: Filter orders until this date
+      limit?:
+        type: integer
+        default: 20
+        maximum: 100
+        description: Maximum number of orders to return
+      offset?:
+        type: integer
+        default: 0
+        description: Number of orders to skip for pagination
+    responses:
+      200:
+        description: Orders retrieved successfully
+        body:
+          application/json:
+            type: processTypes.OrderProcessList
+            example: |
+              {
+                "orders": [
+                  {
+                    "orderId": "ORD-2026-001",
+                    "orderNumber": "ON-20260324-001",
+                    "customerId": "CUST-12345",
+                    "orderDate": "2026-03-24",
+                    "status": "processing",
+                    "workflow": {
+                      "currentStage": "inventory_validation",
+                      "completedStages": ["customer_validation"],
+                      "nextStage": "payment_processing"
+                    },
+                    "totalAmount": 299.99,
+                    "currency": "USD",
+                    "processMetadata": {
+                      "correlationId": "corr-123456",
+                      "processingStartTime": "2026-03-24T10:30:00Z",
+                      "estimatedCompletionTime": "2026-03-24T10:35:00Z"
+                    }
+                  }
+                ],
+                "pagination": {
+                  "total": 1,
+                  "limit": 20,
+                  "offset": 0,
+                  "hasNext": false,
+                  "hasPrevious": false
+                }
+              }
+      400:
+        description: Bad Request
+        body:
+          application/json:
+            type: commonTypes.Error
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: commonTypes.Error
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: commonTypes.Error
+
+  post:
+    displayName: Process Order
+    description: Execute end-to-end order processing workflow
+    body:
+      application/json:
+        type: processTypes.OrderProcessRequest
+        example: |
+          {
+            "correlationId": "corr-123456",
+            "customerId": "CUST-12345",
+            "items": [
+              {
+                "productId": "PROD-001",
+                "quantity": 1,
+                "unitPrice": 299.99
+              }
+            ],
+            "shippingAddress": {
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "billingAddress": {
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "paymentMethod": {
+              "type": "credit_card",
+              "cardNumber": "****-****-****-1234",
+              "expiryMonth": 12,
+              "expiryYear": 2028
+            },
+            "requestTimestamp": "2026-03-24T10:30:00Z"
+          }
+    responses:
+      201:
+        description: Order processing completed successfully
+        body:
+          application/json:
+            type: processTypes.OrderProcessResponse
+            example: |
+              {
+                "orderId": "ORD-2026-001",
+                "orderNumber": "ON-20260324-001",
+                "customerId": "CUST-12345",
+                "orderDate": "2026-03-24",
+                "status": "confirmed",
+                "totalAmount": 299.99,
+                "currency": "USD",
+                "items": [
+                  {
+                    "productId": "PROD-001",
+                    "productName": "Wireless Headphones",
+                    "quantity": 1,
+                    "unitPrice": 299.99,
+                    "totalPrice": 299.99,
+                    "availability": {
+                      "inStock": true,
+                      "reservationId": "RES-789012"
+                    }
+                  }
+                ],
+                "workflow": {
+                  "status": "completed",
+                  "stages": {
+                    "customerValidation": {
+                      "status": "completed",
+                      "completedAt": "2026-03-24T10:30:15Z"
+                    },
+                    "inventoryValidation": {
+                      "status": "completed", 
+                      "completedAt": "2026-03-24T10:30:30Z"
+                    },
+                    "paymentProcessing": {
+                      "status": "completed",
+                      "completedAt": "2026-03-24T10:30:45Z",
+                      "paymentId": "PAY-456789"
+                    },
+                    "orderCreation": {
+                      "status": "completed",
+                      "completedAt": "2026-03-24T10:31:00Z"
+                    },
+                    "fulfillmentInitiation": {
+                      "status": "completed",
+                      "completedAt": "2026-03-24T10:31:15Z",
+                      "shipmentId": "SHIP-345678"
+                    }
+                  }
+                },
+                "shippingAddress": {
+                  "street": "123 Main St",
+                  "city": "New York",
+                  "state": "NY",
+                  "zipCode": "10001",
+                  "country": "USA"
+                },
+                "estimatedDeliveryDate": "2026-03-28",
+                "trackingNumber": "TRK123456789",
+                "processMetadata": {
+                  "correlationId": "corr-123456",
+                  "processingStartTime": "2026-03-24T10:30:00Z",
+                  "processingEndTime": "2026-03-24T10:31:15Z",
+                  "totalProcessingTime": "75000"
+                },
+                "createdAt": "2026-03-24T10:31:15Z",
+                "updatedAt": "2026-03-24T10:31:15Z"
+              }
+      400:
+        description: Bad Request - Invalid order data or validation failed
+        body:
+          application/json:
+            type: commonTypes.ValidationError
+      409:
+        description: Conflict - Business rule violation or resource conflict
+        body:
+          application/json:
+            type: commonTypes.Error
+      500:
+        description: Internal Server Error
+        body:
+          application/json:
+            type: commonTypes.Error
+
+  /{orderId}:
+    displayName: Order Processing Details
+    uriParameters:
+      orderId:
+        type: string
+        description: Unique order identifier
+        pattern: ^ORD-\d{4}-\d{3}$
+        example: ORD-2026-001
+    
+    get:
+      displayName: Get Order Processing Status
+      description: Retrieve detailed order processing information and workflow status
+      responses:
+        200:
+          description: Order processing details retrieved successfully
+          body:
+            application/json:
+              type: processTypes.OrderProcessResponse
+              example: |
+                {
+                  "orderId": "ORD-2026-001",
+                  "orderNumber": "ON-20260324-001",
+                  "customerId": "CUST-12345",
+                  "orderDate": "2026-03-24",
+                  "status": "shipped",
+                  "totalAmount": 299.99,
+                  "currency": "USD",
+                  "workflow": {
+                    "status": "completed",
+                    "currentStage": "fulfillment_completed",
+                    "stages": {
+                      "customerValidation": {
+                        "status": "completed",
+                        "completedAt": "2026-03-24T10:30:15Z"
+                      },
+                      "inventoryValidation": {
+                        "status": "completed",
+                        "completedAt": "2026-03-24T10:30:30Z"
+                      },
+                      "paymentProcessing": {
+                        "status": "completed",
+                        "completedAt": "2026-03-24T10:30:45Z"
+                      },
+                      "orderCreation": {
+                        "status": "completed",
+                        "completedAt": "2026-03-24T10:31:00Z"
+                      },
+                      "fulfillmentInitiation": {
+                        "status": "completed",
+                        "completedAt": "2026-03-24T10:31:15Z"
+                      }
+                    }
+                  },
+                  "trackingNumber": "TRK123456789",
+                  "estimatedDeliveryDate": "2026-03-28"
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: commonTypes.Error
+        500:
+          description: Internal Server Error
+          body:
+            application/json:
+              type: commonTypes.Error
+
+/workflow:
+  displayName: Workflow Management
+  description: Order processing workflow operations
+  
+  /compensate:
+    displayName: Workflow Compensation
+    description: Execute compensation logic for failed order processing
+    
+    post:
+      displayName: Compensate Order Processing
+      description: Execute compensation workflow to rollback failed order processing
+      body:
+        application/json:
+          type: processTypes.CompensationRequest
+          example: |
+            {
+              "correlationId": "corr-123456",
+              "orderId": "ORD-2026-001",
+              "failureStage": "payment_processing",
+              "reason": "Payment authorization failed",
+              "actionsToReverse": [
+                "inventory_reservation",
+                "customer_notification"
+              ]
+            }
+      responses:
+        200:
+          description: Compensation completed successfully
+          body:
+            application/json:
+              type: processTypes.CompensationResponse
+              example: |
+                {
+                  "compensationId": "COMP-789012",
+                  "correlationId": "corr-123456",
+                  "orderId": "ORD-2026-001",
+                  "status": "completed",
+                  "actionsReversed": [
+                    {
+                      "action": "inventory_reservation",
+                      "status": "reversed",
+                      "completedAt": "2026-03-24T10:32:00Z"
+                    },
+                    {
+                      "action": "customer_notification",
+                      "status": "reversed",
+                      "completedAt": "2026-03-24T10:32:15Z"
+                    }
+                  ],
+                  "completedAt": "2026-03-24T10:32:15Z"
+                }
+        400:
+          description: Bad Request
+          body:
+            application/json:
+              type: commonTypes.ValidationError
+        500:
+          description: Internal Server Error
+          body:
+            application/json:
+              type: commonTypes.Error
+
+/health:
+  displayName: Health Check
+  description: Process API health monitoring endpoint
+  get:
+    displayName: Health Status
+    description: Check Process API health and dependency status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2026-03-24T10:00:00Z",
+                "version": "v1.0.0",
+                "environment": "production",
+                "dependencies": {
+                  "customerSystemAPI": "UP",
+                  "inventorySystemAPI": "UP",
+                  "paymentSystemAPI": "UP",
+                  "orderSystemAPI": "UP",
+                  "shippingSystemAPI": "UP",
+                  "objectStore": "UP",
+                  "anypointMQ": "UP"
+                },
+                "metrics": {
+                  "averageProcessingTime": "2500ms",
+                  "successRate": "99.5%",
+                  "activeWorkflows": 15,
+                  "completedToday": 1250
+                }
+              }
+      503:
+        description: Service Unavailable
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2026-03-24T10:00:00Z",
+                "dependencies": {
+                  "customerSystemAPI": "UP",
+                  "inventorySystemAPI": "DOWN",
+                  "paymentSystemAPI": "UP",
+                  "orderSystemAPI": "UP",
+                  "shippingSystemAPI": "UP",
+                  "objectStore": "UP",
+                  "anypointMQ": "UP"
+                },
+                "errors": [
+                  {
+                    "component": "inventorySystemAPI",
+                    "error": "Connection timeout",
+                    "lastSuccessful": "2026-03-24T09:55:00Z"
+                  }
+                ]
+              }
