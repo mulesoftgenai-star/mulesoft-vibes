@@ -1,0 +1,610 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+    xmlns="http://www.mulesoft.org/schema/mule/core" 
+    xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" 
+    xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+    xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+    xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/objectstore http://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd">
+
+    <!-- Payment System API Implementation -->
+    <!-- Provides payment authorization, capture, and void operations for order processing -->
+    
+    <!-- HTTP Listener Configuration -->
+    <http:listener-config name="payment-system-api-httpListenerConfig" doc:name="HTTP Listener config">
+        <http:listener-connection host="0.0.0.0" port="8084" />
+    </http:listener-config>
+
+    <!-- APIKit Configuration -->
+    <apikit:config name="payment-system-api-config" raml="api/payment-system-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" doc:name="Config"/>
+
+    <!-- Object Store Configuration for Payment Data -->
+    <objectstore:config name="payment-object-store-config" doc:name="ObjectStore Config">
+        <objectstore:os-connection />
+    </objectstore:config>
+
+    <!-- Main API Flow -->
+    <flow name="payment-system-api-main" doc:id="payment-system-api-main">
+        <http:listener doc:name="Listener" config-ref="payment-system-api-httpListenerConfig" path="/api/*"/>
+        <apikit:router config-ref="payment-system-api-config" doc:name="APIkit Router"/>
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:BAD_REQUEST">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:NOT_FOUND">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /authorizations - Payment Authorization Flow -->
+    <flow name="post:\authorizations:payment-system-api-config" doc:id="post:\authorizations:payment-system-api-config">
+        <logger level="INFO" doc:name="Log Authorization Request" message='Payment Authorization Request - Correlation ID: #[correlationId], Amount: #[payload.amount], Payment Method: #[payload.paymentMethod]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Validate Payment Authorization Request -->
+        <flow-ref doc:name="Validate Payment Authorization" name="validate-payment-authorization"/>
+        
+        <!-- Process Payment Authorization -->
+        <flow-ref doc:name="Process Authorization" name="process-payment-authorization"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Authorization Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  authorizationId: vars.authorizationId,
+  status: vars.authorizationStatus,
+  amount: payload.amount,
+  currency: payload.currency,
+  paymentMethod: payload.paymentMethod,
+  transactionId: vars.transactionId,
+  authorizedAt: now(),
+  expiresAt: now() + |PT30M|,
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Authorization Success" message='Payment Authorization Success - Correlation ID: #[vars.correlationId], Authorization ID: #[vars.authorizationId], Status: #[vars.authorizationStatus]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Authorization Error" message='Payment Authorization Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "PAYMENT_AUTHORIZATION_FAILED",
+  message: "Payment authorization failed",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /captures - Payment Capture Flow -->
+    <flow name="post:\captures:payment-system-api-config" doc:id="post:\captures:payment-system-api-config">
+        <logger level="INFO" doc:name="Log Capture Request" message='Payment Capture Request - Correlation ID: #[correlationId], Authorization ID: #[payload.authorizationId], Amount: #[payload.amount]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Validate Payment Capture Request -->
+        <flow-ref doc:name="Validate Payment Capture" name="validate-payment-capture"/>
+        
+        <!-- Process Payment Capture -->
+        <flow-ref doc:name="Process Capture" name="process-payment-capture"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Capture Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  captureId: vars.captureId,
+  authorizationId: payload.authorizationId,
+  status: vars.captureStatus,
+  amount: payload.amount,
+  currency: payload.currency,
+  transactionId: vars.transactionId,
+  capturedAt: now(),
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Capture Success" message='Payment Capture Success - Correlation ID: #[vars.correlationId], Capture ID: #[vars.captureId], Status: #[vars.captureStatus]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Capture Error" message='Payment Capture Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "PAYMENT_CAPTURE_FAILED",
+  message: "Payment capture failed",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /voids - Payment Void Flow -->
+    <flow name="post:\voids:payment-system-api-config" doc:id="post:\voids:payment-system-api-config">
+        <logger level="INFO" doc:name="Log Void Request" message='Payment Void Request - Correlation ID: #[correlationId], Authorization ID: #[payload.authorizationId]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Validate Payment Void Request -->
+        <flow-ref doc:name="Validate Payment Void" name="validate-payment-void"/>
+        
+        <!-- Process Payment Void -->
+        <flow-ref doc:name="Process Void" name="process-payment-void"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Void Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  voidId: vars.voidId,
+  authorizationId: payload.authorizationId,
+  status: vars.voidStatus,
+  transactionId: vars.transactionId,
+  voidedAt: now(),
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Void Success" message='Payment Void Success - Correlation ID: #[vars.correlationId], Void ID: #[vars.voidId], Status: #[vars.voidStatus]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Void Error" message='Payment Void Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "PAYMENT_VOID_FAILED",
+  message: "Payment void failed",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET /authorizations/{authorizationId} - Get Authorization Status -->
+    <flow name="get:\authorizations\(authorizationId):payment-system-api-config" doc:id="get:\authorizations\(authorizationId):payment-system-api-config">
+        <logger level="INFO" doc:name="Log Get Authorization Request" message='Get Payment Authorization Request - Correlation ID: #[correlationId], Authorization ID: #[attributes.uriParams.authorizationId]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[attributes.uriParams.authorizationId]' doc:name="Set Authorization ID" variableName="authorizationId"/>
+        
+        <!-- Get Authorization Details -->
+        <flow-ref doc:name="Get Authorization Details" name="get-authorization-details"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Authorization Details">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  authorizationId: vars.authorizationId,
+  status: vars.authorizationDetails.status,
+  amount: vars.authorizationDetails.amount,
+  currency: vars.authorizationDetails.currency,
+  paymentMethod: vars.authorizationDetails.paymentMethod,
+  transactionId: vars.authorizationDetails.transactionId,
+  authorizedAt: vars.authorizationDetails.authorizedAt,
+  expiresAt: vars.authorizationDetails.expiresAt,
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Get Authorization Success" message='Get Payment Authorization Success - Correlation ID: #[vars.correlationId], Authorization ID: #[vars.authorizationId]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="OBJECTSTORE:KEY_NOT_FOUND">
+                <logger level="WARN" doc:name="Log Authorization Not Found" message='Payment Authorization Not Found - Correlation ID: #[vars.correlationId], Authorization ID: #[vars.authorizationId]'/>
+                <ee:transform doc:name="Transform Not Found Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "AUTHORIZATION_NOT_FOUND",
+  message: "Payment authorization not found",
+  authorizationId: vars.authorizationId,
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Get Authorization Error" message='Get Payment Authorization Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "PAYMENT_SYSTEM_ERROR",
+  message: "Payment system error occurred",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Validation Subflows -->
+    
+    <!-- Validate Payment Authorization Request -->
+    <sub-flow name="validate-payment-authorization" doc:id="validate-payment-authorization">
+        <logger level="DEBUG" doc:name="Log Validation Start" message='Validating Payment Authorization Request - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Validate Required Fields -->
+        <choice doc:name="Validate Request Fields">
+            <when expression='#[payload.amount == null or payload.amount &lt;= 0]'>
+                <raise-error doc:name="Invalid Amount" type="PAYMENT:INVALID_AMOUNT" description="Payment amount must be greater than zero"/>
+            </when>
+            <when expression='#[payload.currency == null or isEmpty(payload.currency)]'>
+                <raise-error doc:name="Invalid Currency" type="PAYMENT:INVALID_CURRENCY" description="Payment currency is required"/>
+            </when>
+            <when expression='#[payload.paymentMethod == null or isEmpty(payload.paymentMethod)]'>
+                <raise-error doc:name="Invalid Payment Method" type="PAYMENT:INVALID_PAYMENT_METHOD" description="Payment method is required"/>
+            </when>
+            <when expression='#[payload.cardNumber != null and (sizeOf(payload.cardNumber) &lt; 13 or sizeOf(payload.cardNumber) &gt; 19)]'>
+                <raise-error doc:name="Invalid Card Number" type="PAYMENT:INVALID_CARD_NUMBER" description="Card number must be between 13 and 19 digits"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Validation Success" message='Payment Authorization Request Validation Success - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+        <logger level="DEBUG" doc:name="Validation Success" message='Payment Authorization Request Validation Success - Correlation ID: #[vars.correlationId]'/>
+        
+    </sub-flow>
+
+    <!-- Validate Payment Capture Request -->
+    <sub-flow name="validate-payment-capture" doc:id="validate-payment-capture">
+        <logger level="DEBUG" doc:name="Log Validation Start" message='Validating Payment Capture Request - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Validate Required Fields -->
+        <choice doc:name="Validate Request Fields">
+            <when expression='#[payload.authorizationId == null or isEmpty(payload.authorizationId)]'>
+                <raise-error doc:name="Invalid Authorization ID" type="PAYMENT:INVALID_AUTHORIZATION_ID" description="Authorization ID is required"/>
+            </when>
+            <when expression='#[payload.amount == null or payload.amount &lt;= 0]'>
+                <raise-error doc:name="Invalid Amount" type="PAYMENT:INVALID_AMOUNT" description="Capture amount must be greater than zero"/>
+            </when>
+            <when expression='#[payload.currency == null or isEmpty(payload.currency)]'>
+                <raise-error doc:name="Invalid Currency" type="PAYMENT:INVALID_CURRENCY" description="Payment currency is required"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Validation Success" message='Payment Capture Request Validation Success - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+    </sub-flow>
+
+    <!-- Validate Payment Void Request -->
+    <sub-flow name="validate-payment-void" doc:id="validate-payment-void">
+        <logger level="DEBUG" doc:name="Log Validation Start" message='Validating Payment Void Request - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Validate Required Fields -->
+        <choice doc:name="Validate Request Fields">
+            <when expression='#[payload.authorizationId == null or isEmpty(payload.authorizationId)]'>
+                <raise-error doc:name="Invalid Authorization ID" type="PAYMENT:INVALID_AUTHORIZATION_ID" description="Authorization ID is required"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Validation Success" message='Payment Void Request Validation Success - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+    </sub-flow>
+
+    <!-- Business Logic Subflows -->
+    
+    <!-- Process Payment Authorization -->
+    <sub-flow name="process-payment-authorization" doc:id="process-payment-authorization">
+        <logger level="DEBUG" doc:name="Log Processing Start" message='Processing Payment Authorization - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Generate Authorization ID and Transaction ID -->
+        <set-variable value='#[uuid()]' doc:name="Set Authorization ID" variableName="authorizationId"/>
+        <set-variable value='#["TXN-" ++ (uuid() as String)[0 to 7]]' doc:name="Set Transaction ID" variableName="transactionId"/>
+        
+        <!-- Mock Payment Processing Logic -->
+        <choice doc:name="Mock Payment Gateway Response">
+            <when expression='#[payload.paymentMethod == "CREDIT_CARD" and payload.cardNumber != null]'>
+                <!-- Mock credit card validation -->
+                <choice doc:name="Validate Card Number">
+                    <when expression='#[payload.cardNumber startsWith "4111" or payload.cardNumber startsWith "5555"]'>
+                        <set-variable value='"AUTHORIZED"' doc:name="Set Success Status" variableName="authorizationStatus"/>
+                        <logger level="INFO" doc:name="Log Card Authorized" message='Credit Card Authorized - Correlation ID: #[vars.correlationId], Card: #[payload.cardNumber[0 to 3]]****'/>
+                    </when>
+                    <when expression='#[payload.cardNumber startsWith "4000"]'>
+                        <set-variable value='"DECLINED"' doc:name="Set Declined Status" variableName="authorizationStatus"/>
+                        <logger level="WARN" doc:name="Log Card Declined" message='Credit Card Declined - Correlation ID: #[vars.correlationId], Card: #[payload.cardNumber[0 to 3]]****'/>
+                        <raise-error doc:name="Payment Declined" type="PAYMENT:AUTHORIZATION_DECLINED" description="Payment authorization was declined by the issuing bank"/>
+                    </when>
+                    <otherwise>
+                        <set-variable value='"AUTHORIZED"' doc:name="Set Default Status" variableName="authorizationStatus"/>
+                        <logger level="INFO" doc:name="Log Default Authorized" message='Payment Authorized (Default) - Correlation ID: #[vars.correlationId]'/>
+                    </otherwise>
+                </choice>
+            </when>
+            <when expression='#[payload.paymentMethod == "DEBIT_CARD"]'>
+                <set-variable value='"AUTHORIZED"' doc:name="Set Debit Authorized" variableName="authorizationStatus"/>
+                <logger level="INFO" doc:name="Log Debit Authorized" message='Debit Card Authorized - Correlation ID: #[vars.correlationId]'/>
+            </when>
+            <when expression='#[payload.paymentMethod == "DIGITAL_WALLET"]'>
+                <set-variable value='"AUTHORIZED"' doc:name="Set Wallet Authorized" variableName="authorizationStatus"/>
+                <logger level="INFO" doc:name="Log Wallet Authorized" message='Digital Wallet Authorized - Correlation ID: #[vars.correlationId]'/>
+            </when>
+            <otherwise>
+                <set-variable value='"AUTHORIZED"' doc:name="Set Generic Authorized" variableName="authorizationStatus"/>
+                <logger level="INFO" doc:name="Log Generic Authorized" message='Payment Method Authorized - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+        <!-- Store Authorization Details in Object Store -->
+        <objectstore:store doc:name="Store Authorization" config-ref="payment-object-store-config" key='#["auth:" ++ vars.authorizationId]'>
+            <objectstore:value><![CDATA[#[{
+                "authorizationId": vars.authorizationId,
+                "status": vars.authorizationStatus,
+                "amount": payload.amount,
+                "currency": payload.currency,
+                "paymentMethod": payload.paymentMethod,
+                "transactionId": vars.transactionId,
+                "authorizedAt": now(),
+                "expiresAt": now() + |PT30M|,
+                "correlationId": vars.correlationId
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <logger level="DEBUG" doc:name="Log Processing Complete" message='Payment Authorization Processing Complete - Correlation ID: #[vars.correlationId], Authorization ID: #[vars.authorizationId]'/>
+        
+    </sub-flow>
+
+    <!-- Process Payment Capture -->
+    <sub-flow name="process-payment-capture" doc:id="process-payment-capture">
+        <logger level="DEBUG" doc:name="Log Capture Processing Start" message='Processing Payment Capture - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Get Authorization Details -->
+        <objectstore:retrieve doc:name="Retrieve Authorization" config-ref="payment-object-store-config" key='#["auth:" ++ payload.authorizationId]' target="authorizationDetails"/>
+        
+        <!-- Validate Authorization Status -->
+        <choice doc:name="Validate Authorization">
+            <when expression='#[vars.authorizationDetails.status != "AUTHORIZED"]'>
+                <raise-error doc:name="Invalid Authorization" type="PAYMENT:INVALID_AUTHORIZATION_STATUS" description="Authorization is not in a valid state for capture"/>
+            </when>
+            <when expression='#[vars.authorizationDetails.expiresAt &lt; now()]'>
+                <raise-error doc:name="Expired Authorization" type="PAYMENT:AUTHORIZATION_EXPIRED" description="Authorization has expired"/>
+            </when>
+            <when expression='#[payload.amount &gt; vars.authorizationDetails.amount]'>
+                <raise-error doc:name="Excessive Capture Amount" type="PAYMENT:EXCESSIVE_CAPTURE_AMOUNT" description="Capture amount exceeds authorized amount"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Authorization Valid" message='Authorization Valid for Capture - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+        <!-- Generate Capture ID -->
+        <set-variable value='#[uuid()]' doc:name="Set Capture ID" variableName="captureId"/>
+        <set-variable value='#[vars.authorizationDetails.transactionId]' doc:name="Set Transaction ID" variableName="transactionId"/>
+        <set-variable value='"CAPTURED"' doc:name="Set Capture Status" variableName="captureStatus"/>
+        
+        <!-- Store Capture Details -->
+        <objectstore:store doc:name="Store Capture" config-ref="payment-object-store-config" key='#["capture:" ++ vars.captureId]'>
+            <objectstore:value><![CDATA[#[{
+                "captureId": vars.captureId,
+                "authorizationId": payload.authorizationId,
+                "status": vars.captureStatus,
+                "amount": payload.amount,
+                "currency": payload.currency,
+                "transactionId": vars.transactionId,
+                "capturedAt": now(),
+                "correlationId": vars.correlationId
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <!-- Update Authorization Status -->
+        <objectstore:store doc:name="Update Authorization" config-ref="payment-object-store-config" key='#["auth:" ++ payload.authorizationId]'>
+            <objectstore:value><![CDATA[#[vars.authorizationDetails ++ {
+                "status": "CAPTURED",
+                "capturedAmount": payload.amount,
+                "capturedAt": now()
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <logger level="DEBUG" doc:name="Log Capture Complete" message='Payment Capture Processing Complete - Correlation ID: #[vars.correlationId], Capture ID: #[vars.captureId]'/>
+        
+    </sub-flow>
+
+    <!-- Process Payment Void -->
+    <sub-flow name="process-payment-void" doc:id="process-payment-void">
+        <logger level="DEBUG" doc:name="Log Void Processing Start" message='Processing Payment Void - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Get Authorization Details -->
+        <objectstore:retrieve doc:name="Retrieve Authorization" config-ref="payment-object-store-config" key='#["auth:" ++ payload.authorizationId]' target="authorizationDetails"/>
+        
+        <!-- Validate Authorization Status for Void -->
+        <choice doc:name="Validate Authorization for Void">
+            <when expression='#[vars.authorizationDetails.status == "VOIDED"]'>
+                <raise-error doc:name="Already Voided" type="PAYMENT:ALREADY_VOIDED" description="Authorization has already been voided"/>
+            </when>
+            <when expression='#[vars.authorizationDetails.status == "CAPTURED"]'>
+                <raise-error doc:name="Cannot Void Captured" type="PAYMENT:CANNOT_VOID_CAPTURED" description="Cannot void a captured authorization"/>
+            </when>
+            <when expression='#[vars.authorizationDetails.status != "AUTHORIZED"]'>
+                <raise-error doc:name="Invalid Status for Void" type="PAYMENT:INVALID_AUTHORIZATION_STATUS" description="Authorization is not in a valid state for void"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Authorization Valid for Void" message='Authorization Valid for Void - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+        <!-- Generate Void ID -->
+        <set-variable value='#[uuid()]' doc:name="Set Void ID" variableName="voidId"/>
+        <set-variable value='#[vars.authorizationDetails.transactionId]' doc:name="Set Transaction ID" variableName="transactionId"/>
+        <set-variable value='"VOIDED"' doc:name="Set Void Status" variableName="voidStatus"/>
+        
+        <!-- Store Void Details -->
+        <objectstore:store doc:name="Store Void" config-ref="payment-object-store-config" key='#["void:" ++ vars.voidId]'>
+            <objectstore:value><![CDATA[#[{
+                "voidId": vars.voidId,
+                "authorizationId": payload.authorizationId,
+                "status": vars.voidStatus,
+                "transactionId": vars.transactionId,
+                "voidedAt": now(),
+                "correlationId": vars.correlationId
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <!-- Update Authorization Status -->
+        <objectstore:store doc:name="Update Authorization" config-ref="payment-object-store-config" key='#["auth:" ++ payload.authorizationId]'>
+            <objectstore:value><![CDATA[#[vars.authorizationDetails ++ {
+                "status": "VOIDED",
+                "voidedAt": now()
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <logger level="DEBUG" doc:name="Log Void Complete" message='Payment Void Processing Complete - Correlation ID: #[vars.correlationId], Void ID: #[vars.voidId]'/>
+        
+    </sub-flow>
+
+    <!-- Get Authorization Details -->
+    <sub-flow name="get-authorization-details" doc:id="get-authorization-details">
+        <logger level="DEBUG" doc:name="Log Get Details Start" message='Getting Authorization Details - Correlation ID: #[vars.correlationId], Authorization ID: #[vars.authorizationId]'/>
+        
+        <!-- Retrieve Authorization from Object Store -->
+        <objectstore:retrieve doc:name="Retrieve Authorization" config-ref="payment-object-store-config" key='#["auth:" ++ vars.authorizationId]' target="authorizationDetails"/>
+        
+        <logger level="DEBUG" doc:name="Log Get Details Complete" message='Authorization Details Retrieved - Correlation ID: #[vars.correlationId], Status: #[vars.authorizationDetails.status]'/>
+    </sub-flow>
+
+</mule>

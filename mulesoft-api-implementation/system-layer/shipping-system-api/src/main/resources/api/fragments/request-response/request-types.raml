@@ -1,0 +1,125 @@
+#%RAML 1.0 Library
+
+uses:
+  shipping-types: ../data-types/shipping-types.raml
+
+types:
+  CreateShipmentRequest:
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Order identifier
+        pattern: ^ORD[0-9]{10}$
+        example: "ORD1234567890"
+      customerId:
+        type: string
+        description: Customer identifier
+        pattern: ^CUST[0-9]{8}$
+        example: "CUST12345678"
+      shippingAddress:
+        type: shipping-types.Address
+        description: Delivery address
+      items:
+        type: array
+        items: shipping-types.ShipmentItem
+        description: Items to be shipped
+        minItems: 1
+      carrierPreference:
+        type: string
+        enum: ["UPS", "FEDEX", "DHL", "USPS"]
+        description: Preferred shipping carrier
+        example: "UPS"
+        required: false
+      serviceType:
+        type: string
+        enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "TWO_DAY"]
+        description: Shipping service type
+        example: "STANDARD"
+        default: "STANDARD"
+      specialInstructions:
+        type: string
+        description: Special delivery instructions
+        example: "Leave at front door if no answer"
+        required: false
+
+  UpdateShipmentRequest:
+    type: object
+    properties:
+      status:
+        type: string
+        enum: ["PENDING", "PROCESSING", "SHIPPED", "IN_TRANSIT", "DELIVERED", "CANCELLED", "RETURNED"]
+        description: Updated shipment status
+        example: "SHIPPED"
+        required: false
+      trackingNumber:
+        type: string
+        description: Tracking number from carrier
+        example: "1Z12345E1234567890"
+        required: false
+      carrier:
+        type: string
+        enum: ["UPS", "FEDEX", "DHL", "USPS"]
+        description: Actual shipping carrier
+        example: "UPS"
+        required: false
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+        example: "2024-01-20"
+        required: false
+      actualDeliveryDate:
+        type: date-only
+        description: Actual delivery date
+        example: "2024-01-19"
+        required: false
+      specialInstructions:
+        type: string
+        description: Updated special delivery instructions
+        example: "Ring doorbell twice"
+        required: false
+
+  ShippingRateRequest:
+    type: object
+    properties:
+      fromAddress:
+        type: shipping-types.Address
+        description: Origin address
+      toAddress:
+        type: shipping-types.Address
+        description: Destination address
+      package:
+        type: shipping-types.Package
+        description: Package details
+      serviceTypes:
+        type: array
+        items:
+          type: string
+          enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "TWO_DAY"]
+        description: Service types to get rates for
+        example: ["STANDARD", "EXPRESS"]
+        required: false
+
+  TrackingRequest:
+    type: object
+    properties:
+      trackingNumbers:
+        type: array
+        items: string
+        description: List of tracking numbers to check
+        example: ["1Z12345E1234567890", "1Z98765E0987654321"]
+        minItems: 1
+        maxItems: 20
+
+  AddressValidationRequest:
+    type: object
+    properties:
+      address:
+        type: shipping-types.Address
+        description: Address to validate
+      carrierPreference:
+        type: string
+        enum: ["UPS", "FEDEX", "DHL", "USPS"]
+        description: Preferred carrier for validation service
+        example: "UPS"
+        required: false

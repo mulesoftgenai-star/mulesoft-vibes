@@ -1,0 +1,79 @@
+# Secure Properties - Development Environment
+# Encrypted sensitive configuration values
+
+# OAuth Credentials
+oauth:
+  client:
+    id: "![encrypted_client_id_dev]"
+    secret: "![encrypted_client_secret_dev]"
+    
+# API Keys
+api:
+  key: "![encrypted_api_key_dev]"
+  
+# Database Credentials
+db:
+  username: "![encrypted_db_username_dev]"
+  password: "![encrypted_db_password_dev]"
+  
+# SSL/TLS Configuration
+keystore:
+  password: "![encrypted_keystore_password_dev]"
+  
+truststore:
+  password: "![encrypted_truststore_password_dev]"
+  
+key:
+  password: "![encrypted_key_password_dev]"
+  
+# External System Credentials
+customer:
+  system:
+    username: "![encrypted_customer_username_dev]"
+    password: "![encrypted_customer_password_dev]"
+    api:
+      key: "![encrypted_customer_api_key_dev]"
+    
+inventory:
+  system:
+    username: "![encrypted_inventory_username_dev]"
+    password: "![encrypted_inventory_password_dev]"
+    api:
+      key: "![encrypted_inventory_api_key_dev]"
+    
+payment:
+  gateway:
+    merchant:
+      id: "![encrypted_payment_merchant_id_dev]"
+    api:
+      key: "![encrypted_payment_api_key_dev]"
+    secret:
+      key: "![encrypted_payment_secret_key_dev]"
+    
+shipping:
+  system:
+    api:
+      key: "![encrypted_shipping_api_key_dev]"
+    account:
+      number: "![encrypted_shipping_account_dev]"
+      
+# Encryption Key for Object Stores
+object:
+  store:
+    encryption:
+      key: "![encrypted_object_store_key_dev]"
+
+# Monitoring and Logging Credentials
+monitoring:
+  api:
+    key: "![encrypted_monitoring_api_key_dev]"
+    
+logging:
+  service:
+    token: "![encrypted_logging_token_dev]"
+    
+# Third-party Service Credentials
+notification:
+  service:
+    api:
+      key: "![encrypted_notification_api_key_dev]"

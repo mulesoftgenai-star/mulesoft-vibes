@@ -1,0 +1,582 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+    xmlns="http://www.mulesoft.org/schema/mule/core" 
+    xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" 
+    xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+    xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+    xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/objectstore http://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd">
+
+    <!-- Shipping System API Implementation -->
+    <!-- Provides shipment creation, tracking, and status operations for order fulfillment -->
+    <!-- Global configurations are in global-config.xml -->
+
+    <!-- Main API Flow -->
+    <flow name="shipping-system-api-main" doc:id="shipping-system-api-main">
+        <http:listener doc:name="Listener" config-ref="shipping-system-api-httpListenerConfig" path="/api/*"/>
+        <apikit:router config-ref="shipping-system-api-config" doc:name="APIkit Router"/>
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:BAD_REQUEST">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:NOT_FOUND">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- POST /shipments - Create Shipment Flow -->
+    <flow name="post:\shipments:shipping-system-api-config" doc:id="post:\shipments:shipping-system-api-config">
+        <logger level="INFO" doc:name="Log Shipment Request" message='Create Shipment Request - Correlation ID: #[correlationId], Order ID: #[payload.orderId], Carrier: #[payload.carrier]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        
+        <!-- Validate Shipment Creation Request -->
+        <flow-ref doc:name="Validate Shipment Creation" name="validate-shipment-creation"/>
+        
+        <!-- Process Shipment Creation -->
+        <flow-ref doc:name="Process Shipment Creation" name="process-shipment-creation"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Shipment Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  shipmentId: vars.shipmentId,
+  orderId: payload.orderId,
+  trackingNumber: vars.trackingNumber,
+  carrier: payload.carrier,
+  service: payload.service,
+  status: vars.shipmentStatus,
+  shippingAddress: payload.shippingAddress,
+  estimatedDelivery: vars.estimatedDelivery,
+  createdAt: now(),
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Shipment Success" message='Shipment Created Successfully - Correlation ID: #[vars.correlationId], Shipment ID: #[vars.shipmentId], Tracking: #[vars.trackingNumber]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Shipment Error" message='Shipment Creation Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "SHIPMENT_CREATION_FAILED",
+  message: "Shipment creation failed",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET /shipments/{shipmentId} - Get Shipment Details -->
+    <flow name="get:\shipments\(shipmentId):shipping-system-api-config" doc:id="get:\shipments\(shipmentId):shipping-system-api-config">
+        <logger level="INFO" doc:name="Log Get Shipment Request" message='Get Shipment Request - Correlation ID: #[correlationId], Shipment ID: #[attributes.uriParams.shipmentId]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[attributes.uriParams.shipmentId]' doc:name="Set Shipment ID" variableName="shipmentId"/>
+        
+        <!-- Get Shipment Details -->
+        <flow-ref doc:name="Get Shipment Details" name="get-shipment-details"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Shipment Details">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  shipmentId: vars.shipmentId,
+  orderId: vars.shipmentDetails.orderId,
+  trackingNumber: vars.shipmentDetails.trackingNumber,
+  carrier: vars.shipmentDetails.carrier,
+  service: vars.shipmentDetails.service,
+  status: vars.shipmentDetails.status,
+  shippingAddress: vars.shipmentDetails.shippingAddress,
+  estimatedDelivery: vars.shipmentDetails.estimatedDelivery,
+  actualDelivery: vars.shipmentDetails.actualDelivery default null,
+  createdAt: vars.shipmentDetails.createdAt,
+  updatedAt: vars.shipmentDetails.updatedAt default null,
+  trackingHistory: vars.shipmentDetails.trackingHistory default [],
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Get Shipment Success" message='Get Shipment Success - Correlation ID: #[vars.correlationId], Shipment ID: #[vars.shipmentId], Status: #[vars.shipmentDetails.status]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="OBJECTSTORE:KEY_NOT_FOUND">
+                <logger level="WARN" doc:name="Log Shipment Not Found" message='Shipment Not Found - Correlation ID: #[vars.correlationId], Shipment ID: #[vars.shipmentId]'/>
+                <ee:transform doc:name="Transform Not Found Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "SHIPMENT_NOT_FOUND",
+  message: "Shipment not found",
+  shipmentId: vars.shipmentId,
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Get Shipment Error" message='Get Shipment Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "SHIPPING_SYSTEM_ERROR",
+  message: "Shipping system error occurred",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET /shipments/tracking/{trackingNumber} - Track Shipment by Tracking Number -->
+    <flow name="get:\shipments\tracking\(trackingNumber):shipping-system-api-config" doc:id="get:\shipments\tracking\(trackingNumber):shipping-system-api-config">
+        <logger level="INFO" doc:name="Log Track Shipment Request" message='Track Shipment Request - Correlation ID: #[correlationId], Tracking Number: #[attributes.uriParams.trackingNumber]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[attributes.uriParams.trackingNumber]' doc:name="Set Tracking Number" variableName="trackingNumber"/>
+        
+        <!-- Track Shipment by Tracking Number -->
+        <flow-ref doc:name="Track Shipment by Number" name="track-shipment-by-number"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Tracking Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  trackingNumber: vars.trackingNumber,
+  shipmentId: vars.trackingDetails.shipmentId,
+  orderId: vars.trackingDetails.orderId,
+  carrier: vars.trackingDetails.carrier,
+  service: vars.trackingDetails.service,
+  status: vars.trackingDetails.status,
+  estimatedDelivery: vars.trackingDetails.estimatedDelivery,
+  actualDelivery: vars.trackingDetails.actualDelivery default null,
+  currentLocation: vars.trackingDetails.currentLocation default null,
+  trackingHistory: vars.trackingDetails.trackingHistory default [],
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Track Success" message='Track Shipment Success - Correlation ID: #[vars.correlationId], Tracking Number: #[vars.trackingNumber], Status: #[vars.trackingDetails.status]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="OBJECTSTORE:KEY_NOT_FOUND">
+                <logger level="WARN" doc:name="Log Tracking Not Found" message='Tracking Number Not Found - Correlation ID: #[vars.correlationId], Tracking Number: #[vars.trackingNumber]'/>
+                <ee:transform doc:name="Transform Not Found Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "TRACKING_NOT_FOUND",
+  message: "Tracking number not found",
+  trackingNumber: vars.trackingNumber,
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Track Error" message='Track Shipment Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "SHIPPING_SYSTEM_ERROR",
+  message: "Shipping system error occurred",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- PATCH /shipments/{shipmentId}/status - Update Shipment Status -->
+    <flow name="patch:\shipments\(shipmentId)\status:shipping-system-api-config" doc:id="patch:\shipments\(shipmentId)\status:shipping-system-api-config">
+        <logger level="INFO" doc:name="Log Update Status Request" message='Update Shipment Status Request - Correlation ID: #[correlationId], Shipment ID: #[attributes.uriParams.shipmentId], New Status: #[payload.status]'/>
+        
+        <!-- Set Correlation ID -->
+        <set-variable value='#[correlationId default uuid()]' doc:name="Set Correlation ID" variableName="correlationId"/>
+        <set-variable value='#[attributes.uriParams.shipmentId]' doc:name="Set Shipment ID" variableName="shipmentId"/>
+        
+        <!-- Validate Status Update Request -->
+        <flow-ref doc:name="Validate Status Update" name="validate-status-update"/>
+        
+        <!-- Process Status Update -->
+        <flow-ref doc:name="Process Status Update" name="process-status-update"/>
+        
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform Status Update Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  shipmentId: vars.shipmentId,
+  status: vars.updatedStatus,
+  previousStatus: vars.previousStatus,
+  updatedAt: now(),
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Status Update Success" message='Shipment Status Updated Successfully - Correlation ID: #[vars.correlationId], Shipment ID: #[vars.shipmentId], Status: #[vars.updatedStatus]'/>
+        
+        <error-handler>
+            <on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" type="ANY">
+                <logger level="ERROR" doc:name="Log Status Update Error" message='Shipment Status Update Error - Correlation ID: #[vars.correlationId], Error: #[error.description]'/>
+                <ee:transform doc:name="Transform Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: "STATUS_UPDATE_FAILED",
+  message: "Shipment status update failed",
+  correlationId: vars.correlationId,
+  timestamp: now()
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Validation Subflows -->
+    
+    <!-- Validate Shipment Creation Request -->
+    <sub-flow name="validate-shipment-creation" doc:id="validate-shipment-creation">
+        <logger level="DEBUG" doc:name="Log Validation Start" message='Validating Shipment Creation Request - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Validate Required Fields -->
+        <choice doc:name="Validate Request Fields">
+            <when expression='#[payload.orderId == null or isEmpty(payload.orderId)]'>
+                <raise-error doc:name="Invalid Order ID" type="SHIPPING:INVALID_ORDER_ID" description="Order ID is required"/>
+            </when>
+            <when expression='#[payload.carrier == null or isEmpty(payload.carrier)]'>
+                <raise-error doc:name="Invalid Carrier" type="SHIPPING:INVALID_CARRIER" description="Carrier is required"/>
+            </when>
+            <when expression='#[payload.service == null or isEmpty(payload.service)]'>
+                <raise-error doc:name="Invalid Service" type="SHIPPING:INVALID_SERVICE" description="Service type is required"/>
+            </when>
+            <when expression='#[payload.shippingAddress == null]'>
+                <raise-error doc:name="Invalid Address" type="SHIPPING:INVALID_ADDRESS" description="Shipping address is required"/>
+            </when>
+            <when expression='#[payload.shippingAddress.street == null or isEmpty(payload.shippingAddress.street)]'>
+                <raise-error doc:name="Invalid Street" type="SHIPPING:INVALID_ADDRESS" description="Street address is required"/>
+            </when>
+            <when expression='#[payload.shippingAddress.city == null or isEmpty(payload.shippingAddress.city)]'>
+                <raise-error doc:name="Invalid City" type="SHIPPING:INVALID_ADDRESS" description="City is required"/>
+            </when>
+            <when expression='#[payload.shippingAddress.zipCode == null or isEmpty(payload.shippingAddress.zipCode)]'>
+                <raise-error doc:name="Invalid Zip Code" type="SHIPPING:INVALID_ADDRESS" description="Zip code is required"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Validation Success" message='Shipment Creation Request Validation Success - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+    </sub-flow>
+
+    <!-- Validate Status Update Request -->
+    <sub-flow name="validate-status-update" doc:id="validate-status-update">
+        <logger level="DEBUG" doc:name="Log Validation Start" message='Validating Status Update Request - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Validate Required Fields -->
+        <choice doc:name="Validate Request Fields">
+            <when expression='#[payload.status == null or isEmpty(payload.status)]'>
+                <raise-error doc:name="Invalid Status" type="SHIPPING:INVALID_STATUS" description="Status is required"/>
+            </when>
+            <when expression='#[!(["PENDING", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "RETURNED", "CANCELLED"] contains payload.status)]'>
+                <raise-error doc:name="Invalid Status Value" type="SHIPPING:INVALID_STATUS" description="Status must be one of: PENDING, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, RETURNED, CANCELLED"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Validation Success" message='Status Update Request Validation Success - Correlation ID: #[vars.correlationId]'/>
+            </otherwise>
+        </choice>
+        
+    </sub-flow>
+
+    <!-- Business Logic Subflows -->
+    
+    <!-- Process Shipment Creation -->
+    <sub-flow name="process-shipment-creation" doc:id="process-shipment-creation">
+        <logger level="DEBUG" doc:name="Log Processing Start" message='Processing Shipment Creation - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Generate Shipment ID and Tracking Number -->
+        <set-variable value='#[uuid()]' doc:name="Set Shipment ID" variableName="shipmentId"/>
+        <set-variable value='#[payload.carrier[0 to 2] ++ (uuid() as String)[0 to 9] as Upper]' doc:name="Set Tracking Number" variableName="trackingNumber"/>
+        <set-variable value='"PENDING"' doc:name="Set Initial Status" variableName="shipmentStatus"/>
+        
+        <!-- Calculate Estimated Delivery Date -->
+        <choice doc:name="Calculate Delivery Date by Service">
+            <when expression='#[payload.service == "STANDARD"]'>
+                <set-variable value='#[now() + |P5D|]' doc:name="Standard Delivery (5 days)" variableName="estimatedDelivery"/>
+            </when>
+            <when expression='#[payload.service == "EXPRESS"]'>
+                <set-variable value='#[now() + |P2D|]' doc:name="Express Delivery (2 days)" variableName="estimatedDelivery"/>
+            </when>
+            <when expression='#[payload.service == "OVERNIGHT"]'>
+                <set-variable value='#[now() + |P1D|]' doc:name="Overnight Delivery (1 day)" variableName="estimatedDelivery"/>
+            </when>
+            <otherwise>
+                <set-variable value='#[now() + |P3D|]' doc:name="Default Delivery (3 days)" variableName="estimatedDelivery"/>
+            </otherwise>
+        </choice>
+        
+        <!-- Create Initial Tracking History -->
+        <set-variable doc:name="Set Tracking History" variableName="trackingHistory" value='#[[{
+                "status": "PENDING",
+                "location": "Processing Center",
+                "timestamp": now(),
+                "description": "Shipment created and pending pickup"
+            }]]'/>
+        
+        <!-- Store Shipment Details in Object Store -->
+<objectstore:store doc:name="Store Shipment" 
+                  config-ref="shipping-object-store-config" 
+                  key='#["shipment:" ++ vars.shipmentId]'>
+
+    <objectstore:value><![CDATA[#[{
+        shipmentId: vars.shipmentId,
+        orderId: payload.orderId,
+        trackingNumber: vars.trackingNumber,
+        carrier: payload.carrier,
+        service: payload.service,
+        status: vars.shipmentStatus,
+        shippingAddress: payload.shippingAddress,
+        estimatedDelivery: vars.estimatedDelivery,
+        createdAt: now(),
+        trackingHistory: vars.trackingHistory,
+        correlationId: vars.correlationId
+    }]]]></objectstore:value>
+
+</objectstore:store>
+        
+        <!-- Store Tracking Number Lookup -->
+        <objectstore:store doc:name="Store Tracking Lookup" config-ref="shipping-object-store-config" key='#["tracking:" ++ vars.trackingNumber]'>
+            <objectstore:value><![CDATA[#[{
+                "shipmentId": vars.shipmentId,
+                "orderId": payload.orderId,
+                "carrier": payload.carrier,
+                "service": payload.service,
+                "status": vars.shipmentStatus,
+                "estimatedDelivery": vars.estimatedDelivery,
+                "trackingHistory": vars.trackingHistory
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <logger level="DEBUG" doc:name="Log Processing Complete" message='Shipment Creation Processing Complete - Correlation ID: #[vars.correlationId], Shipment ID: #[vars.shipmentId]'/>
+    </sub-flow>
+
+    <!-- Get Shipment Details -->
+    <sub-flow name="get-shipment-details" doc:id="get-shipment-details">
+        <logger level="DEBUG" doc:name="Log Get Details Start" message='Getting Shipment Details - Correlation ID: #[vars.correlationId], Shipment ID: #[vars.shipmentId]'/>
+        
+        <!-- Retrieve Shipment from Object Store -->
+        <objectstore:retrieve doc:name="Retrieve Shipment" config-ref="shipping-object-store-config" key='#["shipment:" ++ vars.shipmentId]' target="shipmentDetails"/>
+        
+        <logger level="DEBUG" doc:name="Log Get Details Complete" message='Shipment Details Retrieved - Correlation ID: #[vars.correlationId], Status: #[vars.shipmentDetails.status]'/>
+    </sub-flow>
+
+    <!-- Track Shipment by Number -->
+    <sub-flow name="track-shipment-by-number" doc:id="track-shipment-by-number">
+        <logger level="DEBUG" doc:name="Log Track Start" message='Tracking Shipment by Number - Correlation ID: #[vars.correlationId], Tracking Number: #[vars.trackingNumber]'/>
+        
+        <!-- Retrieve Shipment by Tracking Number -->
+        <objectstore:retrieve doc:name="Retrieve by Tracking" config-ref="shipping-object-store-config" key='#["tracking:" ++ vars.trackingNumber]' target="trackingDetails"/>
+        
+        <logger level="DEBUG" doc:name="Log Track Complete" message='Shipment Tracking Retrieved - Correlation ID: #[vars.correlationId], Status: #[vars.trackingDetails.status]'/>
+    </sub-flow>
+
+    <!-- Process Status Update -->
+    <sub-flow name="process-status-update" doc:id="process-status-update">
+        <logger level="DEBUG" doc:name="Log Status Update Start" message='Processing Status Update - Correlation ID: #[vars.correlationId]'/>
+        
+        <!-- Get Current Shipment Details -->
+        <objectstore:retrieve doc:name="Retrieve Shipment" config-ref="shipping-object-store-config" key='#["shipment:" ++ vars.shipmentId]' target="currentShipment"/>
+        
+        <!-- Set Status Variables -->
+        <set-variable value='#[vars.currentShipment.status]' doc:name="Set Previous Status" variableName="previousStatus"/>
+        <set-variable value='#[payload.status]' doc:name="Set Updated Status" variableName="updatedStatus"/>
+        
+        <!-- Update Tracking History -->
+        <set-variable doc:name="Update Tracking History" variableName="updatedTrackingHistory" value='#[vars.currentShipment.trackingHistory ++ [{
+                "status": vars.updatedStatus,
+                "location": payload.location default "In Transit",
+                "timestamp": now(),
+                "description": payload.description default ("Status updated to " ++ vars.updatedStatus)
+            }]]'/>
+        
+        <!-- Set Actual Delivery Date if Delivered -->
+        <choice doc:name="Set Actual Delivery">
+            <when expression='#[vars.updatedStatus == "DELIVERED"]'>
+                <set-variable value='#[now()]' doc:name="Set Delivery Date" variableName="actualDelivery"/>
+            </when>
+            <otherwise>
+                <set-variable value='#[vars.currentShipment.actualDelivery default null]' doc:name="Keep Current Delivery" variableName="actualDelivery"/>
+            </otherwise>
+        </choice>
+        
+        <!-- Update Shipment in Object Store -->
+        <objectstore:store doc:name="Update Shipment" config-ref="shipping-object-store-config" key='#["shipment:" ++ vars.shipmentId]'>
+            <objectstore:value><![CDATA[#[vars.currentShipment ++ {
+                "status": vars.updatedStatus,
+                "actualDelivery": vars.actualDelivery,
+                "updatedAt": now(),
+                "trackingHistory": vars.updatedTrackingHistory
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <!-- Update Tracking Number Lookup -->
+        <objectstore:store doc:name="Update Tracking Lookup" config-ref="shipping-object-store-config" key='#["tracking:" ++ vars.currentShipment.trackingNumber]'>
+            <objectstore:value><![CDATA[#[{
+                "shipmentId": vars.shipmentId,
+                "orderId": vars.currentShipment.orderId,
+                "carrier": vars.currentShipment.carrier,
+                "service": vars.currentShipment.service,
+                "status": vars.updatedStatus,
+                "estimatedDelivery": vars.currentShipment.estimatedDelivery,
+                "actualDelivery": vars.actualDelivery,
+                "currentLocation": payload.location default "In Transit",
+                "trackingHistory": vars.updatedTrackingHistory
+            }]]]></objectstore:value>
+        </objectstore:store>
+        
+        <logger level="DEBUG" doc:name="Log Status Update Complete" message='Status Update Processing Complete - Correlation ID: #[vars.correlationId], Previous: #[vars.previousStatus], New: #[vars.updatedStatus]'/>
+        
+    </sub-flow>
+
+</mule>

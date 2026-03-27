@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:oauth2-provider="http://www.mulesoft.org/schema/mule/oauth2-provider"
+      xmlns:spring="http://www.mulesoft.org/schema/mule/spring"
+      xmlns:oauth-module="http://www.mulesoft.org/schema/mule/oauth-module"
+      xmlns:http-policy="http://www.mulesoft.org/schema/mule/http-policy-transform"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/oauth2-provider http://www.mulesoft.org/schema/mule/oauth2-provider/current/mule-oauth2-provider.xsd
+        http://www.mulesoft.org/schema/mule/spring http://www.mulesoft.org/schema/mule/spring/current/mule-spring.xsd
+        http://www.mulesoft.org/schema/mule/oauth-module http://www.mulesoft.org/schema/mule/oauth-module/current/mule-oauth-module.xsd
+        http://www.mulesoft.org/schema/mule/http-policy-transform http://www.mulesoft.org/schema/mule/http-policy-transform/current/mule-http-policy-transform.xsd">
+
+    <!-- OAuth 2.0 Client Credentials Configuration -->
+    <oauth-module:client-credentials-grant-type 
+        name="OAuth2_Client_Credentials_Config"
+        clientId="${secure::oauth.client.id}"
+        clientSecret="${secure::oauth.client.secret}"
+        tokenUrl="${oauth.token.url}"
+        scopes="${oauth.scopes}">
+        <oauth-module:token-request>
+            <oauth-module:headers>
+                <oauth-module:header headerName="Content-Type" value="application/x-www-form-urlencoded" />
+            </oauth-module:headers>
+        </oauth-module:token-request>
+    </oauth-module:client-credentials-grant-type>
+
+    <!-- OAuth 2.0 Provider Configuration -->
+    <oauth2-provider:config name="OAuth2_Provider_Config"
+                           loginPage="${oauth.login.page}"
+                           authorizationEndpointPath="${oauth.authorization.path}"
+                           accessTokenEndpointPath="${oauth.token.path}"
+                           resourceOwnerSecurityProvider="resourceOwnerSecurityProvider"
+                           clientSecurityProvider="clientSecurityProvider"
+                           supportedGrantTypes="AUTHORIZATION_CODE,IMPLICIT,RESOURCE_OWNER_PASSWORD_CREDENTIALS,CLIENT_CREDENTIALS"
+                           scopes="read write admin">
+        <oauth2-provider:client-store>
+            <oauth2-provider:in-memory-client-store>
+                <oauth2-provider:client clientId="${secure::oauth.client.id}" 
+                                       secret="${secure::oauth.client.secret}"
+                                       type="CONFIDENTIAL"
+                                       clientName="Order Management Client"
+                                       description="OAuth2 client for Order Management APIs">
+                    <oauth2-provider:redirect-uris>
+                        <oauth2-provider:redirect-uri>${oauth.redirect.uri}</oauth2-provider:redirect-uri>
+                    </oauth2-provider:redirect-uris>
+                    <oauth2-provider:authorized-grant-types>
+                        <oauth2-provider:authorized-grant-type>CLIENT_CREDENTIALS</oauth2-provider:authorized-grant-type>
+                        <oauth2-provider:authorized-grant-type>AUTHORIZATION_CODE</oauth2-provider:authorized-grant-type>
+                    </oauth2-provider:authorized-grant-types>
+                    <oauth2-provider:scopes>
+                        <oauth2-provider:scope>read</oauth2-provider:scope>
+                        <oauth2-provider:scope>write</oauth2-provider:scope>
+                        <oauth2-provider:scope>admin</oauth2-provider:scope>
+                    </oauth2-provider:scopes>
+                </oauth2-provider:client>
+            </oauth2-provider:in-memory-client-store>
+        </oauth2-provider:client-store>
+        <oauth2-provider:token-store>
+            <oauth2-provider:in-memory-token-store />
+        </oauth2-provider:token-store>
+    </oauth2-provider:config>
+
+    <!-- Security Filters -->
+    <sub-flow name="validateOAuthTokenSubflow">
+        <oauth2-provider:validate-token config-ref="OAuth2_Provider_Config" 
+                                       scopes="read" 
+                                       resourceOwnerRoles="admin,user" />
+        <set-variable variableName="authUserId" value="#[authentication.principal]" />
+        <set-variable variableName="authScopes" value="#[authentication.grantedAuthorities]" />
+        <logger level="DEBUG" message="OAuth validation successful for user: #[vars.authUserId]" />
+    </sub-flow>
+
+    <!-- API Key Validation (Alternative Security) -->
+    <sub-flow name="validateAPIKeySubflow">
+        <choice>
+            <when expression="#[attributes.headers.'x-api-key' != null]">
+                <set-variable variableName="apiKey" value="#[attributes.headers.'x-api-key']" />
+                <choice>
+                    <when expression="#[vars.apiKey == '${secure::api.key}']">
+                        <logger level="DEBUG" message="API Key validation successful" />
+                    </when>
+                    <otherwise>
+                        <raise-error type="SECURITY:UNAUTHORIZED" description="Invalid API Key" />
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <raise-error type="SECURITY:UNAUTHORIZED" description="API Key required" />
+            </otherwise>
+        </choice>
+    </sub-flow>
+
+    <!-- Rate Limiting Configuration -->
+    <sub-flow name="rateLimitingSubflow">
+        <set-variable variableName="clientId" value="#[attributes.headers.'x-client-id' default 'anonymous']" />
+        <set-variable variableName="requestKey" value="#[vars.clientId ++ '-' ++ now()]" />
+        
+        <!-- Simple rate limiting using object store -->
+        <try>
+            <os:retrieve key="#[vars.clientId]" objectStore="rateLimitStore" />
+            <set-variable variableName="requestCount" value="#[payload + 1]" />
+            <choice>
+                <when expression="#[vars.requestCount > ${api.rate.limit}]">
+                    <raise-error type="API:RATE_LIMIT_EXCEEDED" description="Rate limit exceeded" />
+                </when>
+                <otherwise>
+                    <os:store key="#[vars.clientId]" value="#[vars.requestCount]" objectStore="rateLimitStore" />
+                </otherwise>
+            </choice>
+            <error-handler>
+                <on-error-continue type="OS:KEY_NOT_FOUND">
+                    <os:store key="#[vars.clientId]" value="1" objectStore="rateLimitStore" />
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- CORS Headers Configuration -->
+    <sub-flow name="setCORSHeadersSubflow">
+        <set-response>
+            <set-headers>
+                <set-header headerName="Access-Control-Allow-Origin" value="${cors.allowed.origins}" />
+                <set-header headerName="Access-Control-Allow-Methods" value="GET, POST, PUT, DELETE, OPTIONS" />
+                <set-header headerName="Access-Control-Allow-Headers" value="Origin, Content-Type, X-Auth-Token, Authorization, x-api-key, x-client-id, x-correlation-id" />
+                <set-header headerName="Access-Control-Max-Age" value="86400" />
+            </set-headers>
+        </set-response>
+    </sub-flow>
+
+    <!-- Object Store for Rate Limiting -->
+    <os:object-store name="rateLimitStore" maxEntries="10000" entryTtl="3600" />
+
+</mule>

@@ -1,0 +1,192 @@
+#%RAML 1.0
+title: Order Process API
+version: v1
+description: |
+  Process layer API for order orchestration and business logic.
+  Handles order processing workflow and coordinates with system APIs.
+
+baseUri: https://api.company.com/process/orders/{version}
+protocols: [HTTPS]
+
+mediaType: 
+  - application/json
+
+documentation:
+  - title: Order Process API Guide
+    content: |
+      This API handles business logic orchestration for order processing including:
+      - Order validation and processing
+      - Customer validation coordination
+      - Inventory verification
+      - Payment authorization
+      - Shipment coordination
+
+uses:
+  processTypes: fragments/data-types/process-types.raml
+  requestTypes: fragments/request-response/request-types.raml
+  responseTypes: fragments/request-response/response-types.raml
+
+traits:
+  oauth2-secured: !include fragments/security-traits/oauth2-trait.raml
+
+/orders:
+  description: Order processing operations
+  
+  post:
+    displayName: Process Order
+    description: Process and orchestrate order creation workflow
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: requestTypes.ProcessOrderRequest
+        example: |
+          {
+            "orderId": "ORD1234567",
+            "customerId": "CUST789012",
+            "items": [
+              {
+                "productId": "PRD9876543",
+                "quantity": 2,
+                "unitPrice": {
+                  "amount": 199.99,
+                  "currency": "USD"
+                }
+              }
+            ],
+            "billingAddress": {
+              "street": "123 Main Street",
+              "city": "New York",
+              "state": "NY",
+              "postalCode": "10001",
+              "country": "US"
+            },
+            "shippingAddress": {
+              "street": "456 Oak Avenue",
+              "city": "Brooklyn",
+              "state": "NY",
+              "postalCode": "11201",
+              "country": "US"
+            },
+            "paymentMethod": "CREDIT_CARD",
+            "shippingMethod": "STANDARD"
+          }
+    responses:
+      200:
+        description: Order processed successfully
+        body:
+          application/json:
+            type: responseTypes.ProcessOrderResponse
+            example: |
+              {
+                "orderId": "ORD1234567",
+                "status": "SUCCESS",
+                "message": "Order processed successfully",
+                "processSteps": [
+                  {
+                    "step": "CUSTOMER_VALIDATION",
+                    "status": "SUCCESS",
+                    "result": {
+                      "customerId": "CUST789012",
+                      "isValid": true
+                    }
+                  },
+                  {
+                    "step": "INVENTORY_CHECK",
+                    "status": "SUCCESS",
+                    "result": {
+                      "available": true,
+                      "reservedQuantity": 2
+                    }
+                  }
+                ],
+                "completedAt": "2024-03-27T15:30:00.000Z"
+              }
+      400:
+        description: Bad request - Invalid input data
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+      422:
+        description: Unprocessable entity - Business validation failed
+        body:
+          application/json:
+            type: responseTypes.ProcessingErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+
+  /{orderId}/validate:
+    uriParameters:
+      orderId:
+        type: processTypes.ID
+        description: Unique order identifier
+    
+    post:
+      displayName: Validate Order
+      description: Validate order without processing
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: requestTypes.ValidateOrderRequest
+      responses:
+        200:
+          description: Validation completed
+          body:
+            application/json:
+              type: responseTypes.ValidationResponse
+        400:
+          description: Bad request - Invalid input data
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+
+  /{orderId}/status:
+    uriParameters:
+      orderId:
+        type: processTypes.ID
+        description: Unique order identifier
+    
+    get:
+      displayName: Get Processing Status
+      description: Get current processing status of an order
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Processing status retrieved
+          body:
+            application/json:
+              type: responseTypes.ProcessingStatusResponse
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-27T15:30:00.000Z",
+                "version": "v1"
+              }

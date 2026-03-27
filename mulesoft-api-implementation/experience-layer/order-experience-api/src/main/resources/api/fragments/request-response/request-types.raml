@@ -1,0 +1,80 @@
+#%RAML 1.0 Library
+
+uses:
+  orderTypes: ../data-types/order-types.raml
+
+types:
+  CreateOrderRequest:
+    type: object
+    properties:
+      customerId:
+        type: orderTypes.ID
+        description: Customer identifier
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            productId:
+              type: orderTypes.ID
+            quantity:
+              type: integer
+              minimum: 1
+            unitPrice:
+              type: orderTypes.Money
+      billingAddress:
+        type: orderTypes.Address
+      shippingAddress:
+        type: orderTypes.Address
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER]
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, PICKUP]
+      notes:
+        type: string
+        required: false
+        maxLength: 500
+    example:
+      customerId: "CUST789012"
+      items:
+        - productId: "PRD9876543"
+          quantity: 2
+          unitPrice:
+            amount: 199.99
+            currency: "USD"
+      billingAddress:
+        street: "123 Main Street"
+        city: "New York"
+        state: "NY"
+        postalCode: "10001"
+        country: "US"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      paymentMethod: "CREDIT_CARD"
+      shippingMethod: "STANDARD"
+
+  UpdateOrderRequest:
+    type: object
+    properties:
+      shippingAddress:
+        type: orderTypes.Address
+        required: false
+      notes:
+        type: string
+        required: false
+        maxLength: 500
+    example:
+      shippingAddress:
+        street: "789 Pine Street"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      notes: "Please call before delivery"

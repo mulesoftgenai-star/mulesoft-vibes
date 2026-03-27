@@ -1,0 +1,134 @@
+#%RAML 1.0 Library
+
+uses:
+  customerTypes: ../data-types/customer-types.raml
+
+types:
+  CustomerResponse:
+    type: object
+    properties:
+      customer:
+        type: customerTypes.CustomerProfile
+      status:
+        type: string
+        enum: [SUCCESS, CREATED, UPDATED]
+      message:
+        type: string
+        required: false
+    example:
+      customer:
+        customerId: "CUST789012"
+        firstName: "John"
+        lastName: "Smith"
+        email: "john.smith@example.com"
+        phone: "+1234567890"
+        dateOfBirth: "1985-06-15"
+        status: "ACTIVE"
+        preferences:
+          newsletter: true
+          smsNotifications: false
+          language: "en"
+          currency: "USD"
+        loyaltyTier: "GOLD"
+        totalOrders: 15
+        createdAt: "2023-01-15T10:30:00.000Z"
+        updatedAt: "2024-03-27T15:30:00.000Z"
+      status: "SUCCESS"
+      message: "Customer retrieved successfully"
+
+  CustomerListResponse:
+    type: object
+    properties:
+      customers:
+        type: customerTypes.CustomerProfile[]
+      pagination:
+        type: object
+        properties:
+          page:
+            type: integer
+            minimum: 1
+          pageSize:
+            type: integer
+            minimum: 1
+            maximum: 100
+          totalCount:
+            type: integer
+            minimum: 0
+          totalPages:
+            type: integer
+            minimum: 0
+    example:
+      customers:
+        - customerId: "CUST789012"
+          firstName: "John"
+          lastName: "Smith"
+          email: "john.smith@example.com"
+          phone: "+1234567890"
+          status: "ACTIVE"
+          preferences:
+            newsletter: true
+            smsNotifications: false
+            language: "en"
+            currency: "USD"
+          loyaltyTier: "GOLD"
+          createdAt: "2023-01-15T10:30:00.000Z"
+          updatedAt: "2024-03-27T15:30:00.000Z"
+      pagination:
+        page: 1
+        pageSize: 20
+        totalCount: 150
+        totalPages: 8
+
+  ErrorResponse:
+    type: object
+    properties:
+      error:
+        type: object
+        properties:
+          code:
+            type: string
+          message:
+            type: string
+          timestamp:
+            type: datetime
+            format: rfc3339
+          path:
+            type: string
+          requestId:
+            type: string
+            required: false
+          validationErrors:
+            type: array
+            required: false
+            items:
+              type: object
+              properties:
+                field:
+                  type: string
+                message:
+                  type: string
+                code:
+                  type: string
+    examples:
+      ValidationError:
+        error:
+          code: "VALIDATION_ERROR"
+          message: "Customer data validation failed"
+          timestamp: "2024-03-27T15:30:00.000Z"
+          path: "/api/v1/customers"
+          validationErrors:
+            - field: "email"
+              message: "Invalid email format"
+              code: "INVALID_FORMAT"
+      NotFound:
+        error:
+          code: "CUSTOMER_NOT_FOUND"
+          message: "Customer not found"
+          timestamp: "2024-03-27T15:30:00.000Z"
+          path: "/api/v1/customers/CUST789012"
+      Conflict:
+        error:
+          code: "CUSTOMER_EXISTS"
+          message: "Customer with this email already exists"
+          timestamp: "2024-03-27T15:30:00.000Z"
+          path: "/api/v1/customers"

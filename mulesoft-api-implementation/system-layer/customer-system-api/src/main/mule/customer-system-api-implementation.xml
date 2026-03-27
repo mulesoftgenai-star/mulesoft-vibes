@@ -1,0 +1,524 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+        http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+
+    <!-- Import Shared Configurations -->
+    <import file="classpath://shared-resources/global-config.xml" />
+    <import file="classpath://shared-resources/error-handlers.xml" />
+    <import file="classpath://shared-resources/security-config.xml" />
+
+    <!-- APIKit Configuration -->
+    <apikit:config name="customer-system-api-config" 
+                   api="customer-system-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" />
+
+    <!-- Main API Router Flow -->
+    <flow name="customer-system-api-main">
+        <http:listener config-ref="HTTP_Listener_System_Config" 
+                       path="/api/v1/*" 
+                       allowedMethods="GET, POST, PUT, DELETE, PATCH, OPTIONS">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+
+        <!-- Set Correlation ID -->
+        <set-variable variableName="correlationId" value="#[correlationId]" />
+        <set-variable variableName="requestStartTime" value="#[now()]" />
+        
+        <!-- Log Request -->
+        <logger level="INFO" 
+                message="Customer System API Request - Method: #[attributes.method], URI: #[attributes.requestUri], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Route to APIKit -->
+        <apikit:router config-ref="customer-system-api-config" />
+        
+        <!-- Error Handling -->
+        <error-handler ref="globalErrorHandler" />
+    </flow>
+
+    <!-- Health Check Flow -->
+    <flow name="get:\health:customer-system-api-config">
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "UP",
+  timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  version: p('api.version'),
+  environment: p('mule.env'),
+  correlationId: vars.correlationId,
+  service: "Customer System API",
+  dependencies: {
+    database: "UP"
+  }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- GET /customers/{customerId} - Get Customer Flow -->
+    <flow name="get:\customers\(customerId):customer-system-api-config">
+        <set-variable variableName="customerId" value="#[attributes.uriParams.customerId]" />
+        
+        <!-- Log Customer Retrieval Request -->
+        <logger level="INFO" 
+                message="Retrieving customer - CustomerId: #[vars.customerId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Validate Customer ID -->
+        <flow-ref name="validateCustomerIdSubflow" />
+
+        <!-- Mock Implementation - Get Customer from Database -->
+        <try>
+            <!-- Simulate database lookup -->
+            <choice>
+                <when expression="#[vars.customerId == 'CUST001']">
+                    <ee:transform>
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  customerId: vars.customerId,
+  firstName: "John",
+  lastName: "Doe",
+  email: "john.doe@example.com",
+  phone: "+1-555-0123",
+  status: "ACTIVE",
+  dateCreated: "2024-01-15T10:00:00Z",
+  lastUpdated: "2026-03-20T14:30:00Z",
+  address: {
+    street: "123 Main Street",
+    city: "Anytown",
+    state: "CA",
+    zipCode: "12345",
+    country: "USA"
+  },
+  preferences: {
+    emailNotifications: true,
+    smsNotifications: false,
+    newsletter: true
+  }
+}]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                </when>
+                <when expression="#[vars.customerId == 'CUST002']">
+                    <ee:transform>
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  customerId: vars.customerId,
+  firstName: "Jane",
+  lastName: "Smith",
+  email: "jane.smith@example.com",
+  phone: "+1-555-0456",
+  status: "ACTIVE",
+  dateCreated: "2024-02-10T09:30:00Z",
+  lastUpdated: "2026-03-18T16:45:00Z",
+  address: {
+    street: "456 Oak Avenue",
+    city: "Springfield",
+    state: "IL",
+    zipCode: "62701",
+    country: "USA"
+  },
+  preferences: {
+    emailNotifications: true,
+    smsNotifications: true,
+    newsletter: false
+  }
+}]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                </when>
+                <when expression="#[vars.customerId == 'CUST003']">
+                    <ee:transform>
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  customerId: vars.customerId,
+  firstName: "Bob",
+  lastName: "Johnson",
+  email: "bob.johnson@example.com",
+  phone: "+1-555-0789",
+  status: "INACTIVE",
+  dateCreated: "2023-11-20T14:15:00Z",
+  lastUpdated: "2026-01-10T11:20:00Z",
+  address: {
+    street: "789 Pine Street",
+    city: "Portland",
+    state: "OR",
+    zipCode: "97201",
+    country: "USA"
+  },
+  preferences: {
+    emailNotifications: false,
+    smsNotifications: false,
+    newsletter: false
+  }
+}]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                </when>
+                <otherwise>
+                    <!-- Customer Not Found -->
+                    <raise-error type="BUSINESS:CUSTOMER_NOT_FOUND" 
+                                 description="#['Customer not found with ID: ' ++ vars.customerId]" />
+                </otherwise>
+            </choice>
+
+            <!-- Set Success Response Headers -->
+            <set-variable variableName="outboundHeaders" value="#[{
+                'x-correlation-id': vars.correlationId,
+                'Cache-Control': 'max-age=300'
+            }]" />
+
+            <!-- Log Success -->
+            <logger level="INFO" 
+                    message="Customer retrieved successfully - CustomerId: #[vars.customerId], Status: #[payload.status], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <on-error-propagate type="BUSINESS:CUSTOMER_NOT_FOUND">
+                    <set-variable variableName="httpStatus" value="404" />
+                    <set-variable variableName="errorCode" value="CUSTOMER_NOT_FOUND" />
+                    <set-variable variableName="errorMessage" value="#['Customer not found with ID: ' ++ vars.customerId]" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <set-variable variableName="httpStatus" value="500" />
+                    <set-variable variableName="errorCode" value="CUSTOMER_RETRIEVAL_FAILED" />
+                    <set-variable variableName="errorMessage" value="Failed to retrieve customer - internal system error" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- POST /customers - Create Customer Flow -->
+    <flow name="post:\customers:application\json:customer-system-api-config">
+        <set-variable variableName="customerRequest" value="#[payload]" />
+        
+        <!-- Log Customer Creation Request -->
+        <logger level="INFO" 
+                message="Creating new customer - Email: #[payload.email], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Input Validation -->
+        <flow-ref name="validateCreateCustomerRequestSubflow" />
+
+        <!-- Mock Implementation - Create Customer -->
+        <try>
+            <!-- Generate Customer ID -->
+            <set-variable variableName="newCustomerId" value="#['CUST' ++ (randomInt(1000) + 1000)]" />
+
+            <!-- Create Customer Response -->
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  customerId: vars.newCustomerId,
+  firstName: vars.customerRequest.firstName,
+  lastName: vars.customerRequest.lastName,
+  email: vars.customerRequest.email,
+  phone: vars.customerRequest.phone,
+  status: "ACTIVE",
+  dateCreated: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  lastUpdated: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  address: vars.customerRequest.address,
+  preferences: vars.customerRequest.preferences default {
+    emailNotifications: true,
+    smsNotifications: false,
+    newsletter: true
+  }
+}]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+
+            <!-- Set Success Response Headers -->
+            <set-variable variableName="httpStatus" value="201" />
+            <set-variable variableName="outboundHeaders" value="#[{
+                'Location': '/api/v1/customers/' ++ vars.newCustomerId,
+                'x-correlation-id': vars.correlationId
+            }]" />
+
+            <!-- Log Success -->
+            <logger level="INFO" 
+                    message="Customer created successfully - CustomerId: #[vars.newCustomerId], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <on-error-propagate type="VALIDATION:INVALID_VALUE">
+                    <set-variable variableName="httpStatus" value="400" />
+                    <set-variable variableName="errorCode" value="INVALID_CUSTOMER_DATA" />
+                    <set-variable variableName="errorMessage" value="Invalid customer data - check required fields and formats" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <set-variable variableName="httpStatus" value="500" />
+                    <set-variable variableName="errorCode" value="CUSTOMER_CREATION_FAILED" />
+                    <set-variable variableName="errorMessage" value="Failed to create customer - internal system error" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- PUT /customers/{customerId} - Update Customer Flow -->
+    <flow name="put:\customers\(customerId):application\json:customer-system-api-config">
+        <set-variable variableName="customerId" value="#[attributes.uriParams.customerId]" />
+        <set-variable variableName="customerUpdate" value="#[payload]" />
+        
+        <!-- Log Customer Update Request -->
+        <logger level="INFO" 
+                message="Updating customer - CustomerId: #[vars.customerId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Validate Customer ID -->
+        <flow-ref name="validateCustomerIdSubflow" />
+
+        <!-- Input Validation -->
+        <flow-ref name="validateUpdateCustomerRequestSubflow" />
+
+        <!-- Mock Implementation - Update Customer -->
+        <try>
+            <!-- Check if customer exists -->
+            <choice>
+                <when expression="#[vars.customerId startsWith 'CUST']">
+                    <!-- Update Customer Response -->
+                    <ee:transform>
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  customerId: vars.customerId,
+  firstName: vars.customerUpdate.firstName,
+  lastName: vars.customerUpdate.lastName,
+  email: vars.customerUpdate.email,
+  phone: vars.customerUpdate.phone,
+  status: vars.customerUpdate.status default "ACTIVE",
+  dateCreated: "2024-01-15T10:00:00Z",
+  lastUpdated: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  address: vars.customerUpdate.address,
+  preferences: vars.customerUpdate.preferences
+}]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+
+                    <!-- Set Success Response Headers -->
+                    <set-variable variableName="outboundHeaders" value="#[{
+                        'x-correlation-id': vars.correlationId
+                    }]" />
+
+                    <!-- Log Success -->
+                    <logger level="INFO" 
+                            message="Customer updated successfully - CustomerId: #[vars.customerId], CorrelationId: #[vars.correlationId]" />
+                </when>
+                <otherwise>
+                    <raise-error type="BUSINESS:CUSTOMER_NOT_FOUND" 
+                                 description="#['Customer not found with ID: ' ++ vars.customerId]" />
+                </otherwise>
+            </choice>
+
+            <error-handler>
+                <on-error-propagate type="BUSINESS:CUSTOMER_NOT_FOUND">
+                    <set-variable variableName="httpStatus" value="404" />
+                    <set-variable variableName="errorCode" value="CUSTOMER_NOT_FOUND" />
+                    <set-variable variableName="errorMessage" value="#['Customer not found with ID: ' ++ vars.customerId]" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="VALIDATION:INVALID_VALUE">
+                    <set-variable variableName="httpStatus" value="400" />
+                    <set-variable variableName="errorCode" value="INVALID_CUSTOMER_DATA" />
+                    <set-variable variableName="errorMessage" value="Invalid customer update data" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <set-variable variableName="httpStatus" value="500" />
+                    <set-variable variableName="errorCode" value="CUSTOMER_UPDATE_FAILED" />
+                    <set-variable variableName="errorMessage" value="Failed to update customer - internal system error" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- GET /customers - List Customers Flow -->
+    <flow name="get:\customers:customer-system-api-config">
+        <set-variable variableName="status" value="#[attributes.queryParams.status]" />
+        <set-variable variableName="email" value="#[attributes.queryParams.email]" />
+        <set-variable variableName="limit" value="#[attributes.queryParams.limit default '10' as Number]" />
+        <set-variable variableName="offset" value="#[attributes.queryParams.offset default '0' as Number]" />
+        
+        <!-- Log Customer List Request -->
+        <logger level="INFO" 
+                message="Listing customers - Status: #[vars.status], Email: #[vars.email], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Mock Implementation - Get Customer List -->
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var allCustomers = [
+  {
+    customerId: "CUST001",
+    firstName: "John",
+    lastName: "Doe",
+    email: "john.doe@example.com",
+    status: "ACTIVE",
+    dateCreated: "2024-01-15T10:00:00Z"
+  },
+  {
+    customerId: "CUST002", 
+    firstName: "Jane",
+    lastName: "Smith",
+    email: "jane.smith@example.com",
+    status: "ACTIVE",
+    dateCreated: "2024-02-10T09:30:00Z"
+  },
+  {
+    customerId: "CUST003",
+    firstName: "Bob",
+    lastName: "Johnson", 
+    email: "bob.johnson@example.com",
+    status: "INACTIVE",
+    dateCreated: "2023-11-20T14:15:00Z"
+  }
+]
+var filteredCustomers = allCustomers
+  filter (vars.status == null or $.status == vars.status)
+  filter (vars.email == null or $.email == vars.email)
+---
+{
+  customers: filteredCustomers[vars.offset to (vars.offset + vars.limit - 1)],
+  pagination: {
+    total: sizeOf(filteredCustomers),
+    limit: vars.limit,
+    offset: vars.offset,
+    hasMore: (vars.offset + vars.limit) < sizeOf(filteredCustomers)
+  }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <!-- Set Success Response Headers -->
+        <set-variable variableName="outboundHeaders" value="#[{
+            'x-correlation-id': vars.correlationId,
+            'x-total-count': payload.pagination.total
+        }]" />
+
+        <!-- Log Success -->
+        <logger level="INFO" 
+                message="Customers listed successfully - Count: #[payload.pagination.total], CorrelationId: #[vars.correlationId]" />
+    </flow>
+
+    <!-- Validation Subflows -->
+    
+    <!-- Validate Customer ID -->
+    <sub-flow name="validateCustomerIdSubflow">
+        <validation:is-not-null value="#[vars.customerId]" message="Customer ID is required" />
+        <validation:is-not-empty value="#[vars.customerId]" message="Customer ID cannot be empty" />
+        <validation:matches value="#[vars.customerId]" regex="^CUST[0-9]{3,6}$" message="Customer ID format is invalid. Expected format: CUST followed by 3-6 digits" />
+        
+        <error-handler>
+            <on-error-propagate type="VALIDATION:INVALID_VALUE">
+                <raise-error type="VALIDATION:INVALID_REQUEST" description="#[error.description]" />
+            </on-error-propagate>
+        </error-handler>
+    </sub-flow>
+
+    <!-- Validate Create Customer Request -->
+    <sub-flow name="validateCreateCustomerRequestSubflow">
+        <validation:is-not-null value="#[payload.firstName]" message="First name is required" />
+        <validation:is-not-empty value="#[payload.firstName]" message="First name cannot be empty" />
+        <validation:is-not-null value="#[payload.lastName]" message="Last name is required" />
+        <validation:is-not-empty value="#[payload.lastName]" message="Last name cannot be empty" />
+        <validation:is-not-null value="#[payload.email]" message="Email is required" />
+        <validation:is-email value="#[payload.email]" message="Email format is invalid" />
+        
+        <!-- Optional phone validation -->
+        <choice>
+            <when expression="#[payload.phone != null and payload.phone != '']">
+                <validation:matches value="#[payload.phone]" 
+                                    regex="^\+?[1-9]\d{1,14}$" 
+                                    message="Phone number format is invalid" />
+            </when>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="VALIDATION:INVALID_VALUE">
+                <raise-error type="VALIDATION:INVALID_REQUEST" description="#[error.description]" />
+            </on-error-propagate>
+        </error-handler>
+    </sub-flow>
+
+    <!-- Validate Update Customer Request -->
+    <sub-flow name="validateUpdateCustomerRequestSubflow">
+        <!-- Allow partial updates, so fields are optional but if present must be valid -->
+        <choice>
+            <when expression="#[payload.firstName != null]">
+                <validation:is-not-empty value="#[payload.firstName]" message="First name cannot be empty" />
+            </when>
+        </choice>
+        
+        <choice>
+            <when expression="#[payload.lastName != null]">
+                <validation:is-not-empty value="#[payload.lastName]" message="Last name cannot be empty" />
+            </when>
+        </choice>
+        
+        <choice>
+            <when expression="#[payload.email != null]">
+                <validation:is-email value="#[payload.email]" message="Email format is invalid" />
+            </when>
+        </choice>
+        
+        <choice>
+            <when expression="#[payload.phone != null and payload.phone != '']">
+                <validation:matches value="#[payload.phone]" 
+                                    regex="^\+?[1-9]\d{1,14}$" 
+                                    message="Phone number format is invalid" />
+            </when>
+        </choice>
+        
+        <choice>
+            <when expression="#[payload.status != null]">
+                <validation:is-true expression="#[['ACTIVE', 'INACTIVE', 'BLOCKED'] contains payload.status]" 
+                                    message="Invalid status value. Allowed values: ACTIVE, INACTIVE, BLOCKED" />
+            </when>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="VALIDATION:INVALID_VALUE">
+                <raise-error type="VALIDATION:INVALID_REQUEST" description="#[error.description]" />
+            </on-error-propagate>
+        </error-handler>
+    </sub-flow>
+
+</mule>

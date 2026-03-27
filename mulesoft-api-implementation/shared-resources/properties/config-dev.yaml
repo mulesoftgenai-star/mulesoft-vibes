@@ -1,0 +1,137 @@
+# Development Environment Configuration
+# Order Management System Integration - API Templates
+
+# Application Information
+api:
+  name: "order-management-integration"
+  version: "v2"
+  description: "Order Management System Integration APIs"
+
+# Environment Settings
+mule:
+  env: "dev"
+  
+# Host and Port Configurations
+experience:
+  host: "0.0.0.0"
+  port: "8081"
+  
+process:
+  host: "0.0.0.0"
+  port: "8082"
+  
+system:
+  host: "0.0.0.0"
+  port: "8083"
+
+# External API Endpoints
+api:
+  host: "localhost"
+  port: "443"
+  
+# System API Endpoints
+customer:
+  api:
+    host: "localhost"
+    port: "8083"
+    path: "/api/v1/customers"
+    
+inventory:
+  api:
+    host: "localhost"
+    port: "8084"
+    path: "/api/v1/inventory"
+    
+payment:
+  api:
+    host: "localhost"
+    port: "8085"
+    path: "/api/v1/payments"
+    
+shipping:
+  api:
+    host: "localhost"
+    port: "8086"
+    path: "/api/v1/shipping"
+
+# HTTP Configuration
+http:
+  connection:
+    timeout: "30000"
+  client:
+    timeout: "60000"
+    
+# OAuth Configuration
+oauth:
+  token:
+    url: "https://auth.dev.company.com/oauth/token"
+  scopes: "read write"
+  login:
+    page: "/login"
+  authorization:
+    path: "/oauth/authorize"
+  token:
+    path: "/oauth/token"
+  redirect:
+    uri: "https://api.dev.company.com/callback"
+
+# CORS Configuration
+cors:
+  allowed:
+    origins: "*"
+    
+# Rate Limiting
+api:
+  rate:
+    limit: "1000"
+    
+# Circuit Breaker Configuration
+circuit:
+  breaker:
+    failure:
+      threshold: "5"
+    timeout:
+      seconds: "60"
+
+# Database Configuration
+db:
+  host: "localhost"
+  port: "3306"
+  name: "order_management_dev"
+  
+# Logging Configuration
+logging:
+  level: "DEBUG"
+  pattern: "[%d{yyyy-MM-dd HH:mm:ss}] [%thread] %-5level %logger{36} - %msg%n"
+  
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true
+
+# Business Rules
+business:
+  rules:
+    max:
+      order:
+        amount: "10000"
+      items:
+        count: "50"
+    inventory:
+      reservation:
+        timeout: "900" # 15 minutes
+    payment:
+      authorization:
+        timeout: "30" # 30 seconds
+        
+# Error Handling
+error:
+  handling:
+    retry:
+      attempts: "3"
+      delay: "1000"
+    timeout:
+      default: "30000"

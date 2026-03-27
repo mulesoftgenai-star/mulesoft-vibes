@@ -1,0 +1,150 @@
+#%RAML 1.0 Library
+
+uses:
+  payment-types: ../data-types/payment-types.raml
+
+types:
+  PaymentResponse:
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Unique payment identifier
+        example: "PAY123456789"
+      orderId:
+        type: string
+        description: Associated order identifier
+        example: "ORD1234567890"
+      status:
+        type: string
+        enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED", "REFUNDED"]
+        description: Payment status
+        example: "COMPLETED"
+      amount:
+        type: payment-types.Money
+        description: Payment amount
+      paymentMethod:
+        type: payment-types.PaymentMethod
+        description: Payment method used
+      transactionId:
+        type: string
+        description: Transaction identifier from payment processor
+        example: "TXN987654321"
+      createdAt:
+        type: datetime
+        description: Payment creation timestamp
+        example: "2024-01-15T10:30:00Z"
+      processedAt:
+        type: datetime
+        description: Payment processing timestamp
+        example: "2024-01-15T10:31:15Z"
+        required: false
+
+  RefundResponse:
+    type: object
+    properties:
+      refundId:
+        type: string
+        description: Unique refund identifier
+        example: "REF123456789"
+      paymentId:
+        type: string
+        description: Original payment identifier
+        example: "PAY123456789"
+      amount:
+        type: payment-types.Money
+        description: Refund amount
+      status:
+        type: string
+        enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"]
+        description: Refund status
+        example: "COMPLETED"
+      reason:
+        type: string
+        description: Refund reason
+        example: "Customer requested cancellation"
+      createdAt:
+        type: datetime
+        description: Refund creation timestamp
+        example: "2024-01-15T11:00:00Z"
+      processedAt:
+        type: datetime
+        description: Refund processing timestamp
+        example: "2024-01-15T11:01:30Z"
+        required: false
+
+  PaymentMethodResponse:
+    type: object
+    properties:
+      paymentMethodId:
+        type: string
+        description: Payment method identifier
+        example: "PM001"
+      customerId:
+        type: string
+        description: Customer identifier
+        example: "CUST12345678"
+      type:
+        type: string
+        enum: ["CREDIT_CARD", "DEBIT_CARD", "BANK_ACCOUNT", "DIGITAL_WALLET"]
+        description: Payment method type
+        example: "CREDIT_CARD"
+      maskedDetails:
+        type: string
+        description: Masked payment details for display
+        example: "**** **** **** 1234"
+      isDefault:
+        type: boolean
+        description: Whether this is the default payment method
+        example: true
+      isActive:
+        type: boolean
+        description: Whether this payment method is active
+        example: true
+      createdAt:
+        type: datetime
+        description: Creation timestamp
+        example: "2024-01-01T09:00:00Z"
+
+  PaymentMethodListResponse:
+    type: object
+    properties:
+      paymentMethods:
+        type: PaymentMethodResponse[]
+        description: List of payment methods
+      totalCount:
+        type: integer
+        description: Total number of payment methods
+        example: 3
+
+  PaymentStatusResponse:
+    type: object
+    properties:
+      payments:
+        type: PaymentResponse[]
+        description: List of payment status information
+      totalCount:
+        type: integer
+        description: Total number of payments
+        example: 2
+
+  ErrorResponse:
+    type: object
+    properties:
+      code:
+        type: string
+        description: Error code
+        example: "PAYMENT_001"
+      message:
+        type: string
+        description: Error message
+        example: "Payment processing failed"
+      details:
+        type: string
+        description: Additional error details
+        example: "Insufficient funds in the payment method"
+        required: false
+      timestamp:
+        type: datetime
+        description: Error timestamp
+        example: "2024-01-15T10:30:00Z"

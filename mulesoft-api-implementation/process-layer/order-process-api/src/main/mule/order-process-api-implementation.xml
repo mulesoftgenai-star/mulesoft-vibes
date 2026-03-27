@@ -1,0 +1,810 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xmlns:async="http://www.mulesoft.org/schema/mule/async"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+        http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+        http://www.mulesoft.org/schema/mule/async http://www.mulesoft.org/schema/mule/async/current/mule-async.xsd">
+
+    <!-- Import Shared Configurations -->
+    <import file="classpath://shared-resources/global-config.xml" />
+    <import file="classpath://shared-resources/error-handlers.xml" />
+    <import file="classpath://shared-resources/security-config.xml" />
+
+    <!-- APIKit Configuration -->
+    <apikit:config name="order-process-api-config" 
+                   api="order-process-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" />
+
+    <!-- HTTP Request Configuration for System APIs -->
+    <http:request-config name="Customer_System_API_Config">
+        <http:request-connection protocol="HTTPS" 
+                                 host="${customer.api.host}" 
+                                 port="${customer.api.port}"
+                                 connectionIdleTimeout="30000"
+                                 responseTimeout="30000">
+            <http:authentication>
+                <http:basic-authentication username="${secure::system.api.username}" password="${secure::system.api.password}" />
+            </http:authentication>
+        </http:request-connection>
+    </http:request-config>
+
+    <http:request-config name="Inventory_System_API_Config">
+        <http:request-connection protocol="HTTPS" 
+                                 host="${inventory.api.host}" 
+                                 port="${inventory.api.port}"
+                                 connectionIdleTimeout="30000"
+                                 responseTimeout="30000">
+            <http:authentication>
+                <http:basic-authentication username="${secure::system.api.username}" password="${secure::system.api.password}" />
+            </http:authentication>
+        </http:request-connection>
+    </http:request-config>
+
+    <http:request-config name="Payment_System_API_Config">
+        <http:request-connection protocol="HTTPS" 
+                                 host="${payment.api.host}" 
+                                 port="${payment.api.port}"
+                                 connectionIdleTimeout="30000"
+                                 responseTimeout="30000">
+            <http:authentication>
+                <http:basic-authentication username="${secure::system.api.username}" password="${secure::system.api.password}" />
+            </http:authentication>
+        </http:request-connection>
+    </http:request-config>
+
+    <http:request-config name="Shipping_System_API_Config">
+        <http:request-connection protocol="HTTPS" 
+                                 host="${shipping.api.host}" 
+                                 port="${shipping.api.port}"
+                                 connectionIdleTimeout="30000"
+                                 responseTimeout="30000">
+            <http:authentication>
+                <http:basic-authentication username="${secure::system.api.username}" password="${secure::system.api.password}" />
+            </http:authentication>
+        </http:request-connection>
+    </http:request-config>
+
+    <!-- Main API Router Flow -->
+    <flow name="order-process-api-main">
+        <http:listener config-ref="HTTP_Listener_Process_Config" 
+                       path="/api/v2/*" 
+                       allowedMethods="GET, POST, PUT, DELETE, PATCH, OPTIONS">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+
+        <!-- Set Correlation ID -->
+        <set-variable variableName="correlationId" value="#[correlationId]" />
+        <set-variable variableName="requestStartTime" value="#[now()]" />
+        
+        <!-- Log Request -->
+        <logger level="INFO" 
+                message="Process API Request - Method: #[attributes.method], URI: #[attributes.requestUri], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Route to APIKit -->
+        <apikit:router config-ref="order-process-api-config" />
+        
+        <!-- Error Handling -->
+        <error-handler ref="globalErrorHandler" />
+    </flow>
+
+    <!-- Health Check Flow -->
+    <flow name="get:\health:order-process-api-config">
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "UP",
+  timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  version: p('api.version'),
+  environment: p('mule.env'),
+  correlationId: vars.correlationId,
+  dependencies: {
+    customerAPI: "UP",
+    inventoryAPI: "UP",
+    paymentAPI: "UP",
+    shippingAPI: "UP"
+  }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- POST /orders - Create Order Flow (BRD Business Process Flow) -->
+    <flow name="post:\orders:application\json:order-process-api-config">
+        <set-variable variableName="orderRequest" value="#[payload]" />
+        <set-variable variableName="orderId" value="#[uuid()]" />
+        
+        <!-- Log Order Processing Start -->
+        <logger level="INFO" 
+                message="Order Processing Started - OrderId: #[vars.orderId], CustomerId: #[payload.customerId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Store Order Processing State -->
+        <os:store key="#[vars.orderId]" 
+                  value="#[{
+                    orderId: vars.orderId,
+                    status: 'PROCESSING',
+                    customerId: payload.customerId,
+                    items: payload.items,
+                    createdAt: now(),
+                    correlationId: vars.correlationId
+                  }]"
+                  objectStore="orderStatusStore" />
+
+        <!-- BRD Process Flow Implementation -->
+        <try>
+            <!-- Step 1: Customer Validation -->
+            <flow-ref name="validateCustomerSubflow" />
+            
+            <!-- Step 2: Inventory Validation -->
+            <flow-ref name="validateInventorySubflow" />
+            
+            <!-- Step 3: Payment Authorization -->
+            <flow-ref name="authorizePaymentSubflow" />
+            
+            <!-- Step 4: Create Order in OMS (Mock Implementation) -->
+            <flow-ref name="createOrderInOMSSubflow" />
+            
+            <!-- Step 5: Create Shipment -->
+            <flow-ref name="createShipmentSubflow" />
+            
+            <!-- Step 6: Update Order Status to CREATED -->
+            <flow-ref name="updateOrderStatusSubflow" />
+            
+            <!-- Build Success Response -->
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orderId: vars.orderId,
+  status: vars.finalOrderStatus,
+  customerId: vars.orderRequest.customerId,
+  orderDate: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  totalAmount: vars.totalAmount,
+  items: vars.orderRequest.items,
+  paymentStatus: vars.paymentStatus,
+  shipmentStatus: vars.shipmentStatus,
+  tracking: {
+    correlationId: vars.correlationId,
+    processingTime: ((now() - vars.requestStartTime) as Number) ++ "ms"
+  }
+}]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+
+            <!-- Log Success -->
+            <logger level="INFO" 
+                    message="Order Processing Completed Successfully - OrderId: #[vars.orderId], Status: #[vars.finalOrderStatus], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <!-- Customer Validation Failed -->
+                <on-error-propagate type="BUSINESS:CUSTOMER_NOT_FOUND">
+                    <flow-ref name="orderProcessingFailedSubflow" />
+                    <set-variable variableName="httpStatus" value="400" />
+                    <set-variable variableName="errorCode" value="CUSTOMER_NOT_FOUND" />
+                    <set-variable variableName="errorMessage" value="Customer validation failed - customer not found or inactive" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+
+                <!-- Inventory Validation Failed -->
+                <on-error-propagate type="BUSINESS:INSUFFICIENT_INVENTORY">
+                    <flow-ref name="orderProcessingFailedSubflow" />
+                    <set-variable variableName="httpStatus" value="400" />
+                    <set-variable variableName="errorCode" value="INSUFFICIENT_INVENTORY" />
+                    <set-variable variableName="errorMessage" value="Inventory validation failed - insufficient stock for one or more items" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+
+                <!-- Payment Authorization Failed -->
+                <on-error-propagate type="BUSINESS:PAYMENT_FAILED">
+                    <flow-ref name="orderProcessingFailedSubflow" />
+                    <flow-ref name="compensateInventoryReservationSubflow" />
+                    <set-variable variableName="httpStatus" value="400" />
+                    <set-variable variableName="errorCode" value="PAYMENT_AUTHORIZATION_FAILED" />
+                    <set-variable variableName="errorMessage" value="Payment authorization failed - please check payment details" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+
+                <!-- System Timeout -->
+                <on-error-propagate type="HTTP:TIMEOUT">
+                    <flow-ref name="orderProcessingFailedSubflow" />
+                    <flow-ref name="compensateInventoryReservationSubflow" />
+                    <flow-ref name="compensatePaymentAuthorizationSubflow" />
+                    <set-variable variableName="httpStatus" value="504" />
+                    <set-variable variableName="errorCode" value="PROCESSING_TIMEOUT" />
+                    <set-variable variableName="errorMessage" value="Order processing timeout - please try again later" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+
+                <!-- Generic System Error -->
+                <on-error-propagate type="ANY">
+                    <flow-ref name="orderProcessingFailedSubflow" />
+                    <flow-ref name="compensateInventoryReservationSubflow" />
+                    <flow-ref name="compensatePaymentAuthorizationSubflow" />
+                    <set-variable variableName="httpStatus" value="500" />
+                    <set-variable variableName="errorCode" value="ORDER_PROCESSING_FAILED" />
+                    <set-variable variableName="errorMessage" value="Order processing failed - internal system error" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- GET /orders/{orderId} - Retrieve Order Flow -->
+    <flow name="get:\orders\(orderId):order-process-api-config">
+        <set-variable variableName="orderId" value="#[attributes.uriParams.orderId]" />
+        
+        <!-- Log Order Retrieval Request -->
+        <logger level="INFO" 
+                message="Retrieving order from OMS - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Get Order from Object Store (Mock OMS) -->
+        <try>
+            <os:retrieve key="#[vars.orderId]" objectStore="orderStatusStore" />
+            
+            <!-- Transform Response -->
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orderId: payload.orderId,
+  status: payload.status,
+  customerId: payload.customerId,
+  orderDate: payload.createdAt as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  totalAmount: payload.totalAmount default 0,
+  items: payload.items,
+  paymentStatus: payload.paymentStatus default "PENDING",
+  shipmentStatus: payload.shipmentStatus default "NOT_SHIPPED",
+  lastUpdated: payload.lastUpdated as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"} default now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"}
+}]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+
+            <!-- Log Success -->
+            <logger level="INFO" 
+                    message="Order retrieved successfully - OrderId: #[vars.orderId], Status: #[payload.status], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <on-error-propagate type="OS:KEY_NOT_FOUND">
+                    <set-variable variableName="httpStatus" value="404" />
+                    <set-variable variableName="errorCode" value="ORDER_NOT_FOUND" />
+                    <set-variable variableName="errorMessage" value="#['Order not found with ID: ' ++ vars.orderId]" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <set-variable variableName="httpStatus" value="500" />
+                    <set-variable variableName="errorCode" value="ORDER_RETRIEVAL_FAILED" />
+                    <set-variable variableName="errorMessage" value="Failed to retrieve order - internal system error" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- GET /orders - List Orders Flow -->
+    <flow name="get:\orders:order-process-api-config">
+        <set-variable variableName="customerId" value="#[attributes.queryParams.customerId]" />
+        <set-variable variableName="status" value="#[attributes.queryParams.status]" />
+        <set-variable variableName="limit" value="#[attributes.queryParams.limit default '10' as Number]" />
+        <set-variable variableName="offset" value="#[attributes.queryParams.offset default '0' as Number]" />
+        
+        <!-- Log Order List Request -->
+        <logger level="INFO" 
+                message="Listing orders - CustomerId: #[vars.customerId], Status: #[vars.status], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Mock Implementation - In real scenario, this would query the OMS database -->
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orders: [
+    {
+      orderId: "ORD12345",
+      status: "CONFIRMED",
+      customerId: vars.customerId default "CUST001",
+      orderDate: "2026-03-27T14:00:00Z",
+      totalAmount: 150.50,
+      items: [
+        {
+          productId: "PROD001",
+          quantity: 2,
+          price: 75.25
+        }
+      ]
+    }
+  ] filter (vars.customerId == null or $.customerId == vars.customerId)
+    filter (vars.status == null or $.status == vars.status),
+  total: 1,
+  limit: vars.limit,
+  offset: vars.offset
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <!-- Log Success -->
+        <logger level="INFO" 
+                message="Orders listed successfully - Count: #[payload.total], CorrelationId: #[vars.correlationId]" />
+    </flow>
+
+    <!-- PATCH /orders/{orderId}/status - Update Order Status Flow -->
+    <flow name="patch:\orders\(orderId)\status:application\json:order-process-api-config">
+        <set-variable variableName="orderId" value="#[attributes.uriParams.orderId]" />
+        <set-variable variableName="statusUpdate" value="#[payload.status]" />
+        
+        <!-- Log Order Status Update Request -->
+        <logger level="INFO" 
+                message="Updating order status - OrderId: #[vars.orderId], NewStatus: #[vars.statusUpdate], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Update Order Status in Object Store -->
+        <try>
+            <os:retrieve key="#[vars.orderId]" objectStore="orderStatusStore" />
+            <set-variable variableName="currentOrder" value="#[payload]" />
+            
+            <!-- Update order with new status -->
+            <os:store key="#[vars.orderId]" 
+                      value="#[vars.currentOrder ++ {
+                        status: vars.statusUpdate,
+                        lastUpdated: now(),
+                        updatedBy: attributes.headers.'x-client-id' default 'system'
+                      }]"
+                      objectStore="orderStatusStore" />
+            
+            <!-- Transform Response -->
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orderId: vars.orderId,
+  status: vars.statusUpdate,
+  previousStatus: vars.currentOrder.status,
+  updatedAt: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"}
+}]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+
+            <!-- Log Success -->
+            <logger level="INFO" 
+                    message="Order status updated successfully - OrderId: #[vars.orderId], Status: #[vars.statusUpdate], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <on-error-propagate type="OS:KEY_NOT_FOUND">
+                    <set-variable variableName="httpStatus" value="404" />
+                    <set-variable variableName="errorCode" value="ORDER_NOT_FOUND" />
+                    <set-variable variableName="errorMessage" value="#['Order not found with ID: ' ++ vars.orderId]" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <set-variable variableName="httpStatus" value="500" />
+                    <set-variable variableName="errorCode" value="STATUS_UPDATE_FAILED" />
+                    <set-variable variableName="errorMessage" value="Failed to update order status - internal system error" />
+                    <flow-ref name="buildErrorResponseSubflow" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- Business Process Subflows (BRD Section 8 Implementation) -->
+    
+    <!-- Step 1: Customer Validation -->
+    <sub-flow name="validateCustomerSubflow">
+        <logger level="INFO" 
+                message="Step 1: Validating customer - CustomerId: #[vars.orderRequest.customerId], CorrelationId: #[vars.correlationId]" />
+
+        <try>
+            <http:request method="GET" 
+                          path="#['/api/v1/customers/' ++ vars.orderRequest.customerId]" 
+                          config-ref="Customer_System_API_Config">
+                <http:headers>
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="x-target-service" value="customer-api" />
+                </http:headers>
+            </http:request>
+
+            <!-- Validate Customer Status -->
+            <choice>
+                <when expression="#[payload.status == 'ACTIVE']">
+                    <set-variable variableName="customerValidated" value="true" />
+                    <logger level="INFO" 
+                            message="Customer validation successful - CustomerId: #[vars.orderRequest.customerId], CorrelationId: #[vars.correlationId]" />
+                </when>
+                <otherwise>
+                    <logger level="WARN" 
+                            message="Customer validation failed - CustomerId: #[vars.orderRequest.customerId], Status: #[payload.status], CorrelationId: #[vars.correlationId]" />
+                    <raise-error type="BUSINESS:CUSTOMER_NOT_FOUND" 
+                                 description="#['Customer is not active. Status: ' ++ payload.status]" />
+                </otherwise>
+            </choice>
+
+            <error-handler>
+                <on-error-propagate type="HTTP:NOT_FOUND">
+                    <logger level="WARN" 
+                            message="Customer not found - CustomerId: #[vars.orderRequest.customerId], CorrelationId: #[vars.correlationId]" />
+                    <raise-error type="BUSINESS:CUSTOMER_NOT_FOUND" 
+                                 description="#['Customer not found: ' ++ vars.orderRequest.customerId]" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="HTTP:TIMEOUT">
+                    <flow-ref name="updateCircuitBreakerFailureSubflow" />
+                    <raise-error type="HTTP:TIMEOUT" description="Customer service timeout" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <flow-ref name="updateCircuitBreakerFailureSubflow" />
+                    <raise-error type="BUSINESS:CUSTOMER_VALIDATION_FAILED" 
+                                 description="Customer service unavailable" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- Step 2: Inventory Validation -->
+    <sub-flow name="validateInventorySubflow">
+        <logger level="INFO" 
+                message="Step 2: Validating inventory - Items: #[sizeOf(vars.orderRequest.items)], CorrelationId: #[vars.correlationId]" />
+
+        <foreach collection="#[vars.orderRequest.items]">
+            <try>
+                <http:request method="POST" 
+                              path="/api/v1/inventory/validate" 
+                              config-ref="Inventory_System_API_Config">
+                    <http:headers>
+                        <http:header headerName="Content-Type" value="application/json" />
+                        <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                        <http:header headerName="x-target-service" value="inventory-api" />
+                    </http:headers>
+                    <http:body><![CDATA[#[{
+                        productId: payload.productId,
+                        quantity: payload.quantity
+                    }]]]></http:body>
+                </http:request>
+
+                <!-- Check inventory availability -->
+                <choice>
+                    <when expression="#[payload.available == true and payload.availableQuantity >= vars.orderRequest.items[0].quantity]">
+                        <logger level="INFO" 
+                                message="Inventory validated - ProductId: #[vars.orderRequest.items[0].productId], Available: #[payload.availableQuantity], CorrelationId: #[vars.correlationId]" />
+                    </when>
+                    <otherwise>
+                        <logger level="WARN" 
+                                message="Insufficient inventory - ProductId: #[vars.orderRequest.items[0].productId], Required: #[vars.orderRequest.items[0].quantity], Available: #[payload.availableQuantity], CorrelationId: #[vars.correlationId]" />
+                        <raise-error type="BUSINESS:INSUFFICIENT_INVENTORY" 
+                                     description="#['Insufficient inventory for product: ' ++ vars.orderRequest.items[0].productId]" />
+                    </otherwise>
+                </choice>
+
+                <error-handler>
+                    <on-error-propagate type="HTTP:TIMEOUT">
+                        <flow-ref name="updateCircuitBreakerFailureSubflow" />
+                        <raise-error type="HTTP:TIMEOUT" description="Inventory service timeout" />
+                    </on-error-propagate>
+                    
+                    <on-error-propagate type="ANY">
+                        <flow-ref name="updateCircuitBreakerFailureSubflow" />
+                        <raise-error type="BUSINESS:INVENTORY_VALIDATION_FAILED" 
+                                     description="Inventory service unavailable" />
+                    </on-error-propagate>
+                </error-handler>
+            </try>
+        </foreach>
+
+        <set-variable variableName="inventoryValidated" value="true" />
+        <logger level="INFO" 
+                message="All inventory validated successfully - CorrelationId: #[vars.correlationId]" />
+    </sub-flow>
+
+    <!-- Step 3: Payment Authorization -->
+    <sub-flow name="authorizePaymentSubflow">
+        <logger level="INFO" 
+                message="Step 3: Authorizing payment - CustomerId: #[vars.orderRequest.customerId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Calculate total amount -->
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var totalAmount = sum(vars.orderRequest.items map ($.quantity * $.price))
+---
+{
+  customerId: vars.orderRequest.customerId,
+  amount: totalAmount,
+  currency: "USD",
+  paymentMethod: vars.orderRequest.paymentMethod default "CREDIT_CARD",
+  orderId: vars.orderId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <set-variable variableName="paymentRequest" value="#[payload]" />
+        <set-variable variableName="totalAmount" value="#[payload.amount]" />
+
+        <try>
+            <http:request method="POST" 
+                          path="/api/v1/payments/authorize" 
+                          config-ref="Payment_System_API_Config">
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="x-target-service" value="payment-api" />
+                </http:headers>
+                <http:body>#[vars.paymentRequest]</http:body>
+            </http:request>
+
+            <!-- Check payment authorization -->
+            <choice>
+                <when expression="#[payload.status == 'AUTHORIZED']">
+                    <set-variable variableName="paymentAuthorizationId" value="#[payload.authorizationId]" />
+                    <set-variable variableName="paymentStatus" value="AUTHORIZED" />
+                    <logger level="INFO" 
+                            message="Payment authorized - AuthorizationId: #[payload.authorizationId], Amount: #[vars.totalAmount], CorrelationId: #[vars.correlationId]" />
+                </when>
+                <otherwise>
+                    <logger level="WARN" 
+                            message="Payment authorization failed - Status: #[payload.status], Reason: #[payload.reason], CorrelationId: #[vars.correlationId]" />
+                    <raise-error type="BUSINESS:PAYMENT_FAILED" 
+                                 description="#['Payment authorization failed: ' ++ payload.reason]" />
+                </otherwise>
+            </choice>
+
+            <error-handler>
+                <on-error-propagate type="HTTP:TIMEOUT">
+                    <flow-ref name="updateCircuitBreakerFailureSubflow" />
+                    <raise-error type="HTTP:TIMEOUT" description="Payment service timeout" />
+                </on-error-propagate>
+                
+                <on-error-propagate type="ANY">
+                    <flow-ref name="updateCircuitBreakerFailureSubflow" />
+                    <raise-error type="BUSINESS:PAYMENT_FAILED" 
+                                 description="Payment service unavailable" />
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- Step 4: Create Order in OMS -->
+    <sub-flow name="createOrderInOMSSubflow">
+        <logger level="INFO" 
+                message="Step 4: Creating order in OMS - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Mock OMS Implementation - Store order details -->
+        <os:store key="#[vars.orderId]" 
+                  value="#[{
+                    orderId: vars.orderId,
+                    status: 'CONFIRMED',
+                    customerId: vars.orderRequest.customerId,
+                    items: vars.orderRequest.items,
+                    totalAmount: vars.totalAmount,
+                    paymentStatus: vars.paymentStatus,
+                    paymentAuthorizationId: vars.paymentAuthorizationId,
+                    createdAt: now(),
+                    lastUpdated: now(),
+                    correlationId: vars.correlationId
+                  }]"
+                  objectStore="orderStatusStore" />
+
+        <set-variable variableName="orderCreated" value="true" />
+        <logger level="INFO" 
+                message="Order created in OMS - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+    </sub-flow>
+
+    <!-- Step 5: Create Shipment -->
+    <sub-flow name="createShipmentSubflow">
+        <logger level="INFO" 
+                message="Step 5: Creating shipment - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Prepare shipment request -->
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orderId: vars.orderId,
+  customerId: vars.orderRequest.customerId,
+  items: vars.orderRequest.items map {
+    productId: $.productId,
+    quantity: $.quantity,
+    description: $.description default "Product " ++ $.productId
+  },
+  shippingAddress: vars.orderRequest.shippingAddress default {
+    street: "123 Main St",
+    city: "Anytown",
+    state: "ST",
+    zipCode: "12345",
+    country: "USA"
+  },
+  priority: "STANDARD"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <try>
+            <http:request method="POST" 
+                          path="/api/v1/shipments" 
+                          config-ref="Shipping_System_API_Config">
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    <http:header headerName="x-target-service" value="shipping-api" />
+                </http:headers>
+                <http:body>#[payload]</http:body>
+            </http:request>
+
+            <!-- Check shipment creation -->
+            <choice>
+                <when expression="#[payload.status == 'CREATED']">
+                    <set-variable variableName="shipmentId" value="#[payload.shipmentId]" />
+                    <set-variable variableName="trackingNumber" value="#[payload.trackingNumber]" />
+                    <set-variable variableName="shipmentStatus" value="CREATED" />
+                    <logger level="INFO" 
+                            message="Shipment created - ShipmentId: #[payload.shipmentId], TrackingNumber: #[payload.trackingNumber], CorrelationId: #[vars.correlationId]" />
+                </when>
+                <otherwise>
+                    <!-- Shipment creation failed - log warning but don't fail the order -->
+                    <set-variable variableName="shipmentStatus" value="FAILED" />
+                    <logger level="WARN" 
+                            message="Shipment creation failed - Status: #[payload.status], OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+                </otherwise>
+            </choice>
+
+            <error-handler>
+                <on-error-continue type="HTTP:TIMEOUT">
+                    <set-variable variableName="shipmentStatus" value="PENDING" />
+                    <logger level="WARN" 
+                            message="Shipment creation timeout - will be retried later, OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+                </on-error-continue>
+                
+                <on-error-continue type="ANY">
+                    <set-variable variableName="shipmentStatus" value="PENDING" />
+                    <logger level="WARN" 
+                            message="Shipment creation failed - will be retried later, OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- Step 6: Update Order Status -->
+    <sub-flow name="updateOrderStatusSubflow">
+        <logger level="INFO" 
+                message="Step 6: Updating final order status - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Update order with final details -->
+        <os:store key="#[vars.orderId]" 
+                  value="#[{
+                    orderId: vars.orderId,
+                    status: 'CREATED',
+                    customerId: vars.orderRequest.customerId,
+                    items: vars.orderRequest.items,
+                    totalAmount: vars.totalAmount,
+                    paymentStatus: vars.paymentStatus,
+                    paymentAuthorizationId: vars.paymentAuthorizationId,
+                    shipmentStatus: vars.shipmentStatus,
+                    shipmentId: vars.shipmentId default null,
+                    trackingNumber: vars.trackingNumber default null,
+                    createdAt: now(),
+                    lastUpdated: now(),
+                    correlationId: vars.correlationId
+                  }]"
+                  objectStore="orderStatusStore" />
+
+        <set-variable variableName="finalOrderStatus" value="CREATED" />
+        <logger level="INFO" 
+                message="Order status updated to final - OrderId: #[vars.orderId], Status: CREATED, CorrelationId: #[vars.correlationId]" />
+    </sub-flow>
+
+    <!-- Compensation Subflows -->
+    
+    <!-- Order Processing Failed -->
+    <sub-flow name="orderProcessingFailedSubflow">
+        <logger level="ERROR" 
+                message="Order processing failed - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+        <!-- Update order status to FAILED -->
+        <os:store key="#[vars.orderId]" 
+                  value="#[{
+                    orderId: vars.orderId,
+                    status: 'FAILED',
+                    customerId: vars.orderRequest.customerId,
+                    items: vars.orderRequest.items,
+                    failedAt: now(),
+                    lastUpdated: now(),
+                    correlationId: vars.correlationId,
+                    errorReason: error.description default 'Unknown error'
+                  }]"
+                  objectStore="orderStatusStore" />
+    </sub-flow>
+
+    <!-- Compensate Inventory Reservation -->
+    <sub-flow name="compensateInventoryReservationSubflow">
+        <logger level="WARN" 
+                message="Compensating inventory reservation - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+        <try>
+            <foreach collection="#[vars.orderRequest.items]">
+                <http:request method="POST" 
+                              path="/api/v1/inventory/release" 
+                              config-ref="Inventory_System_API_Config">
+                    <http:headers>
+                        <http:header headerName="Content-Type" value="application/json" />
+                        <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                    </http:headers>
+                    <http:body><![CDATA[#[{
+                        productId: payload.productId,
+                        quantity: payload.quantity,
+                        orderId: vars.orderId
+                    }]]]></http:body>
+                </http:request>
+            </foreach>
+            
+            <logger level="INFO" 
+                    message="Inventory reservation compensated - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <logger level="ERROR" 
+                            message="Failed to compensate inventory reservation - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- Compensate Payment Authorization -->
+    <sub-flow name="compensatePaymentAuthorizationSubflow">
+        <logger level="WARN" 
+                message="Compensating payment authorization - OrderId: #[vars.orderId], AuthorizationId: #[vars.paymentAuthorizationId], CorrelationId: #[vars.correlationId]" />
+
+        <try>
+            <http:request method="POST" 
+                          path="/api/v1/payments/void" 
+                          config-ref="Payment_System_API_Config">
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                    <http:header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                </http:headers>
+                <http:body><![CDATA[#[{
+                    authorizationId: vars.paymentAuthorizationId,
+                    orderId: vars.orderId,
+                    reason: "Order processing failed"
+                }]]]></http:body>
+            </http:request>
+            
+            <logger level="INFO" 
+                    message="Payment authorization compensated - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <logger level="ERROR" 
+                            message="Failed to compensate payment authorization - OrderId: #[vars.orderId], CorrelationId: #[vars.correlationId]" />
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+</mule>

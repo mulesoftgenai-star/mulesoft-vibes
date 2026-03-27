@@ -1,0 +1,262 @@
+#%RAML 1.0
+title: Customer System API
+version: v1
+description: |
+  System layer API for customer data management.
+  Provides CRUD operations for customer profiles and addresses.
+
+baseUri: https://api.company.com/system/customers/{version}
+protocols: [HTTPS]
+
+mediaType: 
+  - application/json
+
+documentation:
+  - title: Customer System API Guide
+    content: |
+      This API provides system-level customer management capabilities including:
+      - Customer profile CRUD operations
+      - Customer validation and verification
+      - Address management
+      - Customer search and lookup
+
+uses:
+  customerTypes: fragments/data-types/customer-types.raml
+
+traits:
+  oauth2-secured: !include fragments/security-traits/oauth2-trait.raml
+
+/customers:
+  description: Customer profile operations
+  
+  post:
+    displayName: Create Customer
+    description: Create a new customer profile
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: object
+        properties:
+          firstName:
+            type: string
+            minLength: 1
+            maxLength: 50
+          lastName:
+            type: string
+            minLength: 1
+            maxLength: 50
+          email:
+            type: string
+            pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+          phone:
+            type: string
+            pattern: ^\+?[1-9]\d{1,14}$
+          dateOfBirth:
+            type: date-only
+            required: false
+          preferences:
+            type: object
+            required: false
+        example: |
+          {
+            "firstName": "John",
+            "lastName": "Smith",
+            "email": "john.smith@example.com",
+            "phone": "+1234567890",
+            "dateOfBirth": "1985-06-15",
+            "preferences": {
+              "newsletter": true,
+              "smsNotifications": false
+            }
+          }
+    responses:
+      201:
+        description: Customer created successfully
+        body:
+          application/json:
+            type: customerTypes.CustomerProfile
+      400:
+        description: Bad request - Invalid input data
+        body:
+          application/json:
+            example: |
+              {
+                "error": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "Invalid customer data provided",
+                  "timestamp": "2024-03-27T15:30:00.000Z",
+                  "path": "/api/v1/customers"
+                }
+              }
+      409:
+        description: Conflict - Customer already exists
+        body:
+          application/json:
+            example: |
+              {
+                "error": {
+                  "code": "CUSTOMER_EXISTS",
+                  "message": "Customer with this email already exists",
+                  "timestamp": "2024-03-27T15:30:00.000Z",
+                  "path": "/api/v1/customers"
+                }
+              }
+
+  get:
+    displayName: Search Customers
+    description: Search customers by various criteria
+    is: [oauth2-secured]
+    queryParameters:
+      email?:
+        type: string
+        description: Filter by email address
+      phone?:
+        type: string
+        description: Filter by phone number
+      firstName?:
+        type: string
+        description: Filter by first name
+      lastName?:
+        type: string
+        description: Filter by last name
+      status?:
+        type: string
+        enum: [ACTIVE, INACTIVE, BLOCKED, SUSPENDED]
+        description: Filter by customer status
+      page?:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Page number
+      pageSize?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of customers per page
+    responses:
+      200:
+        description: Customers retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              customers:
+                type: customerTypes.CustomerProfile[]
+              pagination:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalCount:
+                    type: integer
+                  totalPages:
+                    type: integer
+
+  /{customerId}:
+    uriParameters:
+      customerId:
+        type: customerTypes.ID
+        description: Unique customer identifier
+    
+    get:
+      displayName: Get Customer Details
+      description: Retrieve detailed customer information
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Customer details retrieved successfully
+          body:
+            application/json:
+              type: customerTypes.Customer
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              example: |
+                {
+                  "error": {
+                    "code": "CUSTOMER_NOT_FOUND",
+                    "message": "Customer not found",
+                    "timestamp": "2024-03-27T15:30:00.000Z",
+                    "path": "/api/v1/customers/{customerId}"
+                  }
+                }
+
+    put:
+      displayName: Update Customer
+      description: Update customer profile information
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: object
+          properties:
+            firstName:
+              type: string
+              required: false
+            lastName:
+              type: string
+              required: false
+            email:
+              type: string
+              pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+              required: false
+            phone:
+              type: string
+              pattern: ^\+?[1-9]\d{1,14}$
+              required: false
+            preferences:
+              type: object
+              required: false
+          example: |
+            {
+              "firstName": "John",
+              "lastName": "Doe",
+              "phone": "+1234567891",
+              "preferences": {
+                "newsletter": false
+              }
+            }
+      responses:
+        200:
+          description: Customer updated successfully
+          body:
+            application/json:
+              type: customerTypes.CustomerProfile
+        400:
+          description: Bad request - Invalid input data
+        404:
+          description: Customer not found
+        500:
+          description: Internal server error
+
+    delete:
+      displayName: Deactivate Customer
+      description: Deactivate customer account (soft delete)
+      is: [oauth2-secured]
+      responses:
+        204:
+          description: Customer deactivated successfully
+        404:
+          description: Customer not found
+        500:
+          description: Internal server error
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-27T15:30:00.000Z",
+                "version": "v1"
+              }

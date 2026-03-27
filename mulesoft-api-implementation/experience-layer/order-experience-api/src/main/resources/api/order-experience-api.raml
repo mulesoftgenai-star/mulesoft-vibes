@@ -1,0 +1,340 @@
+#%RAML 1.0
+title: Order Experience API
+version: v1
+description: |
+  Customer-facing API for order management operations.
+  Provides simplified interface for creating, retrieving and managing orders.
+
+baseUri: https://api.company.com/experience/orders/{version}
+protocols: [HTTPS]
+
+mediaType: 
+  - application/json
+
+documentation:
+  - title: Order Experience API Guide
+    content: |
+      This API provides customer-facing order management capabilities including:
+      - Creating new orders
+      - Retrieving order details
+      - Listing customer orders
+      - Updating order status
+
+uses:
+  orderTypes: fragments/data-types/order-types.raml
+  requestTypes: fragments/request-response/request-types.raml
+  responseTypes: fragments/request-response/response-types.raml
+
+traits:
+  oauth2-secured: !include fragments/security-traits/oauth2-trait.raml
+
+/orders:
+  description: Order management operations
+  
+  post:
+    displayName: Create Order
+    description: Create a new order for a customer
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: requestTypes.CreateOrderRequest
+        example: |
+          {
+            "customerId": "CUST789012",
+            "items": [
+              {
+                "productId": "PRD9876543",
+                "quantity": 2,
+                "unitPrice": {
+                  "amount": 199.99,
+                  "currency": "USD"
+                }
+              }
+            ],
+            "billingAddress": {
+              "street": "123 Main Street",
+              "city": "New York",
+              "state": "NY",
+              "postalCode": "10001",
+              "country": "US"
+            },
+            "shippingAddress": {
+              "street": "456 Oak Avenue",
+              "city": "Brooklyn",
+              "state": "NY",
+              "postalCode": "11201",
+              "country": "US"
+            },
+            "paymentMethod": "CREDIT_CARD",
+            "shippingMethod": "STANDARD"
+          }
+    responses:
+      201:
+        description: Order created successfully
+        body:
+          application/json:
+            type: responseTypes.OrderResponse
+            example: |
+              {
+                "order": {
+                  "orderId": "ORD1234567",
+                  "customerId": "CUST789012",
+                  "orderNumber": "ORD-2024-001234",
+                  "orderDate": "2024-03-27T15:30:00.000Z",
+                  "status": "CONFIRMED",
+                  "items": [
+                    {
+                      "itemId": "ITM1234567",
+                      "productId": "PRD9876543",
+                      "productName": "Premium Wireless Headphones",
+                      "sku": "WHD-001-BLK",
+                      "quantity": 2,
+                      "unitPrice": {
+                        "amount": 199.99,
+                        "currency": "USD"
+                      },
+                      "totalPrice": {
+                        "amount": 399.98,
+                        "currency": "USD"
+                      },
+                      "category": "Electronics"
+                    }
+                  ],
+                  "subtotal": {
+                    "amount": 399.98,
+                    "currency": "USD"
+                  },
+                  "tax": {
+                    "amount": 32.00,
+                    "currency": "USD"
+                  },
+                  "shipping": {
+                    "amount": 9.99,
+                    "currency": "USD"
+                  },
+                  "total": {
+                    "amount": 441.97,
+                    "currency": "USD"
+                  },
+                  "billingAddress": {
+                    "street": "123 Main Street",
+                    "city": "New York",
+                    "state": "NY",
+                    "postalCode": "10001",
+                    "country": "US"
+                  },
+                  "shippingAddress": {
+                    "street": "456 Oak Avenue",
+                    "city": "Brooklyn",
+                    "state": "NY",
+                    "postalCode": "11201",
+                    "country": "US"
+                  },
+                  "paymentMethod": "CREDIT_CARD",
+                  "shippingMethod": "STANDARD",
+                  "createdAt": "2024-03-27T15:30:00.000Z",
+                  "updatedAt": "2024-03-27T15:30:00.000Z"
+                },
+                "status": "SUCCESS",
+                "message": "Order created successfully"
+              }
+      400:
+        description: Bad request - Invalid input data
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+
+  get:
+    displayName: List Orders
+    description: Retrieve list of orders for authenticated customer
+    is: [oauth2-secured]
+    queryParameters:
+      customerId:
+        type: orderTypes.ID
+        required: true
+        description: Customer identifier
+      status?:
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, REFUNDED]
+        description: Filter by order status
+      page?:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Page number
+      pageSize?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of orders per page
+    responses:
+      200:
+        description: Orders retrieved successfully
+        body:
+          application/json:
+            type: responseTypes.OrderListResponse
+      400:
+        description: Bad request - Invalid query parameters
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: responseTypes.ErrorResponse
+
+  /{orderId}:
+    uriParameters:
+      orderId:
+        type: orderTypes.ID
+        description: Unique order identifier
+    
+    get:
+      displayName: Get Order Details
+      description: Retrieve detailed information for a specific order
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Order details retrieved successfully
+          body:
+            application/json:
+              type: orderTypes.Order
+              example: |
+                {
+                  "orderId": "ORD1234567",
+                  "customerId": "CUST789012",
+                  "orderNumber": "ORD-2024-001234",
+                  "orderDate": "2024-03-27T15:30:00.000Z",
+                  "status": "CONFIRMED",
+                  "items": [
+                    {
+                      "itemId": "ITM1234567",
+                      "productId": "PRD9876543",
+                      "productName": "Premium Wireless Headphones",
+                      "sku": "WHD-001-BLK",
+                      "quantity": 2,
+                      "unitPrice": {
+                        "amount": 199.99,
+                        "currency": "USD"
+                      },
+                      "totalPrice": {
+                        "amount": 399.98,
+                        "currency": "USD"
+                      },
+                      "category": "Electronics"
+                    }
+                  ],
+                  "subtotal": {
+                    "amount": 399.98,
+                    "currency": "USD"
+                  },
+                  "tax": {
+                    "amount": 32.00,
+                    "currency": "USD"
+                  },
+                  "shipping": {
+                    "amount": 9.99,
+                    "currency": "USD"
+                  },
+                  "total": {
+                    "amount": 441.97,
+                    "currency": "USD"
+                  },
+                  "billingAddress": {
+                    "street": "123 Main Street",
+                    "city": "New York",
+                    "state": "NY",
+                    "postalCode": "10001",
+                    "country": "US"
+                  },
+                  "shippingAddress": {
+                    "street": "456 Oak Avenue",
+                    "city": "Brooklyn",
+                    "state": "NY",
+                    "postalCode": "11201",
+                    "country": "US"
+                  },
+                  "paymentMethod": "CREDIT_CARD",
+                  "shippingMethod": "STANDARD",
+                  "notes": "Please ring doorbell twice",
+                  "createdAt": "2024-03-27T15:30:00.000Z",
+                  "updatedAt": "2024-03-27T15:30:00.000Z"
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+
+    patch:
+      displayName: Update Order
+      description: Update order details (limited fields)
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: requestTypes.UpdateOrderRequest
+      responses:
+        200:
+          description: Order updated successfully
+          body:
+            application/json:
+              type: responseTypes.OrderResponse
+        400:
+          description: Bad request - Invalid input data
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+        409:
+          description: Conflict - Order cannot be updated in current status
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: responseTypes.ErrorResponse
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-27T15:30:00.000Z",
+                "version": "v1"
+              }

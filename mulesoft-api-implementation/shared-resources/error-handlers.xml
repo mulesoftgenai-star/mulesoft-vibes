@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+
+    <!-- Global Error Handler -->
+    <error-handler name="globalErrorHandler">
+        
+        <!-- Business Logic Errors -->
+        <on-error-propagate type="BUSINESS:CUSTOMER_NOT_FOUND">
+            <set-variable variableName="httpStatus" value="404" />
+            <set-variable variableName="errorCode" value="CUSTOMER_NOT_FOUND" />
+            <set-variable variableName="errorMessage" value="Customer not found with provided ID" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+        <on-error-propagate type="BUSINESS:INSUFFICIENT_INVENTORY">
+            <set-variable variableName="httpStatus" value="400" />
+            <set-variable variableName="errorCode" value="INSUFFICIENT_INVENTORY" />
+            <set-variable variableName="errorMessage" value="Insufficient inventory for requested quantity" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+        <on-error-propagate type="BUSINESS:PAYMENT_FAILED">
+            <set-variable variableName="httpStatus" value="400" />
+            <set-variable variableName="errorCode" value="PAYMENT_FAILED" />
+            <set-variable variableName="errorMessage" value="Payment processing failed" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+        <on-error-propagate type="BUSINESS:ORDER_NOT_FOUND">
+            <set-variable variableName="httpStatus" value="404" />
+            <set-variable variableName="errorCode" value="ORDER_NOT_FOUND" />
+            <set-variable variableName="errorMessage" value="Order not found with provided ID" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+
+        <!-- Security Errors -->
+        <on-error-propagate type="SECURITY:UNAUTHORIZED">
+            <set-variable variableName="httpStatus" value="401" />
+            <set-variable variableName="errorCode" value="UNAUTHORIZED" />
+            <set-variable variableName="errorMessage" value="Authentication required or invalid credentials" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+        <on-error-propagate type="SECURITY:ACCESS_DENIED">
+            <set-variable variableName="httpStatus" value="403" />
+            <set-variable variableName="errorCode" value="ACCESS_DENIED" />
+            <set-variable variableName="errorMessage" value="Access denied for requested resource" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+
+        <!-- API Errors -->
+        <on-error-propagate type="API:RATE_LIMIT_EXCEEDED">
+            <set-variable variableName="httpStatus" value="429" />
+            <set-variable variableName="errorCode" value="RATE_LIMIT_EXCEEDED" />
+            <set-variable variableName="errorMessage" value="Too many requests - rate limit exceeded" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+
+        <!-- Validation Errors -->
+        <on-error-propagate type="VALIDATION:INVALID_REQUEST">
+            <set-variable variableName="httpStatus" value="400" />
+            <set-variable variableName="errorCode" value="INVALID_REQUEST" />
+            <set-variable variableName="errorMessage" value="Invalid request format or missing required fields" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+        <on-error-propagate type="APIKIT:BAD_REQUEST">
+            <set-variable variableName="httpStatus" value="400" />
+            <set-variable variableName="errorCode" value="BAD_REQUEST" />
+            <set-variable variableName="errorMessage" value="Request does not match API specification" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+
+        <!-- HTTP Errors -->
+        <on-error-propagate type="HTTP:TIMEOUT">
+            <set-variable variableName="httpStatus" value="504" />
+            <set-variable variableName="errorCode" value="GATEWAY_TIMEOUT" />
+            <set-variable variableName="errorMessage" value="Request timeout - downstream system not responding" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+        <on-error-propagate type="HTTP:CONNECTIVITY">
+            <set-variable variableName="httpStatus" value="503" />
+            <set-variable variableName="errorCode" value="SERVICE_UNAVAILABLE" />
+            <set-variable variableName="errorMessage" value="Service temporarily unavailable" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+
+        <!-- Circuit Breaker Errors -->
+        <on-error-propagate type="CIRCUIT_BREAKER:OPEN">
+            <set-variable variableName="httpStatus" value="503" />
+            <set-variable variableName="errorCode" value="CIRCUIT_BREAKER_OPEN" />
+            <set-variable variableName="errorMessage" value="Service temporarily unavailable - circuit breaker is open" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+
+        <!-- Generic System Errors -->
+        <on-error-propagate type="ANY">
+            <set-variable variableName="httpStatus" value="500" />
+            <set-variable variableName="errorCode" value="INTERNAL_SERVER_ERROR" />
+            <set-variable variableName="errorMessage" value="An unexpected error occurred" />
+            <flow-ref name="buildErrorResponseSubflow" />
+        </on-error-propagate>
+        
+    </error-handler>
+
+    <!-- Build Error Response Subflow -->
+    <sub-flow name="buildErrorResponseSubflow">
+        <set-variable variableName="correlationId" value="#[correlationId]" />
+        <set-variable variableName="requestPath" value="#[attributes.requestPath default 'unknown']" />
+        
+        <!-- Log Error Details -->
+        <logger level="ERROR" message="Error occurred - Code: #[vars.errorCode], Message: #[vars.errorMessage], CorrelationId: #[vars.correlationId]" />
+        
+        <!-- Store Error in Object Store for Audit -->
+        <os:store key="#[vars.correlationId]" 
+                  value="#[{
+                    errorCode: vars.errorCode,
+                    errorMessage: vars.errorMessage,
+                    timestamp: now(),
+                    requestPath: vars.requestPath,
+                    userAgent: attributes.headers.'user-agent' default 'unknown'
+                  }]"
+                  objectStore="errorAuditStore" />
+        
+        <!-- Build Error Response -->
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  error: {
+    code: vars.errorCode,
+    message: vars.errorMessage,
+    timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+    correlationId: vars.correlationId,
+    path: vars.requestPath
+  },
+  metadata: {
+    version: p('api.version') default "1.0",
+    environment: p('mule.env') default "development"
+  }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Set HTTP Status -->
+        <set-response statusCode="#[vars.httpStatus]">
+            <set-headers>
+                <set-header headerName="Content-Type" value="application/json" />
+                <set-header headerName="x-correlation-id" value="#[vars.correlationId]" />
+                <set-header headerName="x-error-code" value="#[vars.errorCode]" />
+            </set-headers>
+        </set-response>
+    </sub-flow>
+
+    <!-- Circuit Breaker Configuration Subflow -->
+    <sub-flow name="circuitBreakerSubflow">
+        <set-variable variableName="serviceName" value="#[attributes.headers.'x-target-service' default 'unknown']" />
+        <set-variable variableName="circuitBreakerKey" value="#['cb-' ++ vars.serviceName]" />
+        
+        <try>
+            <!-- Check Circuit Breaker Status -->
+            <os:retrieve key="#[vars.circuitBreakerKey]" objectStore="circuitBreakerStore" />
+            <choice>
+                <when expression="#[payload.state == 'OPEN' and (now() as Number) - (payload.lastFailure as Number) < (payload.timeout * 1000)]">
+                    <raise-error type="CIRCUIT_BREAKER:OPEN" description="Circuit breaker is open" />
+                </when>
+                <otherwise>
+                    <logger level="DEBUG" message="Circuit breaker is closed for service: #[vars.serviceName]" />
+                </otherwise>
+            </choice>
+            <error-handler>
+                <on-error-continue type="OS:KEY_NOT_FOUND">
+                    <logger level="DEBUG" message="Circuit breaker not found for service: #[vars.serviceName] - creating new entry" />
+                    <os:store key="#[vars.circuitBreakerKey]" 
+                              value="#[{state: 'CLOSED', failureCount: 0, lastFailure: 0, timeout: 60}]"
+                              objectStore="circuitBreakerStore" />
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- Update Circuit Breaker on Failure -->
+    <sub-flow name="updateCircuitBreakerFailureSubflow">
+        <set-variable variableName="serviceName" value="#[attributes.headers.'x-target-service' default 'unknown']" />
+        <set-variable variableName="circuitBreakerKey" value="#['cb-' ++ vars.serviceName]" />
+        
+        <try>
+            <os:retrieve key="#[vars.circuitBreakerKey]" objectStore="circuitBreakerStore" />
+            <set-variable variableName="currentState" value="#[payload]" />
+            <set-variable variableName="newFailureCount" value="#[vars.currentState.failureCount + 1]" />
+            
+            <!-- Update Circuit Breaker State -->
+            <choice>
+                <when expression="#[vars.newFailureCount >= ${circuit.breaker.failure.threshold}]">
+                    <!-- Open Circuit Breaker -->
+                    <os:store key="#[vars.circuitBreakerKey]" 
+                              value="#[{
+                                state: 'OPEN', 
+                                failureCount: vars.newFailureCount,
+                                lastFailure: now() as Number,
+                                timeout: ${circuit.breaker.timeout.seconds}
+                              }]"
+                              objectStore="circuitBreakerStore" />
+                    <logger level="WARN" message="Circuit breaker opened for service: #[vars.serviceName]" />
+                </when>
+                <otherwise>
+                    <!-- Increment Failure Count -->
+                    <os:store key="#[vars.circuitBreakerKey]" 
+                              value="#[{
+                                state: 'CLOSED', 
+                                failureCount: vars.newFailureCount,
+                                lastFailure: now() as Number,
+                                timeout: ${circuit.breaker.timeout.seconds}
+                              }]"
+                              objectStore="circuitBreakerStore" />
+                </otherwise>
+            </choice>
+            <error-handler>
+                <on-error-continue type="OS:KEY_NOT_FOUND">
+                    <!-- Create new circuit breaker entry on failure -->
+                    <os:store key="#[vars.circuitBreakerKey]" 
+                              value="#[{state: 'CLOSED', failureCount: 1, lastFailure: now() as Number, timeout: 60}]"
+                              objectStore="circuitBreakerStore" />
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </sub-flow>
+
+    <!-- Reset Circuit Breaker on Success -->
+    <sub-flow name="resetCircuitBreakerSubflow">
+        <set-variable variableName="serviceName" value="#[attributes.headers.'x-target-service' default 'unknown']" />
+        <set-variable variableName="circuitBreakerKey" value="#['cb-' ++ vars.serviceName]" />
+        
+        <os:store key="#[vars.circuitBreakerKey]" 
+                  value="#[{state: 'CLOSED', failureCount: 0, lastFailure: 0, timeout: 60}]"
+                  objectStore="circuitBreakerStore" />
+        <logger level="DEBUG" message="Circuit breaker reset for service: #[vars.serviceName]" />
+    </sub-flow>
+
+    <!-- Object Stores for Error Handling -->
+    <os:object-store name="errorAuditStore" persistent="true" maxEntries="50000" entryTtl="86400" />
+    <os:object-store name="circuitBreakerStore" persistent="true" maxEntries="1000" entryTtl="3600" />
+
+</mule>

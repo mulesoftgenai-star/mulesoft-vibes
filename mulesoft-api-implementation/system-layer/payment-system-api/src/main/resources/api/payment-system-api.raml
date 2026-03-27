@@ -1,0 +1,192 @@
+#%RAML 1.0
+title: Payment System API
+version: v1
+description: |
+  System layer API for payment processing and management.
+  Provides operations for payment methods, transactions, and gateway integration.
+
+baseUri: https://api.company.com/system/payments/{version}
+protocols: [HTTPS]
+
+mediaType: 
+  - application/json
+
+documentation:
+  - title: Payment System API Guide
+    content: |
+      This API provides system-level payment management capabilities including:
+      - Payment method management
+      - Transaction processing (authorization, capture, refund)
+      - Payment gateway integration
+      - Transaction history and reporting
+
+uses:
+  paymentTypes: fragments/data-types/payment-types.raml
+
+traits:
+  oauth2-secured: !include fragments/security-traits/oauth2-trait.raml
+
+/payment-methods:
+  description: Payment method management operations
+
+  /{customerId}:
+    uriParameters:
+      customerId:
+        type: paymentTypes.ID
+        description: Customer identifier
+    
+    get:
+      displayName: List Payment Methods
+      description: Retrieve payment methods for a customer
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Payment methods retrieved successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                paymentMethods:
+                  type: paymentTypes.PaymentMethod[]
+                customerId:
+                  type: paymentTypes.ID
+        404:
+          description: Customer not found
+
+    post:
+      displayName: Add Payment Method
+      description: Add a new payment method for a customer
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER, DIGITAL_WALLET]
+            isDefault:
+              type: boolean
+              required: false
+              default: false
+            cardDetails:
+              type: object
+              required: false
+              properties:
+                cardNumber:
+                  type: string
+                  description: Encrypted card number
+                expiryMonth:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                expiryYear:
+                  type: integer
+                  minimum: 2024
+                  maximum: 2034
+                holderName:
+                  type: string
+                  maxLength: 100
+      responses:
+        201:
+          description: Payment method added successfully
+          body:
+            application/json:
+              type: paymentTypes.PaymentMethod
+        400:
+          description: Bad request - Invalid payment method data
+
+/transactions:
+  description: Payment transaction operations
+
+  /authorize:
+    post:
+      displayName: Authorize Payment
+      description: Authorize a payment for an order
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: paymentTypes.AuthorizationRequest
+      responses:
+        201:
+          description: Payment authorized successfully
+          body:
+            application/json:
+              type: paymentTypes.PaymentTransaction
+        400:
+          description: Bad request - Invalid authorization data
+        402:
+          description: Payment required - Authorization failed
+
+  /capture:
+    post:
+      displayName: Capture Payment
+      description: Capture a previously authorized payment
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: paymentTypes.CaptureRequest
+      responses:
+        200:
+          description: Payment captured successfully
+          body:
+            application/json:
+              type: paymentTypes.PaymentTransaction
+        400:
+          description: Bad request - Invalid capture data
+        404:
+          description: Authorization not found
+
+  /refund:
+    post:
+      displayName: Refund Payment
+      description: Refund a captured payment
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: paymentTypes.RefundRequest
+      responses:
+        201:
+          description: Refund processed successfully
+          body:
+            application/json:
+              type: paymentTypes.PaymentTransaction
+        400:
+          description: Bad request - Invalid refund data
+        404:
+          description: Transaction not found
+
+  /{transactionId}:
+    uriParameters:
+      transactionId:
+        type: paymentTypes.ID
+        description: Transaction identifier
+    
+    get:
+      displayName: Get Transaction Details
+      description: Retrieve transaction details and status
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Transaction details retrieved successfully
+          body:
+            application/json:
+              type: paymentTypes.PaymentTransaction
+        404:
+          description: Transaction not found
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-27T15:30:00.000Z",
+                "version": "v1"
+              }
