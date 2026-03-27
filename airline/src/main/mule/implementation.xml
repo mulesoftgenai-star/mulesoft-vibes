@@ -2,11 +2,13 @@
 
 <mule xmlns:file="http://www.mulesoft.org/schema/mule/file" 
 	xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
 	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
 	xmlns:http="http://www.mulesoft.org/schema/mule/http"
 	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
 http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
@@ -67,17 +69,247 @@ payload map ( payload01 , indexOfPayload01 ) -> {
 	</flow>
 	
 	<flow name="postFlights" doc:id="d2e39c92-6103-4b69-a20d-942ab493a309" >
-		<ee:transform doc:name="Transform Message" doc:id="8f86c676-b609-4fdf-829e-7ef7b5e0897b" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
+		<logger level="INFO" doc:name="Log flight creation request" doc:id="log-create-flight-start" message="Processing flight creation request with payload: #[payload]"/>
+		
+		<!-- Validate input payload -->
+		<ee:transform doc:name="Validate and transform payload" doc:id="validate-transform-payload">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
 ---
 {
-	"message" : "Flights added successfully (but not really)"
+	code: payload.code default "",
+	price: payload.price default 0.00,
+	departureDate: payload.departureDate default now(),
+	origin: payload.origin default "",
+	destination: payload.destination default "",
+	emptySeats: payload.emptySeats default 0,
+	planeType: payload.plane.'type' default "Unknown",
+	totalSeats: payload.plane.totalSeats default 0
 }]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<logger level="INFO" doc:name="Logger" doc:id="80922a85-840b-426a-ad11-f4f739bc6847" message="Post Flight executed successfully"/>
+		
+		<!-- Validate required fields -->
+		<choice doc:name="Validate required fields" doc:id="validate-required-fields">
+			<when expression="#[payload.code == null or payload.code == '' or payload.origin == null or payload.origin == '' or payload.destination == null or payload.destination == '']">
+				<logger level="ERROR" doc:name="Log validation error" doc:id="log-validation-error" message="Flight creation failed: Missing required fields (code, origin, destination)"/>
+				<raise-error doc:name="Validation Error" doc:id="validation-error" type="FLIGHT:VALIDATION_ERROR" description="Missing required fields: code, origin, and destination are mandatory"/>
+			</when>
+			<otherwise>
+				<logger level="DEBUG" doc:name="Log validation success" doc:id="log-validation-success" message="Flight payload validation successful"/>
+				
+				<!-- Check if flight code already exists -->
+				<db:select doc:name="Check duplicate flight code" doc:id="check-duplicate-code" config-ref="H2_Database_Config">
+					<db:sql><![CDATA[SELECT COUNT(*) as count FROM american WHERE code1 = :flightCode]]></db:sql>
+					<db:input-parameters><![CDATA[#[{'flightCode': payload.code}]]]></db:input-parameters>
+				</db:select>
+				
+				<choice doc:name="Check if code exists" doc:id="check-code-exists">
+					<when expression="#[payload[0].count > 0]">
+						<logger level="WARN" doc:name="Log duplicate code" doc:id="log-duplicate-code" message="Flight creation failed: Flight code already exists"/>
+						<raise-error doc:name="Duplicate Code Error" doc:id="duplicate-code-error" type="FLIGHT:DUPLICATE_CODE" description="Flight with code #[vars.flightData.code] already exists"/>
+					</when>
+					<otherwise>
+						<!-- Store flight data for insertion -->
+						<set-variable value="#[payload]" doc:name="Store original payload" doc:id="store-original-payload" variableName="originalPayload"/>
+						<set-variable value="#[vars.originalPayload]" doc:name="Set flight data" doc:id="set-flight-data" variableName="flightData"/>
+						
+						<!-- Insert flight record -->
+						<db:insert doc:name="Insert flight record" doc:id="insert-flight-record" config-ref="H2_Database_Config">
+							<db:sql><![CDATA[INSERT INTO american (code1, price, takeOffDate, fromAirport, toAirport, seatsAvailable, planeType, totalSeats, created_at, updated_at) 
+								VALUES (:code, :price, :departureDate, :origin, :destination, :emptySeats, :planeType, :totalSeats, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)]]></db:sql>
+							<db:input-parameters><![CDATA[#[{
+								'code': vars.flightData.code,
+								'price': vars.flightData.price as Number,
+								'departureDate': vars.flightData.departureDate as DateTime,
+								'origin': vars.flightData.origin,
+								'destination': vars.flightData.destination,
+								'emptySeats': vars.flightData.emptySeats as Number,
+								'planeType': vars.flightData.planeType,
+								'totalSeats': vars.flightData.totalSeats as Number
+							}]]]></db:input-parameters>
+						</db:insert>
+						
+						<!-- Get the newly created record ID -->
+						<db:select doc:name="Get created flight" doc:id="get-created-flight" config-ref="H2_Database_Config">
+							<db:sql><![CDATA[SELECT * FROM american WHERE code1 = :code ORDER BY ID DESC LIMIT 1]]></db:sql>
+							<db:input-parameters><![CDATA[#[{'code': vars.flightData.code}]]]></db:input-parameters>
+						</db:select>
+						
+						<!-- Store local database flight data -->
+						<set-variable value="#[payload[0]]" doc:name="Store DB flight data" doc:id="store-db-flight-data" variableName="dbFlightData"/>
+						
+						<!-- Transform payload for Salesforce Flight record -->
+						<ee:transform doc:name="Transform for Salesforce" doc:id="transform-for-salesforce">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+	Name: vars.dbFlightData.code1,
+	Flight_Code__c: vars.dbFlightData.code1,
+	Price__c: vars.dbFlightData.price,
+	Departure_Date__c: vars.dbFlightData.takeOffDate as DateTime,
+	Origin__c: vars.dbFlightData.fromAirport,
+	Destination__c: vars.dbFlightData.toAirport,
+	Empty_Seats__c: vars.dbFlightData.seatsAvailable,
+	Plane_Type__c: vars.dbFlightData.planeType,
+	Total_Seats__c: vars.dbFlightData.totalSeats,
+	Local_DB_ID__c: vars.dbFlightData.ID as String
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						
+						<!-- Create Salesforce Flight record -->
+						<salesforce:create doc:name="Create Salesforce Flight Record" doc:id="create-salesforce-flight" 
+							config-ref="Salesforce_Config" type="Flight__c">
+							<salesforce:records><![CDATA[#[payload]]]></salesforce:records>
+						</salesforce:create>
+						
+						<!-- Log Salesforce creation success -->
+						<logger level="INFO" doc:name="Log Salesforce success" doc:id="log-salesforce-success" 
+							message="Flight record created in Salesforce with ID: #[payload[0].id]"/>
+						
+						<!-- Store Salesforce ID for response -->
+						<set-variable value="#[payload[0].id]" doc:name="Store Salesforce ID" doc:id="store-salesforce-id" variableName="salesforceId"/>
+						
+						<!-- Transform response -->
+						<ee:transform doc:name="Create success response" doc:id="create-success-response">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "SUCCESS",
+	message: "Flight record created successfully in both local database and Salesforce",
+	createdFlight: {
+		ID: vars.dbFlightData.ID,
+		code: vars.dbFlightData.code1,
+		price: vars.dbFlightData.price default 0,
+		departureDate: vars.dbFlightData.takeOffDate as String default "",
+		origin: vars.dbFlightData.fromAirport default "",
+		destination: vars.dbFlightData.toAirport default "",
+		emptySeats: vars.dbFlightData.seatsAvailable default 0,
+		plane: {
+			"type": vars.dbFlightData.planeType default "",
+			totalSeats: vars.dbFlightData.totalSeats default 0
+		}
+	},
+	salesforceId: vars.salesforceId,
+	localDatabaseId: vars.dbFlightData.ID,
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						
+						<logger level="INFO" doc:name="Log success" doc:id="log-creation-success" message="Flight record created successfully - Local DB ID: #[payload.localDatabaseId], Salesforce ID: #[payload.salesforceId], Flight Code: #[payload.createdFlight.code]"/>
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+		
+		<!-- Error Handler -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Validation Error Handler" doc:id="validation-error-handler" type="FLIGHT:VALIDATION_ERROR">
+				<ee:transform doc:name="Validation Error Response" doc:id="validation-error-response">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "VALIDATION_ERROR",
+	error: "MISSING_REQUIRED_FIELDS",
+	message: "Flight creation failed due to missing required fields",
+	requiredFields: ["code", "origin", "destination"],
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">400</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Duplicate Code Handler" doc:id="duplicate-code-handler" type="FLIGHT:DUPLICATE_CODE">
+				<ee:transform doc:name="Duplicate Code Response" doc:id="duplicate-code-response">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "DUPLICATE_CODE_ERROR",
+	error: "FLIGHT_CODE_EXISTS",
+	message: "Flight with the provided code already exists",
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">409</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Database Error Handler" doc:id="create-database-error-handler" type="DB:CONNECTIVITY, DB:QUERY_EXECUTION">
+				<logger level="ERROR" doc:name="Log Database Error" doc:id="create-log-database-error" message="Database error during flight creation: #[error.description]"/>
+				<ee:transform doc:name="Database Error Response" doc:id="create-database-error-response">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "DATABASE_ERROR",
+	error: "DATABASE_OPERATION_FAILED",
+	message: "An error occurred while creating the flight record. Please try again later.",
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Salesforce Error Handler" doc:id="salesforce-error-handler" type="SALESFORCE:CONNECTIVITY,SALESFORCE:OPERATION_EXECUTION">
+				<logger level="ERROR" doc:name="Log Salesforce Error" doc:id="log-salesforce-error" message="Salesforce error during flight creation: #[error.description]"/>
+				<ee:transform doc:name="Salesforce Error Response" doc:id="salesforce-error-response">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "SALESFORCE_ERROR",
+	error: "SALESFORCE_OPERATION_FAILED",
+	message: "Flight was created in local database but failed to sync with Salesforce. Please try again or contact support.",
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">503</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="General Error Handler" doc:id="general-error-handler" type="ANY">
+				<logger level="ERROR" doc:name="Log General Error" doc:id="log-general-error" message="Unexpected error during flight creation: #[error.description]"/>
+				<ee:transform doc:name="General Error Response" doc:id="general-error-response">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "ERROR",
+	error: "UNEXPECTED_ERROR",
+	message: "An unexpected error occurred while processing the request",
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
 	</flow>
 	
 	<!-- Enhanced Update Flight Flow with Parallel Notifications using Scatter-Gather -->
@@ -388,7 +620,7 @@ output application/json
 						'id': vars.flightId,
 						'destination': vars.updatePayload.destination,
 						'price': vars.updatePayload.price,
-						'planeType': vars.updatePayload.plane.type,
+						'planeType': vars.updatePayload.plane.'type',
 						'departureDate': vars.updatePayload.departureDate,
 						'code': vars.updatePayload.code,
 						'emptySeats': vars.updatePayload.emptySeats,

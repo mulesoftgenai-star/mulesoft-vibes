@@ -273,7 +273,7 @@ output application/json
 						'id': vars.flightId,
 						'destination': vars.updatePayload.destination,
 						'price': vars.updatePayload.price,
-						'planeType': vars.updatePayload.plane.type,
+						'planeType': vars.updatePayload.plane.'type',
 						'departureDate': vars.updatePayload.departureDate,
 						'code': vars.updatePayload.code,
 						'emptySeats': vars.updatePayload.emptySeats,
@@ -482,6 +482,103 @@ output application/json
 				</choice>
 			</otherwise>
 		</choice>
+	</sub-flow>
+
+	<!-- Enhanced POST Flights with Circuit Breaker -->
+	<flow name="postFlights-with-circuit-breaker" doc:id="post-flights-cb">
+		<logger level="INFO" doc:name="Log Request Start" doc:id="log-request-start-post" 
+			message="Starting POST flights operation with circuit breaker protection"/>
+		
+		<!-- Set operation context -->
+		<set-variable value="postFlights" doc:name="Set Operation" doc:id="set-op-post" variableName="operation"/>
+		<set-variable value="#[payload]" doc:name="Set Request Payload" doc:id="set-request-payload-post" variableName="requestPayload"/>
+		<set-variable value="db-operation-post-flight" doc:name="Set DB Operation Flow" doc:id="set-db-op-post" variableName="dbOperationFlow"/>
+		<set-variable value="fallback-post-flights" doc:name="Set Fallback Flow" doc:id="set-fallback-post" variableName="fallbackFlow"/>
+		
+		<!-- Execute with Circuit Breaker -->
+		<flow-ref doc:name="Execute with Circuit Breaker" doc:id="execute-cb-post" name="execute-with-circuit-breaker"/>
+		
+		<logger level="INFO" doc:name="Logger" doc:id="log-success-post" message="POST flights executed successfully with circuit breaker protection"/>
+		
+		<!-- Error handler for circuit breaker failures -->
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Circuit Breaker Error" 
+				doc:id="cb-error-post" type="CIRCUIT_BREAKER:OPEN">
+				<logger level="ERROR" doc:name="Circuit Open" doc:id="log-circuit-open-post" 
+					message="Circuit breaker is OPEN for postFlights - executing fallback"/>
+				
+				<!-- Execute fallback directly -->
+				<flow-ref doc:name="Execute Fallback" doc:id="execute-fallback-post" name="fallback-post-flights"/>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Validation Error Handler" 
+				doc:id="validation-error-handler-cb" type="FLIGHT:VALIDATION_ERROR">
+				<ee:transform doc:name="Validation Error Response" doc:id="validation-error-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "VALIDATION_ERROR",
+	error: "MISSING_REQUIRED_FIELDS",
+	message: "Flight creation failed due to missing required fields",
+	requiredFields: ["code", "origin", "destination"],
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">400</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Duplicate Code Handler" 
+				doc:id="duplicate-code-handler-cb" type="FLIGHT:DUPLICATE_CODE">
+				<ee:transform doc:name="Duplicate Code Response" doc:id="duplicate-code-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "DUPLICATE_CODE_ERROR",
+	error: "FLIGHT_CODE_EXISTS",
+	message: "Flight with the provided code already exists",
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">409</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Database Error Handler" 
+				doc:id="post-database-error-handler-cb" type="DB:CONNECTIVITY, DB:QUERY_EXECUTION">
+				<logger level="ERROR" doc:name="Log Database Error" doc:id="post-log-database-error-cb" 
+					message="Database error during flight creation: #[error.description]"/>
+				<ee:transform doc:name="Database Error Response" doc:id="post-database-error-response-cb">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "DATABASE_ERROR",
+	error: "DATABASE_OPERATION_FAILED",
+	message: "An error occurred while creating the flight record. Please try again later.",
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"}
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus">500</ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+
+	<!-- Database operation sub-flow for POST flight -->
+	<sub-flow name="db-operation-post-flight" doc:id="db-op-post-flight">
+		<flow-ref doc:name="Create flight in database" doc:id="call-post-flight-cb" name="postFlights"/>
 	</sub-flow>
 
 </mule>

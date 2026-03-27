@@ -406,4 +406,59 @@ output application/json
 			 and process them one by one, updating their status and removing successful ones -->
 	</sub-flow>
 
+	<!-- POST Flights Fallback Flow -->
+	<sub-flow name="fallback-post-flights" doc:id="fallback-post-flights">
+		<logger level="WARN" doc:name="Fallback Active" doc:id="log-fallback-post-flights" 
+			message="Database unavailable - using fallback for POST flights operation"/>
+		
+		<!-- Store POST request for later processing when database is available -->
+		<ee:transform doc:name="Prepare Queued POST Operation" doc:id="prepare-queued-post-operation">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	operationType: "CREATE",
+	operation: vars.operation,
+	requestPayload: vars.requestPayload,
+	timestamp: now(),
+	retryCount: 0,
+	status: "QUEUED"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<os:store doc:name="Queue POST Operation" doc:id="queue-post-operation" 
+			key="#['queued-post-' ++ uuid()]" objectStore="flight-cache-store">
+			<os:value>#[payload]</os:value>
+		</os:store>
+		
+		<logger level="INFO" doc:name="POST Operation Queued" doc:id="post-operation-queued" 
+			message="POST flights operation queued for later processing"/>
+		
+		<!-- Return accepted response with queued status -->
+		<ee:transform doc:name="POST Fallback Response" doc:id="post-fallback-response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "QUEUED",
+	message: "Flight creation request received and queued for processing",
+	requestId: uuid(),
+	timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"},
+	fallbackActive: true,
+	estimatedProcessingTime: "5-10 minutes",
+	notice: "Your flight creation request will be processed once database connectivity is restored."
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Set 202 Accepted status -->
+		<set-variable value="202" doc:name="Set POST Accepted Status" doc:id="set-post-accepted-status" variableName="httpStatus"/>
+		
+		<logger level="INFO" doc:name="Log POST Fallback Response" doc:id="log-post-fallback-response" 
+			message="POST flights fallback response prepared with status 202"/>
+	</sub-flow>
+
 </mule>

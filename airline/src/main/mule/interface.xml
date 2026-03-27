@@ -105,7 +105,7 @@ output application/json
 		<flow-ref doc:name="getFlightById" doc:id="417ab227-bec2-423c-a1f2-a48cd546da18" name="getFlightById"/>
     </flow>
     <flow name="post:\flights:application\json:american-airlines-info-api-config">
-		<flow-ref doc:name="postFlights" doc:id="af6136e0-a88f-4f58-bc3c-634f5cabe97e" name="postFlights"/>
+		<flow-ref doc:name="postFlights-with-circuit-breaker" doc:id="af6136e0-a88f-4f58-bc3c-634f5cabe97e" name="postFlights-with-circuit-breaker"/>
     </flow>
     
     <flow name="put:\flights\(ID):application\json:american-airlines-info-api-config">

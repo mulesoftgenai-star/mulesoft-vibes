@@ -1,0 +1,107 @@
+# CloudHub Deployment Configuration
+# Order Management System Integration - API Templates
+
+deployment:
+  type: "cloudhub"
+  target: "CloudHub"
+  
+# Application Configuration
+application:
+  name: "order-management-integration"
+  runtime: "4.6.0"
+  workers: 1
+  region: "us-east-1"
+  
+# Environment Configurations
+environments:
+  development:
+    domain: "order-mgmt-dev"
+    workers: 1
+    workerSize: "0.1"
+    region: "us-east-1"
+    objectStoreV1: false
+    monitoring: 
+      enabled: true
+      autoRestart: true
+    properties:
+      mule.env: "dev"
+      encryption.key: "${secure::encryption.key}"
+      
+  staging:
+    domain: "order-mgmt-staging"
+    workers: 2
+    workerSize: "0.2"
+    region: "us-east-1"
+    objectStoreV1: false
+    monitoring:
+      enabled: true
+      autoRestart: true
+    properties:
+      mule.env: "staging"
+      encryption.key: "${secure::encryption.key}"
+      
+  production:
+    domain: "order-mgmt-prod"
+    workers: 3
+    workerSize: "1.0"
+    region: "us-east-1"
+    objectStoreV1: false
+    monitoring:
+      enabled: true
+      autoRestart: true
+      alerting:
+        enabled: true
+        email: ["ops@company.com"]
+    properties:
+      mule.env: "prod"
+      encryption.key: "${secure::encryption.key}"
+
+# Security Configuration
+security:
+  httpsOnly: true
+  forwardSslSession: true
+  lastMileEncryption: true
+  
+# Scaling Configuration
+scaling:
+  development:
+    minWorkers: 1
+    maxWorkers: 2
+    cpu: 70
+    memory: 70
+  staging:
+    minWorkers: 2
+    maxWorkers: 4
+    cpu: 70
+    memory: 70
+  production:
+    minWorkers: 3
+    maxWorkers: 10
+    cpu: 70
+    memory: 70
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  categories:
+    - name: "com.company.integration"
+      level: "DEBUG"
+    - name: "org.mule.runtime.core"
+      level: "WARN"
+    - name: "org.mule.connectors"
+      level: "INFO"
+
+# Monitoring Configuration
+monitoring:
+  customMetrics:
+    enabled: true
+    interval: "1m"
+  businessEvents:
+    enabled: true
+  notifications:
+    - type: "deployment-success"
+      email: ["team@company.com"]
+    - type: "deployment-failure"
+      email: ["team@company.com"]
+    - type: "worker-unresponsive"
+      email: ["ops@company.com"]

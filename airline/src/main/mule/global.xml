@@ -2,16 +2,27 @@
 
 <mule xmlns:file="http://www.mulesoft.org/schema/mule/file" 
 	xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
 	xmlns:db="http://www.mulesoft.org/schema/mule/db"
 	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
 	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="
 http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
 http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
 	
+	<!-- Configuration Properties -->
+	<configuration-properties file="config.properties" doc:name="Configuration properties" doc:id="config-properties"/>
+	
+	<!-- Object Store Configuration for Circuit Breaker -->
+	<os:object-store name="Circuit_Breaker_Store" doc:name="Circuit Breaker Object Store" 
+		doc:id="circuit-breaker-store" persistent="true" maxEntries="1000" 
+		entryTtl="7" entryTtlUnit="DAYS"/>
 	
 	
 	<db:config name="H2_Database_Config" doc:name="H2 Database Config" doc:id="a05e160a-1bfc-412f-922e-5d570ea83313" >
@@ -51,5 +62,13 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
 	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="http-request-config">
 		<http:request-connection host="${notification.api.host}" port="${notification.api.port}" />
 	</http:request-config>
+	
+	<!-- Salesforce Configuration -->
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="salesforce-config">
+		<salesforce:basic-connection username="${salesforce.username}" 
+			password="${salesforce.password}" 
+			securityToken="${salesforce.security.token}" 
+			url="${salesforce.url:https://login.salesforce.com/services/Soap/u/60.0}"/>
+	</salesforce:sfdc-config>
         
 	</mule>

@@ -33,14 +33,10 @@ else
 		<set-variable value="#[now()]" doc:name="Set Processing Start Time" doc:id="c3d4e5f6-a7b8-9012-3456-789012cdefgh" variableName="processingStartTime"/>
 		<set-variable value="#[correlationId]" doc:name="Set Batch ID" doc:id="d4e5f6a7-b8c9-0123-4567-890123defghi" variableName="batchId"/>
 		
-		<!-- Start Batch Job -->
-		<batch:job jobName="flight-records-batch-job" doc:id="e5f6a7b8-c9d0-1234-5678-901234efghij">
-			
-			<!-- Input Phase: Split flight records -->
-			<batch:input doc:id="f6a7b8c9-d0e1-2345-6789-012345fghijk">
-				<ee:transform doc:name="Split Flight Records" doc:id="a7b8c9d0-e1f2-3456-7890-123456ghijkl">
-					<ee:message>
-						<ee:set-payload><![CDATA[%dw 2.0
+		<!-- Transform flight records for batch processing -->
+		<ee:transform doc:name="Prepare Flight Records for Batch" doc:id="a7b8c9d0-e1f2-3456-7890-123456ghijkl">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 payload.flights map ((flight, index) -> 
@@ -50,9 +46,11 @@ payload.flights map ((flight, index) ->
 		processingTimestamp: now()
 	}
 )]]></ee:set-payload>
-					</ee:message>
-				</ee:transform>
-			</batch:input>
+			</ee:message>
+		</ee:transform>
+		
+		<!-- Start Batch Job -->
+		<batch:job jobName="flight-records-batch-job" doc:id="e5f6a7b8-c9d0-1234-5678-901234efghij">
 			
 			<!-- Process Phase: Handle each flight record -->
 			<batch:process-records doc:id="b8c9d0e1-f2a3-4567-8901-234567hijklm">
@@ -404,14 +402,13 @@ vars.batchSummary.summary.failedRecords ++ " failed)"]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
 		
-		<email:send doc:name="Send Email Notification" doc:id="c3d4e5f6-a7b8-9012-3456-789012ghijkl" config-ref="Email_SMTP_Config">
+		<email:send doc:name="Send Email Notification" doc:id="c3d4e5f6-a7b8-9012-3456-789012ghijkl" config-ref="Email_SMTP_Config" subject="#[vars.emailSubject]">
 			<email:to-addresses>
 				<email:to-address value="${batch.notification.email}"/>
 			</email:to-addresses>
-			<email:subject>#[vars.emailSubject]</email:subject>
-			<email:content type="text/html" charset="UTF-8">
-				<email:body>#[payload]</email:body>
-			</email:content>
+			<email:body contentType="text/html; charset=UTF-8">
+				<email:content>#[payload]</email:content>
+			</email:body>
 		</email:send>
 		
 		<logger level="INFO" doc:name="Log Email Sent" doc:id="d4e5f6a7-b8c9-0123-4567-890123hijklm" message="Batch completion email notification sent successfully for batch: #[vars.batchSummary.batchId]"/>

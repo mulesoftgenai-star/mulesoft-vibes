@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+      xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+      xmlns:oauth2-provider="http://www.mulesoft.org/schema/mule/oauth2-provider"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+        http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+        http://www.mulesoft.org/schema/mule/oauth2-provider http://www.mulesoft.org/schema/mule/oauth2-provider/current/mule-oauth2-provider.xsd">
+
+    <!-- Secure Properties Configuration -->
+    <secure-properties:config name="Secure_Properties_Config" file="secure-properties-${mule.env}.yaml" key="${encryption.key}" />
+    
+    <!-- Configuration Properties -->
+    <configuration-properties file="config-${mule.env}.yaml" />
+
+    <!-- Global HTTP Request Configuration -->
+    <http:request-config name="HTTP_Request_Configuration">
+        <http:request-connection protocol="HTTPS" host="${api.host}" port="${api.port}">
+            <tls:context>
+                <tls:trust-store path="truststore.jks" password="${secure::truststore.password}" type="jks" />
+                <tls:key-store path="keystore.jks" password="${secure::keystore.password}" type="jks" keyPassword="${secure::key.password}" />
+            </tls:context>
+            <http:client-socket-properties>
+                <http:tcp-client-socket-properties connectionTimeout="${http.connection.timeout}" clientTimeout="${http.client.timeout}" />
+            </http:client-socket-properties>
+        </http:request-connection>
+    </http:request-config>
+
+    <!-- HTTP Listener Configuration for Experience Layer -->
+    <http:listener-config name="HTTP_Listener_Experience_Config">
+        <http:listener-connection host="${experience.host}" port="${experience.port}" protocol="HTTPS">
+            <tls:context>
+                <tls:key-store path="keystore.jks" password="${secure::keystore.password}" type="jks" keyPassword="${secure::key.password}" />
+            </tls:context>
+        </http:listener-connection>
+    </http:listener-config>
+
+    <!-- HTTP Listener Configuration for Process Layer -->
+    <http:listener-config name="HTTP_Listener_Process_Config">
+        <http:listener-connection host="${process.host}" port="${process.port}" protocol="HTTPS">
+            <tls:context>
+                <tls:key-store path="keystore.jks" password="${secure::keystore.password}" type="jks" keyPassword="${secure::key.password}" />
+            </tls:context>
+        </http:listener-connection>
+    </http:listener-config>
+
+    <!-- HTTP Listener Configuration for System Layer -->
+    <http:listener-config name="HTTP_Listener_System_Config">
+        <http:listener-connection host="${system.host}" port="${system.port}" protocol="HTTPS">
+            <tls:context>
+                <tls:key-store path="keystore.jks" password="${secure::keystore.password}" type="jks" keyPassword="${secure::key.password}" />
+            </tls:context>
+        </http:listener-connection>
+    </http:listener-config>
+
+    <!-- Global Variables -->
+    <global-property name="api.version" value="v2" />
+    <global-property name="api.name" value="order-management-integration" />
+    <global-property name="mule.env" value="dev" />
+
+    <!-- Object Store Configuration -->
+    <os:object-store name="orderStatusStore" persistent="true" maxEntries="10000" entryTtl="3600" />
+    
+    <!-- Correlation ID Configuration -->
+    <configuration defaultProcessorChainTimeout="300000" defaultTransactionTimeout="300000" />
+
+</mule>
