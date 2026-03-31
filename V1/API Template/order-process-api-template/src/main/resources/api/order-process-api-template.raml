@@ -1,0 +1,789 @@
+#%RAML 1.0
+title: Order Management Process API Template
+version: v1
+description: |
+  Process Layer API template for Order Management system orchestrating business processes.
+  This template follows MuleSoft's API-led connectivity pattern for the Process layer.
+  
+  Features:
+  - Business process orchestration
+  - Integration between Experience and System layers
+  - Business logic implementation
+  - Transaction management
+  - Process-specific validation and transformations
+  - Workflow coordination
+
+baseUri: https://api.{environment}.company.com/process/orders/{version}
+mediaType: application/json
+
+uses:
+  OrderTypes: ../datatypes/order-types.raml
+  ErrorTypes: ../datatypes/error-types.raml
+  SecurityTraits: ../traits/security-traits.raml
+
+traits:
+  processTracking:
+    headers:
+      X-Process-ID:
+        description: Unique identifier for process tracking
+        type: string
+        pattern: ^PROC-[A-Z0-9]{8}$
+        example: "PROC-12345ABC"
+        required: false
+    responses:
+      200:
+        headers:
+          X-Process-ID:
+            description: Process identifier for tracking
+            type: string
+          X-Process-Duration:
+            description: Process execution time in milliseconds
+            type: integer
+
+  retryable:
+    headers:
+      X-Retry-Count:
+        description: Number of retry attempts
+        type: integer
+        minimum: 0
+        maximum: 5
+        default: 0
+        required: false
+    responses:
+      503:
+        description: Service temporarily unavailable - retry recommended
+        headers:
+          Retry-After:
+            description: Seconds to wait before retrying
+            type: integer
+            example: 30
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/orders:
+  displayName: Order Process Management
+  description: Business process orchestration for order management
+  
+  post:
+    displayName: Create Order Process
+    description: |
+      Orchestrates the complete order creation process including:
+      - Customer validation
+      - Inventory allocation
+      - Payment authorization
+      - Order persistence
+      - Fulfillment initiation
+      - Notification dispatch
+    is: [SecurityTraits.client-credentials, processTracking, retryable]
+    body:
+      application/json:
+        type: OrderTypes.OrderRequest
+        example: |
+          {
+            "customerId": "CUST-12345ABC",
+            "orderType": "STANDARD",
+            "priority": "MEDIUM",
+            "items": [
+              {
+                "productId": "PROD-001ABCDE",
+                "quantity": 2,
+                "unitPrice": 149.99
+              }
+            ],
+            "shippingAddress": {
+              "firstName": "John",
+              "lastName": "Doe",
+              "addressLine1": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "postalCode": "10001",
+              "country": "US"
+            },
+            "paymentInfo": {
+              "paymentMethod": "CREDIT_CARD",
+              "cardToken": "tok_visa_4242"
+            },
+            "source": "WEB"
+          }
+    responses:
+      201:
+        description: Order process completed successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              processId:
+                type: string
+                pattern: ^PROC-[A-Z0-9]{8}$
+              order:
+                type: OrderTypes.Order
+              processSteps:
+                type: object
+                properties:
+                  customerValidation:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [SUCCESS, FAILED, SKIPPED]
+                      duration:
+                        type: integer
+                      timestamp:
+                        type: datetime-only
+                  inventoryCheck:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [SUCCESS, FAILED, SKIPPED]
+                      allocatedItems:
+                        type: object[]
+                      duration:
+                        type: integer
+                      timestamp:
+                        type: datetime-only
+                  paymentAuthorization:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [SUCCESS, FAILED, SKIPPED]
+                      transactionId:
+                        type: string
+                      duration:
+                        type: integer
+                      timestamp:
+                        type: datetime-only
+                  orderPersistence:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [SUCCESS, FAILED, SKIPPED]
+                      orderId:
+                        type: string
+                      duration:
+                        type: integer
+                      timestamp:
+                        type: datetime-only
+                  fulfillmentInitiation:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [SUCCESS, FAILED, SKIPPED]
+                      fulfillmentId:
+                        type: string
+                      duration:
+                        type: integer
+                      timestamp:
+                        type: datetime-only
+            example: |
+              {
+                "processId": "PROC-12345ABC",
+                "order": {
+                  "orderId": "ORD-2023A001",
+                  "orderNumber": "2023-000001",
+                  "customerId": "CUST-12345ABC",
+                  "orderStatus": "CONFIRMED",
+                  "totalAmount": 349.97
+                },
+                "processSteps": {
+                  "customerValidation": {
+                    "status": "SUCCESS",
+                    "duration": 150,
+                    "timestamp": "2023-12-01T10:30:01"
+                  },
+                  "inventoryCheck": {
+                    "status": "SUCCESS",
+                    "allocatedItems": [
+                      {"productId": "PROD-001ABCDE", "quantity": 2, "allocated": true}
+                    ],
+                    "duration": 300,
+                    "timestamp": "2023-12-01T10:30:02"
+                  },
+                  "paymentAuthorization": {
+                    "status": "SUCCESS",
+                    "transactionId": "TXN-ABC12345",
+                    "duration": 450,
+                    "timestamp": "2023-12-01T10:30:03"
+                  },
+                  "orderPersistence": {
+                    "status": "SUCCESS",
+                    "orderId": "ORD-2023A001",
+                    "duration": 100,
+                    "timestamp": "2023-12-01T10:30:04"
+                  },
+                  "fulfillmentInitiation": {
+                    "status": "SUCCESS",
+                    "fulfillmentId": "FUL-XYZ789",
+                    "duration": 200,
+                    "timestamp": "2023-12-01T10:30:05"
+                  }
+                }
+              }
+      400:
+        description: Invalid request data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      422:
+        description: Business process validation failed
+        body:
+          application/json:
+            type: ErrorTypes.BusinessErrorResponse
+            example: |
+              {
+                "title": "Business Process Error",
+                "status": 422,
+                "detail": "Order creation process failed at inventory allocation step",
+                "timestamp": "2023-12-01T10:30:00",
+                "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+                "businessErrorCode": "INSUFFICIENT_INVENTORY",
+                "businessContext": {
+                  "failedStep": "inventoryCheck",
+                  "unavailableItems": [
+                    {
+                      "productId": "PROD-001ABCDE",
+                      "requestedQuantity": 2,
+                      "availableQuantity": 1
+                    }
+                  ]
+                }
+              }
+      500:
+        description: Internal process error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  /{orderId}:
+    displayName: Order Process Operations
+    description: Process operations for existing orders
+    uriParameters:
+      orderId:
+        description: Order identifier
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        example: ORD-2023A001
+
+    /status:
+      patch:
+        displayName: Update Order Status Process
+        description: |
+          Orchestrates order status updates including:
+          - Status validation
+          - Business rule checks
+          - Downstream system updates
+          - Event notifications
+        is: [SecurityTraits.client-credentials, processTracking, retryable]
+        body:
+          application/json:
+            type: object
+            properties:
+              newStatus:
+                type: string
+                enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+                required: true
+              reason:
+                type: string
+                maxLength: 500
+                required: false
+              updatedBy:
+                type: string
+                required: true
+              metadata:
+                type: object
+                required: false
+            example: |
+              {
+                "newStatus": "SHIPPED",
+                "reason": "Order shipped via FedEx",
+                "updatedBy": "fulfillment-system",
+                "metadata": {
+                  "trackingNumber": "TRK-12345678",
+                  "carrier": "FEDEX",
+                  "shippedDate": "2023-12-02T09:15:00"
+                }
+              }
+        responses:
+          200:
+            description: Status update process completed
+            body:
+              application/json:
+                type: object
+                properties:
+                  processId:
+                    type: string
+                  orderId:
+                    type: string
+                  previousStatus:
+                    type: string
+                  newStatus:
+                    type: string
+                  processSteps:
+                    type: object
+                    properties:
+                      statusValidation:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED]
+                          validTransition:
+                            type: boolean
+                          duration:
+                            type: integer
+                      businessRuleCheck:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED]
+                          rulesEvaluated:
+                            type: string[]
+                          duration:
+                            type: integer
+                      systemUpdates:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED, PARTIAL]
+                          updatedSystems:
+                            type: string[]
+                          failedSystems:
+                            type: string[]
+                          duration:
+                            type: integer
+                      notifications:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED, PARTIAL]
+                          sentNotifications:
+                            type: string[]
+                          duration:
+                            type: integer
+          400:
+            description: Invalid status update request
+            body:
+              application/json:
+                type: ErrorTypes.ValidationErrorResponse
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+          409:
+            description: Invalid status transition
+            body:
+              application/json:
+                type: ErrorTypes.ConflictErrorResponse
+          422:
+            description: Business rule violation
+            body:
+              application/json:
+                type: ErrorTypes.BusinessErrorResponse
+
+    /cancel:
+      post:
+        displayName: Cancel Order Process
+        description: |
+          Orchestrates order cancellation including:
+          - Cancellation validation
+          - Inventory release
+          - Payment refund processing
+          - System updates
+          - Notifications
+        is: [SecurityTraits.client-credentials, processTracking, retryable]
+        body:
+          application/json:
+            type: object
+            properties:
+              reason:
+                type: string
+                enum: [CUSTOMER_REQUEST, INVENTORY_UNAVAILABLE, PAYMENT_FAILED, FRAUD_DETECTED, SYSTEM_ERROR]
+                required: true
+              notes:
+                type: string
+                maxLength: 1000
+                required: false
+              cancelledBy:
+                type: string
+                required: true
+              refundRequested:
+                type: boolean
+                default: true
+                required: false
+            example: |
+              {
+                "reason": "CUSTOMER_REQUEST",
+                "notes": "Customer changed mind about the order",
+                "cancelledBy": "customer-portal",
+                "refundRequested": true
+              }
+        responses:
+          200:
+            description: Cancellation process completed
+            body:
+              application/json:
+                type: object
+                properties:
+                  processId:
+                    type: string
+                  orderId:
+                    type: string
+                  cancellationStatus:
+                    type: string
+                    enum: [CANCELLED, PARTIALLY_CANCELLED, CANCELLATION_FAILED]
+                  processSteps:
+                    type: object
+                    properties:
+                      cancellationValidation:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          cancellable:
+                            type: boolean
+                          reason:
+                            type: string
+                      inventoryRelease:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          releasedItems:
+                            type: object[]
+                      paymentRefund:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED, SKIPPED]
+                          refundAmount:
+                            type: number
+                            format: double
+                          refundTransactionId:
+                            type: string
+                          duration:
+                            type: integer
+                      systemUpdates:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED, PARTIAL]
+                          updatedSystems:
+                            type: string[]
+                          duration:
+                            type: integer
+                      notifications:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, FAILED, PARTIAL]
+                          sentNotifications:
+                            type: string[]
+                          duration:
+                            type: integer
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+          409:
+            description: Order cannot be cancelled in current status
+            body:
+              application/json:
+                type: ErrorTypes.ConflictErrorResponse
+          422:
+            description: Business rule violation
+            body:
+              application/json:
+                type: ErrorTypes.BusinessErrorResponse
+
+/workflows:
+  displayName: Workflow Management
+  description: Business workflow orchestration and management
+
+  /order-fulfillment:
+    displayName: Order Fulfillment Workflow
+    description: Complete order fulfillment process orchestration
+    
+    post:
+      displayName: Start Order Fulfillment Workflow
+      description: |
+        Initiates comprehensive order fulfillment workflow including:
+        - Order validation and preparation
+        - Inventory allocation and picking
+        - Packaging and labeling
+        - Shipping carrier selection
+        - Tracking number generation
+        - Customer notifications
+      is: [SecurityTraits.secured-process-api, processTracking, retryable]
+      body:
+        application/json:
+          type: object
+          properties:
+            orderId:
+              type: string
+              pattern: ^ORD-[A-Z0-9]{8}$
+              required: true
+            priority:
+              type: string
+              enum: [LOW, MEDIUM, HIGH, URGENT]
+              default: MEDIUM
+              required: false
+            fulfillmentCenter:
+              type: string
+              required: false
+            specialInstructions:
+              type: string
+              maxLength: 500
+              required: false
+          example: |
+            {
+              "orderId": "ORD-2023A001",
+              "priority": "HIGH",
+              "fulfillmentCenter": "FC-EAST-001",
+              "specialInstructions": "Handle with care - fragile items"
+            }
+      responses:
+        202:
+          description: Fulfillment workflow initiated
+          body:
+            application/json:
+              type: object
+              properties:
+                workflowId:
+                  type: string
+                  pattern: ^WF-[A-Z0-9]{8}$
+                orderId:
+                  type: string
+                status:
+                  type: string
+                  enum: [INITIATED, IN_PROGRESS, COMPLETED, FAILED]
+                estimatedCompletion:
+                  type: datetime-only
+                steps:
+                  type: object
+                  properties:
+                    orderValidation:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+                        estimatedDuration:
+                          type: integer
+                    inventoryAllocation:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+                        estimatedDuration:
+                          type: integer
+                    picking:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+                        estimatedDuration:
+                          type: integer
+                    packaging:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+                        estimatedDuration:
+                          type: integer
+                    shipping:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+                        estimatedDuration:
+                          type: integer
+
+    /{workflowId}:
+      displayName: Workflow Instance Management
+      uriParameters:
+        workflowId:
+          description: Workflow instance identifier
+          type: string
+          pattern: ^WF-[A-Z0-9]{8}$
+          example: WF-12345ABC
+
+      get:
+        displayName: Get Workflow Status
+        description: Retrieve current status and progress of fulfillment workflow
+        is: [SecurityTraits.secured-process-api, processTracking]
+        responses:
+          200:
+            description: Workflow status retrieved successfully
+            body:
+              application/json:
+                type: object
+                properties:
+                  workflowId:
+                    type: string
+                  orderId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [INITIATED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+                  startTime:
+                    type: datetime-only
+                  endTime:
+                    type: datetime-only
+                  duration:
+                    type: integer
+                  progress:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  currentStep:
+                    type: string
+                  steps:
+                    type: object
+                  errors:
+                    type: object[]
+
+      patch:
+        displayName: Update Workflow
+        description: Update workflow status or parameters
+        is: [SecurityTraits.secured-process-api, processTracking]
+        body:
+          application/json:
+            type: object
+            properties:
+              action:
+                type: string
+                enum: [PAUSE, RESUME, CANCEL, RETRY]
+                required: true
+              reason:
+                type: string
+                maxLength: 500
+                required: false
+        responses:
+          200:
+            description: Workflow updated successfully
+          404:
+            description: Workflow not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+          409:
+            description: Invalid workflow state transition
+            body:
+              application/json:
+                type: ErrorTypes.ConflictErrorResponse
+
+/health:
+  displayName: Health Check
+  description: Process API health and dependency status
+  get:
+    displayName: Health Check
+    description: Returns process API health status and upstream dependencies
+    responses:
+      200:
+        description: Process API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime-only
+              version:
+                type: string
+              dependencies:
+                type: object
+                properties:
+                  customerSystemApi:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                  inventorySystemApi:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                  paymentSystemApi:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                  shippingSystemApi:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                  orderDatabase:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2023-12-01T10:30:00",
+                "version": "v1.0.0",
+                "dependencies": {
+                  "customerSystemApi": {
+                    "status": "UP",
+                    "responseTime": 89
+                  },
+                  "inventorySystemApi": {
+                    "status": "UP",
+                    "responseTime": 145
+                  },
+                  "paymentSystemApi": {
+                    "status": "UP",
+                    "responseTime": 234
+                  },
+                  "shippingSystemApi": {
+                    "status": "UP",
+                    "responseTime": 178
+                  },
+                  "orderDatabase": {
+                    "status": "UP",
+                    "responseTime": 45
+                  }
+                }
+              }
+      503:
+        description: Process API is unhealthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [DOWN, DEGRADED]
+              timestamp:
+                type: datetime-only
+              errors:
+                type: string[]

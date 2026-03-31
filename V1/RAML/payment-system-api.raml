@@ -1,0 +1,785 @@
+#%RAML 1.0
+title: Payment System API
+version: v1.0
+baseUri: https://api.paymentsystem.internal/{version}
+description: |
+  System API for Payment Processing System providing payment operations.
+  This API interfaces with payment gateways and provides payment processing services.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  PaymentTypes: order-management-api-fragments/src/main/resources/api/datatypes/payment-types.raml
+  ErrorTypes: order-management-api-fragments/src/main/resources/api/datatypes/error-types.raml
+  ApiLayerTypes: order-management-api-fragments/src/main/resources/api/datatypes/api-layer-types.raml
+  SecurityTraits: order-management-api-fragments/src/main/resources/api/traits/security-traits.raml
+
+traits:
+  apiKeyAuth: SecurityTraits.api-key-secured
+  systemLogged: SecurityTraits.audit-logged
+
+securitySchemes:
+  apiKey:
+    description: API Key authentication for system access
+    type: x-api-key
+    describedBy:
+      headers:
+        X-API-Key:
+          description: API Key for system authentication
+          type: string
+          example: "ak_1234567890abcdef1234567890abcdef12345678"
+          required: true
+        X-API-Secret:
+          description: API Secret for enhanced security
+          type: string
+          example: "as_abcdef1234567890abcdef1234567890abcdef12"
+          required: false
+      responses:
+        401:
+          description: Unauthorized - Invalid or missing API key
+        403:
+          description: Forbidden - Valid key but insufficient permissions
+
+/payments:
+  displayName: Payment Management
+  description: Payment processing operations for system integration
+  
+  post:
+    displayName: Process Payment
+    description: Process a payment authorization request
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: ApiLayerTypes.SystemPaymentAuthRequest
+        example: |
+          {
+            "transactionId": "TXN-12345678",
+            "orderId": "ORD-12345678",
+            "amount": 299.99,
+            "currency": "USD",
+            "paymentMethod": {
+              "type": "CREDIT_CARD",
+              "token": "tok_visa_4242424242424242",
+              "cardInfo": {
+                "maskedNumber": "************4242",
+                "expiryMonth": 12,
+                "expiryYear": 2028,
+                "cardType": "VISA"
+              }
+            },
+            "billingAddress": {
+              "firstName": "John",
+              "lastName": "Doe",
+              "addressLine1": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "postalCode": "10001",
+              "country": "US"
+            },
+            "merchantInfo": {
+              "merchantId": "MERCHANT-001",
+              "terminalId": "TERM-001"
+            }
+          }
+    responses:
+      200:
+        description: Payment authorization completed
+        body:
+          application/json:
+            type: ApiLayerTypes.SystemPaymentAuthResponse
+            example: |
+              {
+                "transactionId": "TXN-12345678",
+                "authorizationStatus": "APPROVED",
+                "authorizationCode": "AUTH123456",
+                "amount": 299.99,
+                "currency": "USD",
+                "processorTransactionId": "PROC-789456123",
+                "authorizationDate": "2024-03-24T16:30:00",
+                "expiryDate": "2024-03-31T16:30:00",
+                "avsResult": "MATCH",
+                "cvvResult": "MATCH"
+              }
+      400:
+        description: Invalid payment request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      402:
+        description: Payment declined
+        body:
+          application/json:
+            type: ErrorTypes.BusinessErrorResponse
+            example: |
+              {
+                "type": "https://api.paymentsystem.internal/problems/payment-declined",
+                "title": "Payment Declined",
+                "status": 402,
+                "detail": "The payment was declined by the issuing bank",
+                "timestamp": "2024-03-24T16:30:00",
+                "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+                "businessErrorCode": "PAYMENT_DECLINED",
+                "businessContext": {
+                  "declineReason": "INSUFFICIENT_FUNDS",
+                  "processorCode": "51"
+                }
+              }
+      500:
+        description: Payment processing error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  get:
+    displayName: List Payments
+    description: Retrieve payment records with filtering and pagination
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      orderId?:
+        type: string
+        description: Filter by order ID
+        pattern: ^ORD-[A-Z0-9]{8}$
+      customerId?:
+        type: string
+        description: Filter by customer ID
+        pattern: ^CUST-[A-Z0-9]{8}$
+      status?:
+        type: string[]
+        enum: [PENDING, AUTHORIZED, CAPTURED, SETTLED, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED, DISPUTED]
+        description: Filter by payment status
+      paymentMethod?:
+        type: string[]
+        enum: [CREDIT_CARD, DEBIT_CARD, BANK_ACCOUNT, DIGITAL_WALLET, PAYPAL, APPLE_PAY, GOOGLE_PAY, GIFT_CARD, STORE_CREDIT, CRYPTOCURRENCY]
+        description: Filter by payment method
+      dateFrom?:
+        type: date-only
+        description: Filter payments from date
+      dateTo?:
+        type: date-only
+        description: Filter payments to date
+      amountMin?:
+        type: number
+        minimum: 0
+        description: Minimum payment amount
+      amountMax?:
+        type: number
+        minimum: 0
+        description: Maximum payment amount
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of payments to return
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+        description: Number of payments to skip
+    responses:
+      200:
+        description: Successfully retrieved payments
+        body:
+          application/json:
+            type: PaymentTypes.PaymentSummary[]
+            example: |
+              [
+                {
+                  "paymentId": "PAY-12345678",
+                  "orderId": "ORD-12345678",
+                  "customerId": "CUST-12345678",
+                  "amount": 299.99,
+                  "currency": "USD",
+                  "paymentMethod": "CREDIT_CARD",
+                  "status": "AUTHORIZED",
+                  "createdDate": "2024-03-24T16:30:00",
+                  "lastFourDigits": "4242"
+                }
+              ]
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+/payments/{paymentId}:
+  displayName: Payment Details
+  uriParameters:
+    paymentId:
+      type: string
+      description: Unique payment identifier
+      pattern: ^PAY-[A-Z0-9]{8}$
+      example: "PAY-12345678"
+  
+  get:
+    displayName: Get Payment Details
+    description: Retrieve detailed payment information
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    responses:
+      200:
+        description: Payment details retrieved successfully
+        body:
+          application/json:
+            type: PaymentTypes.PaymentInfo
+            example: |
+              {
+                "paymentId": "PAY-12345678",
+                "paymentMethod": "CREDIT_CARD",
+                "amount": 299.99,
+                "currency": "USD",
+                "status": "AUTHORIZED",
+                "transactionId": "TXN-12345678",
+                "authorizationCode": "AUTH123456",
+                "merchantId": "MERCHANT-001",
+                "orderId": "ORD-12345678",
+                "customerId": "CUST-12345678",
+                "billingAddress": {
+                  "firstName": "John",
+                  "lastName": "Doe",
+                  "addressLine1": "123 Main St",
+                  "city": "New York",
+                  "state": "NY",
+                  "postalCode": "10001",
+                  "country": "US"
+                },
+                "paymentDetails": {
+                  "cardType": "VISA",
+                  "lastFourDigits": "4242",
+                  "expiryMonth": 12,
+                  "expiryYear": 2028,
+                  "cardholderName": "John Doe"
+                },
+                "createdDate": "2024-03-24T16:30:00",
+                "processedDate": "2024-03-24T16:30:15"
+              }
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.AuthenticationErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/payments/{paymentId}/capture:
+  displayName: Capture Payment
+  uriParameters:
+    paymentId:
+      type: string
+      description: Unique payment identifier
+      pattern: ^PAY-[A-Z0-9]{8}$
+  
+  post:
+    displayName: Capture Authorized Payment
+    description: Capture a previously authorized payment
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: object
+        properties:
+          amount?:
+            type: number
+            minimum: 0
+            description: Amount to capture (partial capture allowed)
+          finalCapture?:
+            type: boolean
+            default: true
+            description: Whether this is the final capture
+          captureReason?:
+            type: string
+            maxLength: 200
+            description: Reason for capture
+        example: |
+          {
+            "amount": 299.99,
+            "finalCapture": true,
+            "captureReason": "Order shipped"
+          }
+    responses:
+      200:
+        description: Payment captured successfully
+        body:
+          application/json:
+            type: PaymentTypes.PaymentResponse
+            example: |
+              {
+                "paymentId": "PAY-12345678",
+                "status": "SUCCESS",
+                "transactionId": "TXN-12345678",
+                "authorizationCode": "AUTH123456",
+                "amount": 299.99,
+                "currency": "USD",
+                "processedDate": "2024-03-24T16:45:00",
+                "message": "Payment captured successfully"
+              }
+      400:
+        description: Invalid capture request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      409:
+        description: Payment cannot be captured (wrong status)
+        body:
+          application/json:
+            type: ErrorTypes.ConflictErrorResponse
+      500:
+        description: Capture processing error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/payments/{paymentId}/void:
+  displayName: Void Payment
+  uriParameters:
+    paymentId:
+      type: string
+      description: Unique payment identifier
+      pattern: ^PAY-[A-Z0-9]{8}$
+  
+  post:
+    displayName: Void Authorized Payment
+    description: Void a previously authorized payment
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: object
+        properties:
+          voidReason:
+            type: string
+            enum: [CUSTOMER_REQUEST, ORDER_CANCELLED, DUPLICATE_TRANSACTION, FRAUDULENT_TRANSACTION, OTHER]
+            description: Reason for voiding payment
+            required: true
+          notes?:
+            type: string
+            maxLength: 500
+            description: Additional notes
+        example: |
+          {
+            "voidReason": "ORDER_CANCELLED",
+            "notes": "Customer cancelled order before shipment"
+          }
+    responses:
+      200:
+        description: Payment voided successfully
+        body:
+          application/json:
+            type: PaymentTypes.PaymentResponse
+            example: |
+              {
+                "paymentId": "PAY-12345678",
+                "status": "SUCCESS",
+                "transactionId": "TXN-12345678",
+                "amount": 299.99,
+                "currency": "USD",
+                "processedDate": "2024-03-24T16:45:00",
+                "message": "Payment voided successfully"
+              }
+      400:
+        description: Invalid void request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      409:
+        description: Payment cannot be voided (wrong status)
+        body:
+          application/json:
+            type: ErrorTypes.ConflictErrorResponse
+      500:
+        description: Void processing error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/payments/{paymentId}/refund:
+  displayName: Refund Payment
+  uriParameters:
+    paymentId:
+      type: string
+      description: Unique payment identifier
+      pattern: ^PAY-[A-Z0-9]{8}$
+  
+  post:
+    displayName: Refund Payment
+    description: Process a refund for a captured payment
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: PaymentTypes.RefundRequest
+        example: |
+          {
+            "paymentId": "PAY-12345678",
+            "orderId": "ORD-12345678",
+            "amount": 299.99,
+            "currency": "USD",
+            "reason": "CUSTOMER_REQUEST",
+            "description": "Customer not satisfied with product quality",
+            "requestedBy": "CUSTOMER_SERVICE"
+          }
+    responses:
+      200:
+        description: Refund processed successfully
+        body:
+          application/json:
+            type: PaymentTypes.RefundResponse
+            example: |
+              {
+                "refundId": "REF-12345678",
+                "paymentId": "PAY-12345678",
+                "status": "SUCCESS",
+                "amount": 299.99,
+                "currency": "USD",
+                "transactionId": "REFUND-789456",
+                "processedDate": "2024-03-24T16:45:00",
+                "expectedSettlement": "2024-03-27",
+                "message": "Refund processed successfully"
+              }
+      400:
+        description: Invalid refund request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      409:
+        description: Payment cannot be refunded
+        body:
+          application/json:
+            type: ErrorTypes.ConflictErrorResponse
+      500:
+        description: Refund processing error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/payments/refunds:
+  displayName: Refund Management
+  description: Refund operations and history
+  
+  get:
+    displayName: List Refunds
+    description: Retrieve refund records with filtering
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      paymentId?:
+        type: string
+        pattern: ^PAY-[A-Z0-9]{8}$
+        description: Filter by payment ID
+      orderId?:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        description: Filter by order ID
+      status?:
+        type: string[]
+        enum: [SUCCESS, FAILED, PENDING, DECLINED, ERROR]
+        description: Filter by refund status
+      dateFrom?:
+        type: date-only
+        description: Filter refunds from date
+      dateTo?:
+        type: date-only
+        description: Filter refunds to date
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+    responses:
+      200:
+        description: Successfully retrieved refunds
+        body:
+          application/json:
+            type: object
+            properties:
+              refunds:
+                type: PaymentTypes.RefundResponse[]
+              totalCount:
+                type: integer
+              hasMore:
+                type: boolean
+            example: |
+              {
+                "refunds": [
+                  {
+                    "refundId": "REF-12345678",
+                    "paymentId": "PAY-12345678",
+                    "status": "SUCCESS",
+                    "amount": 299.99,
+                    "currency": "USD",
+                    "processedDate": "2024-03-24T16:45:00"
+                  }
+                ],
+                "totalCount": 1,
+                "hasMore": false
+              }
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+/payments/transactions:
+  displayName: Transaction History
+  description: Payment transaction history and audit trail
+  
+  get:
+    displayName: Get Transaction History
+    description: Retrieve payment transaction history
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      paymentId?:
+        type: string
+        pattern: ^PAY-[A-Z0-9]{8}$
+        description: Filter by payment ID
+      orderId?:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        description: Filter by order ID
+      transactionType?:
+        type: string[]
+        enum: [AUTHORIZATION, CAPTURE, VOID, REFUND, CHARGEBACK]
+        description: Filter by transaction type
+      dateFrom?:
+        type: datetime-only
+        description: Filter transactions from date/time
+      dateTo?:
+        type: datetime-only
+        description: Filter transactions to date/time
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+    responses:
+      200:
+        description: Transaction history retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              transactions:
+                type: object[]
+                properties:
+                  transactionId:
+                    type: string
+                  paymentId:
+                    type: string
+                  transactionType:
+                    type: string
+                    enum: [AUTHORIZATION, CAPTURE, VOID, REFUND, CHARGEBACK]
+                  amount:
+                    type: number
+                  currency:
+                    type: string
+                  status:
+                    type: string
+                  timestamp:
+                    type: datetime-only
+                  processorResponse:
+                    type: object
+              totalCount:
+                type: integer
+            example: |
+              {
+                "transactions": [
+                  {
+                    "transactionId": "TXN-12345678",
+                    "paymentId": "PAY-12345678",
+                    "transactionType": "AUTHORIZATION",
+                    "amount": 299.99,
+                    "currency": "USD",
+                    "status": "SUCCESS",
+                    "timestamp": "2024-03-24T16:30:00"
+                  }
+                ],
+                "totalCount": 1
+              }
+      400:
+        description: Invalid query parameters
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      500:
+        description: Transaction service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/payments/verify:
+  displayName: Payment Verification
+  description: Verify payment information and status
+  
+  post:
+    displayName: Verify Payment
+    description: Verify payment details and current status
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: object
+        properties:
+          paymentId?:
+            type: string
+            pattern: ^PAY-[A-Z0-9]{8}$
+            description: Payment ID to verify
+          transactionId?:
+            type: string
+            description: Transaction ID to verify
+          processorTransactionId?:
+            type: string
+            description: Processor transaction ID to verify
+          verificationLevel:
+            type: string
+            enum: [BASIC, DETAILED, COMPREHENSIVE]
+            default: BASIC
+            description: Level of verification to perform
+        example: |
+          {
+            "paymentId": "PAY-12345678",
+            "verificationLevel": "COMPREHENSIVE"
+          }
+    responses:
+      200:
+        description: Payment verification completed
+        body:
+          application/json:
+            type: object
+            properties:
+              paymentId:
+                type: string
+              verificationStatus:
+                type: string
+                enum: [VERIFIED, NOT_FOUND, MISMATCH, ERROR]
+              currentStatus:
+                type: string
+              verificationDetails:
+                type: object
+              lastUpdated:
+                type: datetime-only
+            example: |
+              {
+                "paymentId": "PAY-12345678",
+                "verificationStatus": "VERIFIED",
+                "currentStatus": "CAPTURED",
+                "verificationDetails": {
+                  "authorizationValid": true,
+                  "amountMatches": true,
+                  "statusConsistent": true
+                },
+                "lastUpdated": "2024-03-24T16:30:00"
+              }
+      400:
+        description: Invalid verification request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Payment not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Verification service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/health:
+  displayName: Health Check
+  description: Payment System API health status
+  
+  get:
+    displayName: Health Check
+    description: Check API and payment processor connectivity
+    responses:
+      200:
+        description: System is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-24T16:30:00Z",
+                "version": "1.0.0",
+                "checks": {
+                  "database": "UP",
+                  "paymentProcessor": "UP",
+                  "fraudService": "UP",
+                  "tokenVault": "UP"
+                },
+                "metrics": {
+                  "totalPayments": 15420,
+                  "successRate": 98.5,
+                  "averageProcessingTime": 1.2
+                }
+              }
+      503:
+        description: System is unhealthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-03-24T16:30:00Z",
+                "version": "1.0.0",
+                "checks": {
+                  "database": "UP",
+                  "paymentProcessor": "DOWN",
+                  "fraudService": "DEGRADED",
+                  "tokenVault": "UP"
+                },
+                "errors": [
+                  {
+                    "component": "paymentProcessor",
+                    "error

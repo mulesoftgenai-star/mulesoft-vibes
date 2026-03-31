@@ -1,0 +1,476 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:db="http://www.mulesoft.org/schema/mule/db" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+                          http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd">
+
+    <!-- Order Experience API Main Flow -->
+    <flow name="order-experience-api-main" doc:id="order-experience-api-main">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders" allowedMethods="POST,GET" doc:name="HTTP Listener - Orders Collection" doc:id="http-listener-orders"/>
+        
+        <!-- Set correlation ID for tracking -->
+        <flow-ref name="set-correlation-id" doc:name="Set Correlation ID" doc:id="set-correlation-id"/>
+        
+        <!-- Route based on HTTP Method -->
+        <choice doc:name="Route based on HTTP Method" doc:id="route-by-method">
+            <when expression="#[attributes.method == 'POST']">
+                <flow-ref name="create-order-flow" doc:name="Create Order" doc:id="create-order-ref"/>
+            </when>
+            <when expression="#[attributes.method == 'GET']">
+                <flow-ref name="list-orders-flow" doc:name="List Orders" doc:id="list-orders-ref"/>
+            </when>
+            <otherwise>
+                <raise-error type="HTTP:METHOD_NOT_ALLOWED" description="HTTP method not supported" doc:name="Method Not Allowed" doc:id="method-not-allowed"/>
+            </otherwise>
+        </choice>
+        
+        <error-handler ref="global-error-handler-experience" doc:name="Experience API Error Handler" doc:id="experience-api-error-handler"/>
+    </flow>
+
+    <!-- Individual Order Operations Flow -->
+    <flow name="order-experience-api-individual" doc:id="order-experience-api-individual">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders/{orderId}" allowedMethods="GET,PATCH,DELETE" doc:name="HTTP Listener - Individual Order" doc:id="http-listener-individual-order"/>
+        
+        <!-- Set correlation ID for tracking -->
+        <flow-ref name="set-correlation-id" doc:name="Set Correlation ID" doc:id="set-correlation-id-individual"/>
+        
+        <!-- Extract order ID from URI parameters -->
+        <set-variable value="#[attributes.uriParams.orderId]" variableName="orderId" doc:name="Extract Order ID" doc:id="extract-order-id"/>
+        
+        <!-- Route based on HTTP Method -->
+        <choice doc:name="Route Individual Order Operations" doc:id="route-individual-operations">
+            <when expression="#[attributes.method == 'GET']">
+                <flow-ref name="get-order-details-flow" doc:name="Get Order Details" doc:id="get-order-details-ref"/>
+            </when>
+            <when expression="#[attributes.method == 'PATCH']">
+                <flow-ref name="update-order-flow" doc:name="Update Order" doc:id="update-order-ref"/>
+            </when>
+            <when expression="#[attributes.method == 'DELETE']">
+                <flow-ref name="cancel-order-flow" doc:name="Cancel Order" doc:id="cancel-order-ref"/>
+            </when>
+            <otherwise>
+                <raise-error type="HTTP:METHOD_NOT_ALLOWED" description="HTTP method not supported" doc:name="Method Not Allowed Individual" doc:id="method-not-allowed-individual"/>
+            </otherwise>
+        </choice>
+        
+        <error-handler ref="global-error-handler-experience" doc:name="Experience API Error Handler Individual" doc:id="experience-api-error-handler-individual"/>
+    </flow>
+
+    <!-- Create Order Flow -->
+    <flow name="create-order-flow" doc:id="create-order-flow">
+        <logger level="INFO" doc:name="Log Create Order Request" doc:id="log-create-order-request" 
+                message="Creating new order - Correlation ID: #[vars.correlationId], Customer ID: #[payload.customerId default 'unknown']"/>
+        
+        <!-- Validate request payload -->
+        <flow-ref name="validate-create-order-request" doc:name="Validate Create Order Request" doc:id="validate-create-order-request"/>
+        
+        <!-- Transform to Process API format -->
+        <ee:transform doc:name="Transform to Process API Format" doc:id="transform-to-process-api">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: uuid(),
+    customerId: payload.customerId,
+    orderDate: now(),
+    items: payload.items map (item, index) -> {
+        lineItemId: "LINE-" ++ (index + 1),
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.quantity * item.unitPrice
+    },
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress default payload.shippingAddress,
+    paymentMethod: payload.paymentMethod,
+    totalAmount: sum(payload.items map ($.quantity * $.unitPrice)),
+    currency: payload.currency default "USD",
+    priority: payload.priority default "NORMAL",
+    source: "EXPERIENCE_API",
+    requestId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Order Process API -->
+        <http:request method="POST" url="${order.process.api.url}/orders" config-ref="Order_Process_API_Config" doc:name="Call Order Process API" doc:id="call-order-process-api">
+            <http:headers><![CDATA[#[{
+                "Content-Type": "application/json",
+                "x-correlation-id": vars.correlationId,
+                "client_id": p('order.process.api.client.id'),
+                "client_secret": p('order.process.api.client.secret')
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform response to Experience API format -->
+        <ee:transform doc:name="Transform Response to Experience API Format" doc:id="transform-response-experience">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    customerId: payload.customerId,
+    orderDate: payload.orderDate,
+    status: payload.status default "PENDING",
+    totalAmount: payload.totalAmount,
+    currency: payload.currency,
+    items: payload.items map {
+        productId: $.productId,
+        productName: $.productName default "",
+        quantity: $.quantity,
+        unitPrice: $.unitPrice,
+        totalPrice: $.totalPrice
+    },
+    shippingAddress: payload.shippingAddress,
+    paymentMethod: payload.paymentMethod,
+    estimatedDeliveryDate: payload.estimatedDeliveryDate,
+    trackingNumber: payload.trackingNumber,
+    createdAt: now(),
+    links: {
+        self: "/orders/" ++ payload.orderId,
+        tracking: "/orders/" ++ payload.orderId ++ "/tracking"
+    }
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus"><![CDATA[201]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Created" doc:id="log-order-created" 
+                message="Order created successfully - Order ID: #[payload.orderId], Correlation ID: #[vars.correlationId]"/>
+    </flow>
+
+    <!-- Get Order Details Flow -->
+    <flow name="get-order-details-flow" doc:id="get-order-details-flow">
+        <logger level="INFO" doc:name="Log Get Order Request" doc:id="log-get-order-request" 
+                message="Retrieving order details - Order ID: #[vars.orderId], Correlation ID: #[vars.correlationId]"/>
+        
+        <!-- Call Order Process API to get order details -->
+        <http:request method="GET" url="${order.process.api.url}/orders/{orderId}" config-ref="Order_Process_API_Config" doc:name="Get Order from Process API" doc:id="get-order-from-process-api">
+            <http:uri-params><![CDATA[#[{
+                "orderId": vars.orderId
+            }]]]></http:uri-params>
+            <http:headers><![CDATA[#[{
+                "x-correlation-id": vars.correlationId,
+                "client_id": p('order.process.api.client.id'),
+                "client_secret": p('order.process.api.client.secret')
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform response to Experience API format -->
+        <ee:transform doc:name="Transform Order Details Response" doc:id="transform-order-details-response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    orderNumber: payload.orderNumber default payload.orderId,
+    customerId: payload.customerId,
+    orderDate: payload.orderDate,
+    status: payload.status,
+    statusHistory: payload.statusHistory default [],
+    totalAmount: payload.totalAmount,
+    currency: payload.currency default "USD",
+    items: payload.items map {
+        lineItemId: $.lineItemId,
+        productId: $.productId,
+        productName: $.productName default "",
+        sku: $.sku default "",
+        quantity: $.quantity,
+        unitPrice: $.unitPrice,
+        totalPrice: $.totalPrice
+    },
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress,
+    paymentMethod: payload.paymentMethod,
+    paymentStatus: payload.paymentStatus default "PENDING",
+    shippingInfo: {
+        method: payload.shippingMethod default "STANDARD",
+        trackingNumber: payload.trackingNumber,
+        estimatedDeliveryDate: payload.estimatedDeliveryDate,
+        actualDeliveryDate: payload.actualDeliveryDate
+    },
+    createdAt: payload.orderDate,
+    updatedAt: payload.lastUpdated default payload.orderDate,
+    links: {
+        self: "/orders/" ++ payload.orderId,
+        tracking: "/orders/" ++ payload.orderId ++ "/tracking",
+        cancel: "/orders/" ++ payload.orderId
+    }
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus"><![CDATA[200]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Retrieved" doc:id="log-order-retrieved" 
+                message="Order details retrieved successfully - Order ID: #[payload.orderId], Status: #[payload.status]"/>
+    </flow>
+
+    <!-- List Orders Flow -->
+    <flow name="list-orders-flow" doc:id="list-orders-flow">
+        <logger level="INFO" doc:name="Log List Orders Request" doc:id="log-list-orders-request" 
+                message="Retrieving orders list - Correlation ID: #[vars.correlationId]"/>
+        
+        <!-- Extract query parameters -->
+        <set-variable value="#[attributes.queryParams.customerId default '']" variableName="customerId" doc:name="Extract Customer ID" doc:id="extract-customer-id"/>
+        <set-variable value="#[attributes.queryParams.status default '']" variableName="status" doc:name="Extract Status" doc:id="extract-status"/>
+        <set-variable value="#[attributes.queryParams.limit default '20']" variableName="limit" doc:name="Extract Limit" doc:id="extract-limit"/>
+        <set-variable value="#[attributes.queryParams.offset default '0']" variableName="offset" doc:name="Extract Offset" doc:id="extract-offset"/>
+        
+        <!-- Call Order Process API to list orders -->
+        <http:request method="GET" url="${order.process.api.url}/orders" config-ref="Order_Process_API_Config" doc:name="List Orders from Process API" doc:id="list-orders-from-process-api">
+            <http:query-params><![CDATA[#[{
+                "customerId": vars.customerId,
+                "status": vars.status,
+                "limit": vars.limit,
+                "offset": vars.offset
+            }]]]></http:query-params>
+            <http:headers><![CDATA[#[{
+                "x-correlation-id": vars.correlationId,
+                "client_id": p('order.process.api.client.id'),
+                "client_secret": p('order.process.api.client.secret')
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform response to Experience API format -->
+        <ee:transform doc:name="Transform Orders List Response" doc:id="transform-orders-list-response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orders: payload.orders map {
+        orderId: $.orderId,
+        orderNumber: $.orderNumber default $.orderId,
+        customerId: $.customerId,
+        orderDate: $.orderDate,
+        status: $.status,
+        totalAmount: $.totalAmount,
+        currency: $.currency default "USD",
+        itemCount: sizeOf($.items default []),
+        estimatedDeliveryDate: $.estimatedDeliveryDate,
+        links: {
+            self: "/orders/" ++ $.orderId,
+            details: "/orders/" ++ $.orderId
+        }
+    },
+    pagination: {
+        totalItems: payload.totalItems default 0,
+        totalPages: payload.totalPages default 1,
+        currentPage: (vars.offset as Number / vars.limit as Number) + 1,
+        pageSize: vars.limit as Number,
+        hasNext: payload.hasNext default false,
+        hasPrevious: (vars.offset as Number) > 0
+    },
+    filters: {
+        customerId: if (vars.customerId != "") vars.customerId else null,
+        status: if (vars.status != "") vars.status else null
+    }
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">200</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Orders Listed" doc:id="log-orders-listed" 
+                message="Orders list retrieved successfully - Count: #[sizeOf(payload.orders)], Correlation ID: #[vars.correlationId]"/>
+    </flow>
+
+    <!-- Update Order Flow -->
+    <flow name="update-order-flow" doc:id="update-order-flow">
+        <logger level="INFO" doc:name="Log Update Order Request" doc:id="log-update-order-request" 
+                message="Updating order - Order ID: #[vars.orderId], Correlation ID: #[vars.correlationId]"/>
+        
+        <!-- Validate update request -->
+        <flow-ref name="validate-update-order-request" doc:name="Validate Update Request" doc:id="validate-update-request"/>
+        
+        <!-- Transform to Process API format -->
+        <ee:transform doc:name="Transform Update Request" doc:id="transform-update-request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderId,
+    shippingAddress: payload.shippingAddress,
+    billingAddress: payload.billingAddress,
+    paymentMethod: payload.paymentMethod,
+    specialInstructions: payload.specialInstructions,
+    updatedBy: "EXPERIENCE_API",
+    updateReason: payload.updateReason default "Customer requested update",
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Order Process API to update order -->
+        <http:request method="PATCH" url="${order.process.api.url}/orders/{orderId}" config-ref="Order_Process_API_Config" doc:name="Update Order via Process API" doc:id="update-order-via-process-api">
+            <http:uri-params><![CDATA[#[{
+                "orderId": vars.orderId
+            }]]]></http:uri-params>
+            <http:headers><![CDATA[#[{
+                "Content-Type": "application/json",
+                "x-correlation-id": vars.correlationId,
+                "client_id": p('order.process.api.client.id'),
+                "client_secret": p('order.process.api.client.secret')
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform response -->
+        <ee:transform doc:name="Transform Update Response" doc:id="transform-update-response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: payload.status,
+    message: "Order updated successfully",
+    updatedFields: payload.updatedFields default [],
+    updatedAt: now(),
+    links: {
+        self: "/orders/" ++ payload.orderId,
+        details: "/orders/" ++ payload.orderId
+    }
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">200</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Updated" doc:id="log-order-updated" 
+                message="Order updated successfully - Order ID: #[payload.orderId], Correlation ID: #[vars.correlationId]"/>
+    </flow>
+
+    <!-- Cancel Order Flow -->
+    <flow name="cancel-order-flow" doc:id="cancel-order-flow">
+        <logger level="INFO" doc:name="Log Cancel Order Request" doc:id="log-cancel-order-request" 
+                message="Cancelling order - Order ID: #[vars.orderId], Correlation ID: #[vars.correlationId]"/>
+        
+        <!-- Transform cancellation request -->
+        <ee:transform doc:name="Transform Cancellation Request" doc:id="transform-cancellation-request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderId,
+    cancelReason: payload.cancelReason default "Customer requested cancellation",
+    cancelledBy: "EXPERIENCE_API",
+    correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <!-- Call Order Process API to cancel order -->
+        <http:request method="DELETE" url="${order.process.api.url}/orders/{orderId}" config-ref="Order_Process_API_Config" doc:name="Cancel Order via Process API" doc:id="cancel-order-via-process-api">
+            <http:uri-params><![CDATA[#[{
+                "orderId": vars.orderId
+            }]]]></http:uri-params>
+            <http:headers><![CDATA[#[{
+                "Content-Type": "application/json",
+                "x-correlation-id": vars.correlationId,
+                "client_id": p('order.process.api.client.id'),
+                "client_secret": p('order.process.api.client.secret')
+            }]]]></http:headers>
+        </http:request>
+        
+        <!-- Transform cancellation response -->
+        <ee:transform doc:name="Transform Cancellation Response" doc:id="transform-cancellation-response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: payload.orderId,
+    status: "CANCELLED",
+    message: "Order cancelled successfully",
+    cancelledAt: now(),
+    refundAmount: payload.refundAmount default 0,
+    refundStatus: payload.refundStatus default "PENDING",
+    links: {
+        details: "/orders/" ++ payload.orderId
+    }
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">200</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        
+        <logger level="INFO" doc:name="Log Order Cancelled" doc:id="log-order-cancelled" 
+                message="Order cancelled successfully - Order ID: #[payload.orderId], Correlation ID: #[vars.correlationId]"/>
+    </flow>
+
+    <!-- Validation Sub-flows -->
+    <sub-flow name="validate-create-order-request" doc:id="validate-create-order-request">
+        <choice doc:name="Validate Create Order Payload" doc:id="validate-create-order-payload">
+            <when expression="#[payload.customerId == null or payload.customerId == &quot;&quot;]">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="Customer ID is required" doc:name="Customer ID Required" doc:id="customer-id-required"/>
+            </when>
+            <when expression="#[payload.items == null or sizeOf(payload.items) == 0]">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="Order items are required" doc:name="Order Items Required" doc:id="order-items-required"/>
+            </when>
+            <when expression="#[payload.shippingAddress == null]">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="Shipping address is required" doc:name="Shipping Address Required" doc:id="shipping-address-required"/>
+            </when>
+            <when expression="#[payload.paymentMethod == null]">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="Payment method is required" doc:name="Payment Method Required" doc:id="payment-method-required"/>
+            </when>
+        </choice>
+        
+        <!-- Validate items -->
+        <foreach collection="#[payload.items]" doc:name="Validate Each Item" doc:id="validate-each-item">
+            <choice doc:name="Validate Item Fields" doc:id="validate-item-fields">
+                <when expression="#[payload.productId == null or payload.productId == '']">
+                    <raise-error type="BUSINESS:VALIDATION_ERROR" description="Product ID is required for all items" doc:name="Product ID Required" doc:id="product-id-required"/>
+                </when>
+                <when expression="#[payload.quantity == null or payload.quantity <= 0]">
+                    <raise-error type="BUSINESS:VALIDATION_ERROR" description="Valid quantity is required for all items" doc:name="Quantity Required" doc:id="quantity-required"/>
+                </when>
+                <when expression="#[payload.unitPrice == null or payload.unitPrice <= 0]">
+                    <raise-error type="BUSINESS:VALIDATION_ERROR" description="Valid unit price is required for all items" doc:name="Unit Price Required" doc:id="unit-price-required"/>
+                </when>
+            </choice>
+        </foreach>
+    </sub-flow>
+
+    <sub-flow name="validate-update-order-request" doc:id="validate-update-order-request">
+        <choice doc:name="Validate Update Fields" doc:id="validate-update-fields">
+            <when expression="#[payload.shippingAddress == null and payload.billingAddress == null and payload.paymentMethod == null]">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="At least one field must be provided for update" doc:name="Update Fields Required" doc:id="update-fields-required"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <!-- Correlation ID Helper Sub-flow -->
+    <sub-flow name="set-correlation-id" doc:id="set-correlation-id-subflow">
+        <choice doc:name="Check Correlation ID" doc:id="check-correlation-id-subflow">
+            <when expression="#[attributes.headers['x-correlation-id'] != null]">
+                <set-variable value="#[attributes.headers['x-correlation-id']]" variableName="correlationId" doc:name="Use Existing Correlation ID" doc:id="use-existing-correlation-id-subflow"/>
+            </when>
+            <otherwise>
+                <set-variable value="#[uuid()]" variableName="correlationId" doc:name="Generate New Correlation ID" doc:id="generate-new-correlation-id-subflow"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+
+</mule>

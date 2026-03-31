@@ -1,0 +1,709 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains data types for Customer Management within Order Management APIs.
+  It defines Customer, CustomerProfile, and related structures for Experience, Process, and System layer APIs.
+
+types:
+  Customer:
+    displayName: Customer
+    description: Complete customer information including profile, preferences, and contact details
+    type: object
+    properties:
+      customerId:
+        type: string
+        description: Unique customer identifier
+        pattern: ^CUST-[A-Z0-9]{8}$
+        example: CUST-87654321
+        required: true
+      customerNumber:
+        type: string
+        description: Human-readable customer number
+        example: "CUST-2024-000001"
+        required: true
+      customerType:
+        type: string
+        description: Type of customer
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        example: INDIVIDUAL
+        required: true
+      status:
+        type: string
+        description: Customer account status
+        enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+        example: ACTIVE
+        required: true
+      title:
+        type: string
+        description: Customer title (Mr., Mrs., Dr., etc.)
+        maxLength: 10
+        required: false
+      firstName:
+        type: string
+        description: Customer first name
+        maxLength: 50
+        required: true
+      middleName:
+        type: string
+        description: Customer middle name or initial
+        maxLength: 50
+        required: false
+      lastName:
+        type: string
+        description: Customer last name
+        maxLength: 50
+        required: true
+      displayName:
+        type: string
+        description: Preferred display name
+        maxLength: 100
+        required: false
+      dateOfBirth:
+        type: date-only
+        description: Date of birth (for age verification, promotions)
+        required: false
+      gender:
+        type: string
+        description: Customer gender
+        enum: [MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY]
+        required: false
+      email:
+        type: string
+        description: Primary email address
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: true
+      secondaryEmail:
+        type: string
+        description: Secondary email address
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: false
+      phoneNumber:
+        type: string
+        description: Primary phone number
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: true
+      mobileNumber:
+        type: string
+        description: Mobile phone number
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      workNumber:
+        type: string
+        description: Work phone number
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      preferredContactMethod:
+        type: string
+        description: Preferred method of contact
+        enum: [EMAIL, PHONE, SMS, MAIL, PUSH_NOTIFICATION]
+        default: EMAIL
+        required: false
+      language:
+        type: string
+        description: Preferred language (ISO 639-1)
+        pattern: ^[a-z]{2}$
+        example: en
+        default: en
+        required: false
+      timezone:
+        type: string
+        description: Customer timezone (IANA timezone)
+        example: America/New_York
+        required: false
+      currency:
+        type: string
+        description: Preferred currency (ISO 4217)
+        pattern: ^[A-Z]{3}$
+        example: USD
+        default: USD
+        required: false
+      addresses:
+        type: CustomerAddress[]
+        description: Customer addresses
+        required: false
+      paymentMethods:
+        type: PaymentMethodReference[]
+        description: Saved payment methods (references only)
+        required: false
+      preferences:
+        type: CustomerPreferences
+        description: Customer preferences and settings
+        required: false
+      loyaltyInfo:
+        type: LoyaltyInfo
+        description: Loyalty program information
+        required: false
+      creditInfo:
+        type: CreditInfo
+        description: Credit and payment terms information
+        required: false
+      marketingConsent:
+        type: MarketingConsent
+        description: Marketing communication preferences
+        required: false
+      registrationDate:
+        type: datetime-only
+        description: Customer registration date and time
+        required: true
+      lastLoginDate:
+        type: datetime-only
+        description: Last login date and time
+        required: false
+      source:
+        type: string
+        description: How customer was acquired
+        enum: [WEB, MOBILE, STORE, REFERRAL, MARKETING, API]
+        required: false
+      referredBy:
+        type: string
+        description: Reference to referring customer
+        required: false
+      tags:
+        type: string[]
+        description: Customer tags for segmentation
+        required: false
+      notes:
+        type: string
+        description: Internal notes about the customer
+        maxLength: 2000
+        required: false
+      createdBy:
+        type: string
+        description: User or system that created the customer record
+        required: true
+      lastModifiedDate:
+        type: datetime-only
+        description: Last modification timestamp
+        required: false
+      lastModifiedBy:
+        type: string
+        description: User or system that last modified the record
+        required: false
+      version:
+        type: integer
+        description: Customer record version for optimistic locking
+        minimum: 1
+        example: 1
+        required: false
+
+  CustomerSummary:
+    displayName: Customer Summary
+    description: Lightweight customer representation for list views and references
+    type: object
+    properties:
+      customerId:
+        type: string
+        required: true
+      customerNumber:
+        type: string
+        required: true
+      firstName:
+        type: string
+        required: true
+      lastName:
+        type: string
+        required: true
+      displayName:
+        type: string
+        required: false
+      email:
+        type: string
+        required: true
+      phoneNumber:
+        type: string
+        required: false
+      customerType:
+        type: string
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        required: true
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+        required: true
+
+  CustomerAddress:
+    displayName: Customer Address
+    description: Customer address information extending base Address type
+    type: object
+    properties:
+      addressId:
+        type: string
+        description: Unique address identifier
+        required: true
+      addressType:
+        type: string
+        enum: [HOME, WORK, BILLING, SHIPPING, OTHER]
+        required: true
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      company:
+        type: string
+        maxLength: 100
+        required: false
+      addressLine1:
+        type: string
+        maxLength: 100
+        required: true
+      addressLine2:
+        type: string
+        maxLength: 100
+        required: false
+      city:
+        type: string
+        maxLength: 50
+        required: true
+      state:
+        type: string
+        maxLength: 50
+        required: true
+      postalCode:
+        type: string
+        pattern: ^[0-9A-Z\-\s]{3,10}$
+        required: true
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        example: US
+        required: true
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      isDefault:
+        type: boolean
+        default: false
+        required: false
+      isActive:
+        type: boolean
+        default: true
+        required: false
+
+  PaymentMethodReference:
+    displayName: Payment Method Reference
+    description: Reference to saved payment methods (secure, no actual payment details)
+    type: object
+    properties:
+      paymentMethodId:
+        type: string
+        description: Unique payment method identifier
+        required: true
+      paymentType:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, BANK_ACCOUNT, DIGITAL_WALLET, GIFT_CARD]
+        required: true
+      displayName:
+        type: string
+        description: User-friendly display name
+        example: "Visa ending in 1234"
+        required: true
+      lastFourDigits:
+        type: string
+        pattern: ^\d{4}$
+        required: false
+      expiryMonth:
+        type: integer
+        minimum: 1
+        maximum: 12
+        required: false
+      expiryYear:
+        type: integer
+        minimum: 2024
+        maximum: 2050
+        required: false
+      isDefault:
+        type: boolean
+        default: false
+        required: false
+      isActive:
+        type: boolean
+        default: true
+        required: false
+      createdDate:
+        type: date-only
+        required: true
+      lastUsedDate:
+        type: date-only
+        required: false
+
+  CustomerPreferences:
+    displayName: Customer Preferences
+    description: Customer preferences and settings
+    type: object
+    properties:
+      communicationPreferences:
+        type: CommunicationPreferences
+        required: false
+      shippingPreferences:
+        type: ShippingPreferences
+        required: false
+      marketingPreferences:
+        type: MarketingPreferences
+        required: false
+      privacySettings:
+        type: PrivacySettings
+        required: false
+      displayPreferences:
+        type: DisplayPreferences
+        required: false
+
+  CommunicationPreferences:
+    displayName: Communication Preferences
+    description: How customer prefers to be contacted
+    type: object
+    properties:
+      preferredChannel:
+        type: string
+        enum: [EMAIL, SMS, PHONE, MAIL, PUSH_NOTIFICATION]
+        default: EMAIL
+        required: false
+      emailNotifications:
+        type: boolean
+        default: true
+        required: false
+      smsNotifications:
+        type: boolean
+        default: false
+        required: false
+      phoneNotifications:
+        type: boolean
+        default: false
+        required: false
+      pushNotifications:
+        type: boolean
+        default: true
+        required: false
+      frequency:
+        type: string
+        enum: [IMMEDIATE, DAILY, WEEKLY, MONTHLY]
+        default: IMMEDIATE
+        required: false
+
+  ShippingPreferences:
+    displayName: Shipping Preferences
+    description: Customer shipping preferences
+    type: object
+    properties:
+      preferredCarrier:
+        type: string
+        enum: [UPS, FEDEX, USPS, DHL, ANY]
+        default: ANY
+        required: false
+      preferredSpeed:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, TWO_DAY]
+        default: STANDARD
+        required: false
+      specialInstructions:
+        type: string
+        maxLength: 500
+        required: false
+      requireSignature:
+        type: boolean
+        default: false
+        required: false
+      allowWeekendDelivery:
+        type: boolean
+        default: true
+        required: false
+
+  MarketingPreferences:
+    displayName: Marketing Preferences
+    description: Marketing communication preferences
+    type: object
+    properties:
+      allowMarketing:
+        type: boolean
+        default: true
+        required: false
+      allowThirdPartyMarketing:
+        type: boolean
+        default: false
+        required: false
+      interests:
+        type: string[]
+        description: Product categories of interest
+        required: false
+      preferredOfferTypes:
+        type: string[]
+        enum: [DISCOUNT, COUPON, SALE, NEW_PRODUCT, EXCLUSIVE]
+        required: false
+
+  PrivacySettings:
+    displayName: Privacy Settings
+    description: Customer privacy preferences
+    type: object
+    properties:
+      allowDataSharing:
+        type: boolean
+        default: false
+        required: false
+      allowAnalytics:
+        type: boolean
+        default: true
+        required: false
+      allowPersonalization:
+        type: boolean
+        default: true
+        required: false
+      dataRetentionPeriod:
+        type: string
+        enum: [ONE_YEAR, TWO_YEARS, FIVE_YEARS, INDEFINITE]
+        default: FIVE_YEARS
+        required: false
+
+  DisplayPreferences:
+    displayName: Display Preferences
+    description: UI and display preferences
+    type: object
+    properties:
+      language:
+        type: string
+        pattern: ^[a-z]{2}$
+        default: en
+        required: false
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        default: USD
+        required: false
+      timezone:
+        type: string
+        example: America/New_York
+        required: false
+      dateFormat:
+        type: string
+        enum: [MM_DD_YYYY, DD_MM_YYYY, YYYY_MM_DD]
+        default: MM_DD_YYYY
+        required: false
+      theme:
+        type: string
+        enum: [LIGHT, DARK, AUTO]
+        default: LIGHT
+        required: false
+
+  LoyaltyInfo:
+    displayName: Loyalty Information
+    description: Customer loyalty program information
+    type: object
+    properties:
+      loyaltyId:
+        type: string
+        description: Loyalty program member ID
+        required: true
+      tier:
+        type: string
+        enum: [BRONZE, SILVER, GOLD, PLATINUM, DIAMOND]
+        required: true
+      points:
+        type: integer
+        description: Current loyalty points balance
+        minimum: 0
+        required: true
+      lifetimeValue:
+        type: number
+        description: Total lifetime spending
+        minimum: 0
+        required: true
+      memberSince:
+        type: date-only
+        required: true
+      nextTierThreshold:
+        type: number
+        description: Amount needed to reach next tier
+        minimum: 0
+        required: false
+      expirationDate:
+        type: date-only
+        description: When points expire
+        required: false
+      benefits:
+        type: string[]
+        description: Current tier benefits
+        required: false
+
+  CreditInfo:
+    displayName: Credit Information
+    description: Customer credit and payment terms
+    type: object
+    properties:
+      creditLimit:
+        type: number
+        description: Total credit limit
+        minimum: 0
+        required: true
+      availableCredit:
+        type: number
+        description: Available credit amount
+        minimum: 0
+        required: true
+      creditUsed:
+        type: number
+        description: Currently used credit
+        minimum: 0
+        required: true
+      paymentTerms:
+        type: string
+        enum: [NET_15, NET_30, NET_45, NET_60, COD, PREPAID]
+        required: true
+      creditScore:
+        type: integer
+        description: Internal credit score
+        minimum: 0
+        maximum: 1000
+        required: false
+      lastCreditReview:
+        type: date-only
+        required: false
+      nextReviewDate:
+        type: date-only
+        required: false
+      creditStatus:
+        type: string
+        enum: [ACTIVE, SUSPENDED, UNDER_REVIEW, CLOSED]
+        required: true
+
+  MarketingConsent:
+    displayName: Marketing Consent
+    description: Marketing communication consent tracking
+    type: object
+    properties:
+      emailConsent:
+        type: ConsentRecord
+        required: false
+      smsConsent:
+        type: ConsentRecord
+        required: false
+      phoneConsent:
+        type: ConsentRecord
+        required: false
+      mailingConsent:
+        type: ConsentRecord
+        required: false
+      thirdPartyConsent:
+        type: ConsentRecord
+        required: false
+      gdprConsent:
+        type: ConsentRecord
+        required: false
+
+  ConsentRecord:
+    displayName: Consent Record
+    description: Individual consent record with timestamp and method
+    type: object
+    properties:
+      granted:
+        type: boolean
+        required: true
+      grantedDate:
+        type: datetime-only
+        required: true
+      consentMethod:
+        type: string
+        enum: [WEB_FORM, EMAIL_CONFIRMATION, PHONE_CALL, IN_PERSON, API]
+        required: true
+      ipAddress:
+        type: string
+        description: IP address when consent was granted
+        required: false
+      userAgent:
+        type: string
+        description: Browser user agent when consent was granted
+        required: false
+      revokedDate:
+        type: datetime-only
+        required: false
+      lastUpdated:
+        type: datetime-only
+        required: true
+
+  CustomerRequest:
+    displayName: Customer Creation Request
+    description: Request payload for creating a new customer
+    type: object
+    properties:
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      email:
+        type: string
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: true
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: true
+      customerType:
+        type: string
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        default: INDIVIDUAL
+        required: false
+      addresses:
+        type: CustomerAddress[]
+        minItems: 1
+        required: true
+      preferences:
+        type: CustomerPreferences
+        required: false
+      marketingConsent:
+        type: MarketingConsent
+        required: true
+      source:
+        type: string
+        enum: [WEB, MOBILE, STORE, REFERRAL, MARKETING, API]
+        required: true
+
+  CustomerUpdate:
+    displayName: Customer Update Request
+    description: Request payload for updating customer information
+    type: object
+    properties:
+      firstName:
+        type: string
+        maxLength: 50
+        required: false
+      lastName:
+        type: string
+        maxLength: 50
+        required: false
+      email:
+        type: string
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: false
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      customerType:
+        type: string
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        required: false
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+        required: false
+      preferences:
+        type: CustomerPreferences
+        required: false
+      addresses:
+        type: CustomerAddress[]
+        required: false
+      notes:
+        type: string
+        maxLength: 2000
+        required: false
+      version:
+        type: integer
+        description: Current version for optimistic locking
+        minimum: 1
+        required: false

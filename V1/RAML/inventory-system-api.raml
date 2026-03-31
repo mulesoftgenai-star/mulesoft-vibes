@@ -1,0 +1,750 @@
+#%RAML 1.0
+title: Inventory System API
+version: v1.0
+baseUri: https://api.inventorysystem.internal/{version}
+description: |
+  System API for Inventory Management System providing inventory operations.
+  This API interfaces with the inventory database and provides stock management services.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  InventoryTypes: order-management-api-fragments/src/main/resources/api/datatypes/inventory-types.raml
+  ErrorTypes: order-management-api-fragments/src/main/resources/api/datatypes/error-types.raml
+  ApiLayerTypes: order-management-api-fragments/src/main/resources/api/datatypes/api-layer-types.raml
+  SecurityTraits: order-management-api-fragments/src/main/resources/api/traits/security-traits.raml
+
+traits:
+  apiKeyAuth: SecurityTraits.api-key-secured
+  systemLogged: SecurityTraits.audit-logged
+
+securitySchemes:
+  apiKey:
+    description: API Key authentication for system access
+    type: x-api-key
+    describedBy:
+      headers:
+        X-API-Key:
+          description: API Key for system authentication
+          type: string
+          example: "ak_1234567890abcdef1234567890abcdef12345678"
+          required: true
+        X-API-Secret:
+          description: API Secret for enhanced security
+          type: string
+          example: "as_abcdef1234567890abcdef1234567890abcdef12"
+          required: false
+      responses:
+        401:
+          description: Unauthorized - Invalid or missing API key
+        403:
+          description: Forbidden - Valid key but insufficient permissions
+
+/inventory:
+  displayName: Inventory Management
+  description: Inventory operations for system integration
+  
+  get:
+    displayName: List Inventory
+    description: Retrieve inventory records with filtering and pagination
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      productIds?:
+        type: string[]
+        description: Filter by product IDs
+        example: ["PROD-12345678", "PROD-87654321"]
+      skus?:
+        type: string[]
+        description: Filter by SKUs
+        example: ["SKU-ABC-123", "SKU-XYZ-789"]
+      warehouseIds?:
+        type: string[]
+        description: Filter by warehouse IDs
+        example: ["WH-EAST-001", "WH-WEST-001"]
+      status?:
+        type: string[]
+        enum: [ACTIVE, INACTIVE, DISCONTINUED, QUARANTINED]
+        description: Filter by inventory status
+      availabilityOnly?:
+        type: boolean
+        default: false
+        description: Only return items with available quantity > 0
+      lowStockOnly?:
+        type: boolean
+        default: false
+        description: Only return items below reorder point
+      lastUpdatedFrom?:
+        type: datetime-only
+        description: Filter by last updated date (from)
+      lastUpdatedTo?:
+        type: datetime-only
+        description: Filter by last updated date (to)
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of records to return
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+        description: Number of records to skip
+    responses:
+      200:
+        description: Successfully retrieved inventory records
+        body:
+          application/json:
+            type: InventoryTypes.SystemInventoryRecord[]
+            example: |
+              [
+                {
+                  "inventoryId": "INV-12345678",
+                  "productId": "PROD-12345678",
+                  "sku": "SKU-ABC-123",
+                  "warehouseId": "WH-EAST-001",
+                  "locationCode": "A-01-15",
+                  "quantityOnHand": 100,
+                  "quantityReserved": 20,
+                  "quantityAllocated": 10,
+                  "quantityAvailable": 70,
+                  "quantityOnOrder": 50,
+                  "reorderPoint": 25,
+                  "maximumStock": 500,
+                  "minimumStock": 10,
+                  "unitCost": 25.50,
+                  "totalValue": 2550.00,
+                  "lastUpdated": "2024-03-24T16:30:00",
+                  "status": "ACTIVE"
+                }
+              ]
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+/inventory/check:
+  displayName: Inventory Check
+  description: Check inventory availability for order processing
+  
+  post:
+    displayName: Check Inventory Availability
+    description: Check availability of multiple items for order processing
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: ApiLayerTypes.SystemInventoryCheckRequest
+        example: |
+          {
+            "requestId": "REQ-12345678",
+            "items": [
+              {
+                "itemId": "ITEM-001",
+                "productId": "PROD-12345678",
+                "sku": "SKU-ABC-123",
+                "quantity": 5
+              },
+              {
+                "itemId": "ITEM-002",
+                "productId": "PROD-87654321",
+                "sku": "SKU-XYZ-789",
+                "quantity": 2
+              }
+            ],
+            "reservationRequired": true,
+            "warehousePreferences": ["WH-EAST-001", "WH-WEST-001"]
+          }
+    responses:
+      200:
+        description: Inventory check completed
+        body:
+          application/json:
+            type: ApiLayerTypes.SystemInventoryCheckResponse
+            example: |
+              {
+                "requestId": "REQ-12345678",
+                "overallStatus": "AVAILABLE",
+                "items": [
+                  {
+                    "itemId": "ITEM-001",
+                    "productId": "PROD-12345678",
+                    "sku": "SKU-ABC-123",
+                    "requestedQuantity": 5,
+                    "availableQuantity": 70,
+                    "allocatedQuantity": 5,
+                    "warehouseId": "WH-EAST-001",
+                    "unitCost": 25.50
+                  },
+                  {
+                    "itemId": "ITEM-002",
+                    "productId": "PROD-87654321",
+                    "sku": "SKU-XYZ-789",
+                    "requestedQuantity": 2,
+                    "availableQuantity": 45,
+                    "allocatedQuantity": 2,
+                    "warehouseId": "WH-EAST-001",
+                    "unitCost": 18.75
+                  }
+                ],
+                "reservationId": "RES-12345678",
+                "checkTimestamp": "2024-03-24T16:30:00"
+              }
+      400:
+        description: Invalid inventory check request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      500:
+        description: Inventory check service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/inventory/reserve:
+  displayName: Inventory Reservation
+  description: Reserve inventory for order processing
+  
+  post:
+    displayName: Reserve Inventory
+    description: Reserve inventory items for a specific order
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: InventoryTypes.ProcessInventoryRequest
+        example: |
+          {
+            "requestId": "REQ-12345678",
+            "orderId": "ORD-12345678",
+            "customerId": "CUST-12345678",
+            "items": [
+              {
+                "lineItemId": "LINE-001",
+                "productId": "PROD-12345678",
+                "sku": "SKU-ABC-123",
+                "quantity": 5,
+                "warehousePreference": ["WH-EAST-001"],
+                "expirationTime": "2024-03-24T18:30:00"
+              }
+            ],
+            "operation": "RESERVE",
+            "priority": "NORMAL"
+          }
+    responses:
+      200:
+        description: Inventory reservation completed
+        body:
+          application/json:
+            type: InventoryTypes.ProcessInventoryResponse
+            example: |
+              {
+                "requestId": "REQ-12345678",
+                "processingStatus": "COMPLETED",
+                "items": [
+                  {
+                    "lineItemId": "LINE-001",
+                    "productId": "PROD-12345678",
+                    "sku": "SKU-ABC-123",
+                    "requestedQuantity": 5,
+                    "processedQuantity": 5,
+                    "remainingQuantity": 0,
+                    "status": "FULFILLED",
+                    "reservationId": "RES-12345678",
+                    "unitCost": 25.50
+                  }
+                ],
+                "totalReservedValue": 127.50
+              }
+      400:
+        description: Invalid reservation request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      409:
+        description: Insufficient inventory
+        body:
+          application/json:
+            type: ErrorTypes.BusinessErrorResponse
+      500:
+        description: Reservation service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/inventory/release:
+  displayName: Release Inventory
+  description: Release previously reserved inventory
+  
+  post:
+    displayName: Release Reserved Inventory
+    description: Release inventory reservations when no longer needed
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: object
+        properties:
+          requestId:
+            type: string
+            description: Unique request identifier
+            required: true
+          reservationIds:
+            type: string[]
+            description: Reservation IDs to release
+            minItems: 1
+            required: true
+          reason:
+            type: string
+            enum: [ORDER_CANCELLED, ORDER_MODIFIED, TIMEOUT, MANUAL_RELEASE]
+            description: Reason for releasing reservation
+            required: true
+          releasedBy:
+            type: string
+            description: System or user releasing the reservation
+            required: true
+        example: |
+          {
+            "requestId": "REQ-87654321",
+            "reservationIds": ["RES-12345678", "RES-87654321"],
+            "reason": "ORDER_CANCELLED",
+            "releasedBy": "ORDER_SYSTEM"
+          }
+    responses:
+      200:
+        description: Inventory released successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              requestId:
+                type: string
+              releasedReservations:
+                type: object[]
+                properties:
+                  reservationId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [RELEASED, ALREADY_CONSUMED, NOT_FOUND, ERROR]
+                  releasedQuantity:
+                    type: integer
+                  message:
+                    type: string
+            example: |
+              {
+                "requestId": "REQ-87654321",
+                "releasedReservations": [
+                  {
+                    "reservationId": "RES-12345678",
+                    "status": "RELEASED",
+                    "releasedQuantity": 5,
+                    "message": "Reservation released successfully"
+                  },
+                  {
+                    "reservationId": "RES-87654321",
+                    "status": "NOT_FOUND",
+                    "releasedQuantity": 0,
+                    "message": "Reservation not found or already expired"
+                  }
+                ]
+              }
+      400:
+        description: Invalid release request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Reservations not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Release service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/inventory/{productId}:
+  displayName: Product Inventory
+  uriParameters:
+    productId:
+      type: string
+      description: Unique product identifier
+      pattern: ^PROD-[A-Z0-9]{8}$
+      example: "PROD-12345678"
+  
+  get:
+    displayName: Get Product Inventory
+    description: Retrieve inventory details for a specific product
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      warehouseId?:
+        type: string
+        description: Filter by specific warehouse
+        example: "WH-EAST-001"
+      includeAllocations?:
+        type: boolean
+        default: false
+        description: Include current allocations
+      includeReservations?:
+        type: boolean
+        default: false
+        description: Include current reservations
+      includeTransactionHistory?:
+        type: boolean
+        default: false
+        description: Include recent transaction history
+    responses:
+      200:
+        description: Product inventory retrieved successfully
+        body:
+          application/json:
+            type: InventoryTypes.SystemInventoryRecord[]
+            example: |
+              [
+                {
+                  "inventoryId": "INV-12345678",
+                  "productId": "PROD-12345678",
+                  "sku": "SKU-ABC-123",
+                  "warehouseId": "WH-EAST-001",
+                  "locationCode": "A-01-15",
+                  "quantityOnHand": 100,
+                  "quantityReserved": 20,
+                  "quantityAllocated": 10,
+                  "quantityAvailable": 70,
+                  "quantityOnOrder": 50,
+                  "reorderPoint": 25,
+                  "maximumStock": 500,
+                  "minimumStock": 10,
+                  "unitCost": 25.50,
+                  "totalValue": 2550.00,
+                  "lastUpdated": "2024-03-24T16:30:00",
+                  "lastCountDate": "2024-03-20",
+                  "status": "ACTIVE"
+                }
+              ]
+      404:
+        description: Product inventory not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  put:
+    displayName: Update Product Inventory
+    description: Update inventory levels for a product
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: object
+        properties:
+          warehouseId:
+            type: string
+            description: Warehouse identifier
+            required: true
+          adjustmentType:
+            type: string
+            enum: [RECEIPT, ISSUE, ADJUSTMENT, TRANSFER_IN, TRANSFER_OUT, CYCLE_COUNT]
+            description: Type of inventory adjustment
+            required: true
+          quantity:
+            type: integer
+            description: Adjustment quantity (positive or negative)
+            required: true
+          reason:
+            type: string
+            description: Reason for adjustment
+            maxLength: 200
+            required: true
+          referenceNumber:
+            type: string
+            description: Reference document number
+            required: false
+          unitCost?:
+            type: number
+            description: Unit cost for the adjustment
+            minimum: 0
+          performedBy:
+            type: string
+            description: User or system performing adjustment
+            required: true
+          notes?:
+            type: string
+            description: Additional notes
+            maxLength: 500
+        example: |
+          {
+            "warehouseId": "WH-EAST-001",
+            "adjustmentType": "RECEIPT",
+            "quantity": 50,
+            "reason": "Purchase order receipt",
+            "referenceNumber": "PO-12345",
+            "unitCost": 25.50,
+            "performedBy": "RECEIVING_SYSTEM",
+            "notes": "Good condition, no damage"
+          }
+    responses:
+      200:
+        description: Inventory updated successfully
+        body:
+          application/json:
+            type: InventoryTypes.SystemInventoryRecord
+      400:
+        description: Invalid update data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Product inventory not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Update service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/inventory/transactions:
+  displayName: Inventory Transactions
+  description: Inventory transaction history and logging
+  
+  get:
+    displayName: Get Transaction History
+    description: Retrieve inventory transaction history
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      productId?:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        description: Filter by product ID
+      warehouseId?:
+        type: string
+        description: Filter by warehouse ID
+      transactionType?:
+        type: string[]
+        enum: [RECEIPT, ISSUE, TRANSFER, ADJUSTMENT, RESERVATION, RELEASE]
+        description: Filter by transaction types
+      dateFrom?:
+        type: date-only
+        description: Filter transactions from date
+      dateTo?:
+        type: date-only
+        description: Filter transactions to date
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+    responses:
+      200:
+        description: Transaction history retrieved successfully
+        body:
+          application/json:
+            type: InventoryTypes.InventoryTransaction[]
+            example: |
+              [
+                {
+                  "transactionId": "TXN-12345678",
+                  "productId": "PROD-12345678",
+                  "sku": "SKU-ABC-123",
+                  "warehouseId": "WH-EAST-001",
+                  "transactionType": "RECEIPT",
+                  "quantity": 50,
+                  "unitCost": 25.50,
+                  "totalCost": 1275.00,
+                  "referenceNumber": "PO-12345",
+                  "referenceType": "PURCHASE_ORDER",
+                  "transactionDate": "2024-03-24T16:30:00",
+                  "reasonCode": "PURCHASE_RECEIPT",
+                  "performedBy": "RECEIVING_SYSTEM"
+                }
+              ]
+      400:
+        description: Invalid query parameters
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      500:
+        description: Transaction service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  post:
+    displayName: Record Transaction
+    description: Record a new inventory transaction
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: InventoryTypes.InventoryTransaction
+        example: |
+          {
+            "transactionId": "TXN-87654321",
+            "productId": "PROD-12345678",
+            "sku": "SKU-ABC-123",
+            "warehouseId": "WH-EAST-001",
+            "transactionType": "ISSUE",
+            "quantity": -5,
+            "unitCost": 25.50,
+            "totalCost": -127.50,
+            "referenceNumber": "ORD-12345678",
+            "referenceType": "SALES_ORDER",
+            "transactionDate": "2024-03-24T17:00:00",
+            "reasonCode": "ORDER_FULFILLMENT",
+            "performedBy": "ORDER_SYSTEM"
+          }
+    responses:
+      201:
+        description: Transaction recorded successfully
+        headers:
+          Location:
+            description: URL of the created transaction
+            type: string
+        body:
+          application/json:
+            type: InventoryTypes.InventoryTransaction
+      400:
+        description: Invalid transaction data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      500:
+        description: Transaction recording error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/inventory/search:
+  displayName: Inventory Search
+  description: Advanced inventory search capabilities
+  
+  post:
+    displayName: Search Inventory
+    description: Advanced search with complex criteria
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: InventoryTypes.InventorySearchCriteria
+        example: |
+          {
+            "productIds": ["PROD-12345678"],
+            "skus": ["SKU-ABC-123"],
+            "warehouseIds": ["WH-EAST-001", "WH-WEST-001"],
+            "status": ["ACTIVE"],
+            "availabilityOnly": true,
+            "lowStockOnly": false,
+            "lastUpdatedFrom": "2024-03-20T00:00:00",
+            "lastUpdatedTo": "2024-03-24T23:59:59"
+          }
+    responses:
+      200:
+        description: Search completed successfully
+        body:
+          application/json:
+            type: InventoryTypes.InventorySearchResults
+            example: |
+              {
+                "inventoryRecords": [
+                  {
+                    "inventoryId": "INV-12345678",
+                    "productId": "PROD-12345678",
+                    "sku": "SKU-ABC-123",
+                    "warehouseId": "WH-EAST-001",
+                    "quantityOnHand": 100,
+                    "quantityAvailable": 70,
+                    "status": "ACTIVE"
+                  }
+                ],
+                "totalCount": 1,
+                "page": 1,
+                "pageSize": 20,
+                "hasMorePages": false
+              }
+      400:
+        description: Invalid search criteria
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      500:
+        description: Search service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/health:
+  displayName: Health Check
+  description: Inventory System API health status
+  
+  get:
+    displayName: Health Check
+    description: Check API and database connectivity
+    responses:
+      200:
+        description: System is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-24T16:30:00Z",
+                "version": "1.0.0",
+                "checks": {
+                  "database": "UP",
+                  "cache": "UP",
+                  "messageQueue": "UP"
+                },
+                "metrics": {
+                  "totalProducts": 1250,
+                  "activeWarehouses": 5,
+                  "pendingReservations": 45
+                }
+              }
+      503:
+        description: System is unhealthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-03-24T16:30:00Z",
+                "version": "1.0.0",
+                "checks": {
+                  "database": "DOWN",
+                  "cache": "UP",
+                  "messageQueue": "DEGRADED"
+                },
+                "errors": [
+                  {
+                    "component": "database",
+                    "error": "Connection pool exhausted"
+                  }
+                ]
+              }

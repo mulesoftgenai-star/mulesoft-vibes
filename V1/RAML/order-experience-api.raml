@@ -1,0 +1,481 @@
+#%RAML 1.0
+title: Order Experience API
+version: v1.0
+baseUri: https://api.orderexperience.com/{version}
+description: |
+  Experience API for Order Management System providing customer-facing order operations.
+  This API serves as the entry point for external consumers and mobile/web applications.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  OrderTypes: order-management-api-fragments/src/main/resources/api/datatypes/order-types.raml
+  CustomerTypes: order-management-api-fragments/src/main/resources/api/datatypes/customer-types.raml
+  InventoryTypes: order-management-api-fragments/src/main/resources/api/datatypes/inventory-types.raml
+  PaymentTypes: order-management-api-fragments/src/main/resources/api/datatypes/payment-types.raml
+  ShipmentTypes: order-management-api-fragments/src/main/resources/api/datatypes/shipment-types.raml
+  ErrorTypes: order-management-api-fragments/src/main/resources/api/datatypes/error-types.raml
+  ApiLayerTypes: order-management-api-fragments/src/main/resources/api/datatypes/api-layer-types.raml
+  SecurityTraits: order-management-api-fragments/src/main/resources/api/traits/security-traits.raml
+
+traits:
+  standardHeaders: SecurityTraits.standardHeaders
+  rateLimited: SecurityTraits.rateLimited
+
+securitySchemes:
+  oauth_2_0:
+    description: OAuth 2.0 Authentication
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          pattern: "Bearer .*"
+          example: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9
+      responses:
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+    settings:
+      authorizationUri: https://auth.orderexperience.com/oauth/authorize
+      accessTokenUri: https://auth.orderexperience.com/oauth/token
+      authorizationGrants: [authorization_code, client_credentials]
+
+/orders:
+  displayName: Orders
+  description: Order management operations for customer experience
+  
+  get:
+    displayName: Get Orders
+    description: Retrieve orders for authenticated customer
+    is: [standardHeaders, rateLimited]
+    securedBy: [oauth_2_0]
+    queryParameters:
+      customerId?:
+        type: string
+        description: Customer ID to filter orders
+        example: "CUST001"
+      status?:
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+        description: Filter orders by status
+      startDate?:
+        type: datetime
+        description: Start date for order search (ISO 8601)
+      endDate?:
+        type: datetime
+        description: End date for order search (ISO 8601)
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of orders to return
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+        description: Number of orders to skip
+    responses:
+      200:
+        description: Successfully retrieved orders
+        body:
+          application/json:
+            type: ApiLayerTypes.OrderListResponse
+            example: |
+              {
+                "orders": [
+                  {
+                    "orderId": "ORD001",
+                    "customerId": "CUST001",
+                    "orderDate": "2024-01-15T10:30:00Z",
+                    "status": "CONFIRMED",
+                    "totalAmount": 299.99,
+                    "currency": "USD",
+                    "items": [
+                      {
+                        "productId": "PROD001",
+                        "productName": "Wireless Headphones",
+                        "quantity": 2,
+                        "unitPrice": 149.99,
+                        "totalPrice": 299.98
+                      }
+                    ],
+                    "shippingAddress": {
+                      "street": "123 Main St",
+                      "city": "New York",
+                      "state": "NY",
+                      "zipCode": "10001",
+                      "country": "USA"
+                    },
+                    "paymentMethod": "CREDIT_CARD"
+                  }
+                ],
+                "pagination": {
+                  "totalItems": 1,
+                  "totalPages": 1,
+                  "currentPage": 1,
+                  "pageSize": 20
+                }
+              }
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+  post:
+    displayName: Create Order
+    description: Create a new order
+    is: [standardHeaders, rateLimited]
+    securedBy: [oauth_2_0]
+    body:
+      application/json:
+        type: OrderTypes.CreateOrderRequest
+        example: |
+          {
+            "customerId": "CUST001",
+            "items": [
+              {
+                "productId": "PROD001",
+                "quantity": 2,
+                "unitPrice": 149.99
+              }
+            ],
+            "shippingAddress": {
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "paymentMethod": "CREDIT_CARD",
+            "paymentDetails": {
+              "cardToken": "tok_visa_4242",
+              "billingAddress": {
+                "street": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "zipCode": "10001",
+                "country": "USA"
+              }
+            }
+          }
+    responses:
+      201:
+        description: Order created successfully
+        headers:
+          Location:
+            description: URL of the created order
+            type: string
+        body:
+          application/json:
+            type: OrderTypes.OrderResponse
+            example: |
+              {
+                "orderId": "ORD001",
+                "customerId": "CUST001",
+                "orderDate": "2024-01-15T10:30:00Z",
+                "status": "PENDING",
+                "totalAmount": 299.99,
+                "currency": "USD",
+                "estimatedDeliveryDate": "2024-01-22T00:00:00Z"
+              }
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      409:
+        description: Conflict - duplicate order
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+  /{orderId}:
+    displayName: Order Details
+    uriParameters:
+      orderId:
+        type: string
+        description: Unique order identifier
+        example: "ORD001"
+    
+    get:
+      displayName: Get Order Details
+      description: Retrieve detailed information for a specific order
+      is: [standardHeaders, rateLimited]
+      securedBy: [oauth_2_0]
+      responses:
+        200:
+          description: Order details retrieved successfully
+          body:
+            application/json:
+              type: OrderTypes.OrderResponse
+              example: |
+                {
+                  "orderId": "ORD001",
+                  "customerId": "CUST001",
+                  "orderDate": "2024-01-15T10:30:00Z",
+                  "status": "SHIPPED",
+                  "totalAmount": 299.99,
+                  "currency": "USD",
+                  "items": [
+                    {
+                      "productId": "PROD001",
+                      "productName": "Wireless Headphones",
+                      "quantity": 2,
+                      "unitPrice": 149.99,
+                      "totalPrice": 299.98
+                    }
+                  ],
+                  "shippingAddress": {
+                    "street": "123 Main St",
+                    "city": "New York",
+                    "state": "NY",
+                    "zipCode": "10001",
+                    "country": "USA"
+                  },
+                  "trackingInfo": {
+                    "trackingNumber": "1Z999AA1234567890",
+                    "carrier": "UPS",
+                    "estimatedDeliveryDate": "2024-01-22T00:00:00Z"
+                  }
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+    
+    patch:
+      displayName: Update Order
+      description: Update order details (limited operations allowed)
+      is: [standardHeaders, rateLimited]
+      securedBy: [oauth_2_0]
+      body:
+        application/json:
+          type: OrderTypes.UpdateOrderRequest
+          example: |
+            {
+              "shippingAddress": {
+                "street": "456 Oak Ave",
+                "city": "Los Angeles",
+                "state": "CA",
+                "zipCode": "90210",
+                "country": "USA"
+              }
+            }
+      responses:
+        200:
+          description: Order updated successfully
+          body:
+            application/json:
+              type: OrderTypes.OrderResponse
+        400:
+          description: Bad request
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        409:
+          description: Order cannot be updated in current state
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+    
+    delete:
+      displayName: Cancel Order
+      description: Cancel an order (if cancellable)
+      is: [standardHeaders, rateLimited]
+      securedBy: [oauth_2_0]
+      responses:
+        200:
+          description: Order cancelled successfully
+          body:
+            application/json:
+              type: ApiLayerTypes.SuccessResponse
+              example: |
+                {
+                  "success": true,
+                  "message": "Order cancelled successfully",
+                  "orderId": "ORD001"
+                }
+        400:
+          description: Order cannot be cancelled
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorTypes.ErrorResponse
+
+    /tracking:
+      get:
+        displayName: Get Order Tracking
+        description: Get tracking information for the order
+        is: [standardHeaders, rateLimited]
+        securedBy: [oauth_2_0]
+        responses:
+          200:
+            description: Tracking information retrieved successfully
+            body:
+              application/json:
+                type: ShipmentTypes.TrackingResponse
+                example: |
+                  {
+                    "orderId": "ORD001",
+                    "trackingNumber": "1Z999AA1234567890",
+                    "carrier": "UPS",
+                    "status": "IN_TRANSIT",
+                    "estimatedDeliveryDate": "2024-01-22T00:00:00Z",
+                    "trackingEvents": [
+                      {
+                        "timestamp": "2024-01-20T09:00:00Z",
+                        "location": "New York, NY",
+                        "status": "PICKED_UP",
+                        "description": "Package picked up"
+                      },
+                      {
+                        "timestamp": "2024-01-20T14:30:00Z",
+                        "location": "Philadelphia, PA",
+                        "status": "IN_TRANSIT",
+                        "description": "Package in transit"
+                      }
+                    ]
+                  }
+          404:
+            description: Order or tracking information not found
+            body:
+              application/json:
+                type: ErrorTypes.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorTypes.ErrorResponse
+
+/customers:
+  displayName: Customer Management
+  description: Customer-related operations
+
+  /{customerId}:
+    displayName: Customer Details
+    uriParameters:
+      customerId:
+        type: string
+        description: Unique customer identifier
+        example: "CUST001"
+    
+    /orders:
+      get:
+        displayName: Get Customer Orders
+        description: Get all orders for a specific customer
+        is: [standardHeaders, rateLimited]
+        securedBy: [oauth_2_0]
+        queryParameters:
+          status?:
+            type: string
+            enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+          limit?:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          offset?:
+            type: integer
+            minimum: 0
+            default: 0
+        responses:
+          200:
+            description: Customer orders retrieved successfully
+            body:
+              application/json:
+                type: ApiLayerTypes.OrderListResponse
+          404:
+            description: Customer not found
+            body:
+              application/json:
+                type: ErrorTypes.ErrorResponse
+          500:
+            description: Internal server error
+            body:
+              application/json:
+                type: ErrorTypes.ErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health and status endpoint
+  
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: ApiLayerTypes.HealthResponse
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "version": "1.0.0",
+                "dependencies": {
+                  "orderProcessAPI": "UP",
+                  "customerSystemAPI": "UP",
+                  "inventorySystemAPI": "UP"
+                }
+              }
+      503:
+        description: API is unhealthy
+        body:
+          application/json:
+            type: ApiLayerTypes.HealthResponse

@@ -1,0 +1,95 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library provides comprehensive data types for Order Management APIs across
+  Experience, Process, and System layers. It includes all necessary types for
+  order processing, customer management, inventory, payment, and shipping operations.
+
+uses:
+  orderTypes: src/main/resources/api/datatypes/order-types.raml
+  customerTypes: src/main/resources/api/datatypes/customer-types.raml
+  paymentTypes: src/main/resources/api/datatypes/payment-types.raml
+  shipmentTypes: src/main/resources/api/datatypes/shipment-types.raml
+  inventoryTypes: src/main/resources/api/datatypes/inventory-types.raml
+  apiLayerTypes: src/main/resources/api/datatypes/api-layer-types.raml
+  errorTypes: src/main/resources/api/datatypes/error-types.raml
+  securityTraits: src/main/resources/api/traits/security-traits.raml
+
+types:
+  # Re-export all types from imported libraries for easy access
+  
+  # Order Management Types
+  Order: orderTypes.Order
+  OrderItem: orderTypes.OrderItem
+  OrderSummary: orderTypes.OrderSummary
+  OrderRequest: orderTypes.OrderRequest
+  OrderItemRequest: orderTypes.OrderItemRequest
+  OrderStatusUpdate: orderTypes.OrderStatusUpdate
+  Address: orderTypes.Address
+  PaymentReference: orderTypes.PaymentReference
+  TrackingInfo: orderTypes.TrackingInfo
+  Dimensions: orderTypes.Dimensions
+  
+  # Customer Management Types
+  Customer: customerTypes.Customer
+  CustomerSummary: customerTypes.CustomerSummary
+  CustomerAddress: customerTypes.CustomerAddress
+  CustomerPreferences: customerTypes.CustomerPreferences
+  CustomerRequest: customerTypes.CustomerRequest
+  CustomerUpdate: customerTypes.CustomerUpdate
+  LoyaltyInfo: customerTypes.LoyaltyInfo
+  CreditInfo: customerTypes.CreditInfo
+  
+  # Payment Types
+  PaymentInfo: paymentTypes.PaymentInfo
+  PaymentDetails: paymentTypes.PaymentDetails
+  BillingAddress: paymentTypes.BillingAddress
+  PaymentRequest: paymentTypes.PaymentRequest
+  PaymentResponse: paymentTypes.PaymentResponse
+  RefundRequest: paymentTypes.RefundRequest
+  RefundResponse: paymentTypes.RefundResponse
+  PaymentSummary: paymentTypes.PaymentSummary
+  
+  # Shipment Types
+  Shipment: shipmentTypes.Shipment
+  ShipmentItem: shipmentTypes.ShipmentItem
+  ShipmentRequest: shipmentTypes.ShipmentRequest
+  ShipmentSummary: shipmentTypes.ShipmentSummary
+  ShipmentStatusUpdate: shipmentTypes.ShipmentStatusUpdate
+  CarrierInfo: shipmentTypes.CarrierInfo
+  ShippingAddress: shipmentTypes.ShippingAddress
+  
+  # Inventory Types
+  ExperienceInventoryRequest: inventoryTypes.ExperienceInventoryRequest
+  ExperienceInventoryResponse: inventoryTypes.ExperienceInventoryResponse
+  ProcessInventoryRequest: inventoryTypes.ProcessInventoryRequest
+  ProcessInventoryResponse: inventoryTypes.ProcessInventoryResponse
+  SystemInventoryRecord: inventoryTypes.SystemInventoryRecord
+  InventoryAllocation: inventoryTypes.InventoryAllocation
+  InventoryTransaction: inventoryTypes.InventoryTransaction
+  
+  # API Layer Specific Types
+  ExperienceOrderCreateRequest: apiLayerTypes.ExperienceOrderCreateRequest
+  ExperienceOrderCreateResponse: apiLayerTypes.ExperienceOrderCreateResponse
+  ProcessOrderRequest: apiLayerTypes.ProcessOrderRequest
+  ProcessOrderResponse: apiLayerTypes.ProcessOrderResponse
+  SystemCustomerValidationRequest: apiLayerTypes.SystemCustomerValidationRequest
+  SystemCustomerValidationResponse: apiLayerTypes.SystemCustomerValidationResponse
+  SystemInventoryCheckRequest: apiLayerTypes.SystemInventoryCheckRequest
+  SystemInventoryCheckResponse: apiLayerTypes.SystemInventoryCheckResponse
+  SystemPaymentAuthRequest: apiLayerTypes.SystemPaymentAuthRequest
+  SystemPaymentAuthResponse: apiLayerTypes.SystemPaymentAuthResponse
+  SystemShipmentCreateRequest: apiLayerTypes.SystemShipmentCreateRequest
+  SystemShipmentCreateResponse: apiLayerTypes.SystemShipmentCreateResponse
+  
+  # Error Types
+  ErrorResponse: errorTypes.ErrorResponse
+  ValidationError: errorTypes.ValidationError
+  BusinessError: errorTypes.BusinessError
+  SystemError: errorTypes.SystemError
+
+traits:
+  # Re-export security traits
+  clientIdEnforced: securityTraits.clientIdEnforced
+  oauth2Protected: securityTraits.oauth2Protected
+  rateLimited: securityTraits.rateLimited

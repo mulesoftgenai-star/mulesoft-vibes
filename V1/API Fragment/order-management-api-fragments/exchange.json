@@ -1,0 +1,11 @@
+{
+  "main": "order-management-api-fragments.raml",
+  "name": "order management api fragments",
+  "classifier": "raml-fragment",
+  "organizationId": "0dd90754-831a-4072-8875-e7cffcfcd717",
+  "descriptorVersion": "1.0.0",
+  "groupId": "0dd90754-831a-4072-8875-e7cffcfcd717",
+  "assetId": "order-management-api-fragments",
+  "version": "1.0.0",
+  "tags": []
+}

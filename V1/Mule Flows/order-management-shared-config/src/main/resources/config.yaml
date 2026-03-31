@@ -1,0 +1,96 @@
+# Order Management System - Shared Configuration
+# Environment-specific properties for Order Management APIs
+
+# Common HTTP Configuration
+http:
+  listener:
+    port: 8081
+    host: "0.0.0.0"
+  request:
+    timeout: 30000
+    
+# Experience API Configuration
+experience-api:
+  base-path: "/api/v1"
+  port: 8081
+  
+# Process API Configuration  
+process-api:
+  base-path: "/process/v1"
+  port: 8082
+  host: "localhost"
+  
+# System APIs Configuration
+customer-api:
+  base-path: "/customers/v1"
+  port: 8083
+  host: "localhost"
+  
+inventory-api:
+  base-path: "/inventory/v1" 
+  port: 8084
+  host: "localhost"
+  
+payment-api:
+  base-path: "/payments/v1"
+  port: 8085
+  host: "localhost"
+  
+shipping-api:
+  base-path: "/shipping/v1"
+  port: 8086
+  host: "localhost"
+
+# Database Configuration
+database:
+  host: "${DB_HOST:localhost}"
+  port: "${DB_PORT:5432}"
+  name: "${DB_NAME:order_management}"
+  username: "${DB_USER:orderuser}"
+  password: "${DB_PASSWORD:orderpass}"
+  driver: "postgresql"
+  
+# External System Configuration
+external-systems:
+  payment-gateway:
+    url: "${PAYMENT_GATEWAY_URL:https://sandbox.paymentgateway.com/api}"
+    api-key: "${PAYMENT_API_KEY:sandbox-key}"
+    timeout: 15000
+    
+  shipping-carriers:
+    fedex:
+      url: "${FEDEX_URL:https://api.fedex.com}"
+      api-key: "${FEDEX_API_KEY:fedex-key}"
+    ups:
+      url: "${UPS_URL:https://api.ups.com}"
+      api-key: "${UPS_API_KEY:ups-key}"
+      
+  inventory-system:
+    url: "${INVENTORY_SYSTEM_URL:https://inventory.company.com/api}"
+    api-key: "${INVENTORY_API_KEY:inventory-key}"
+    
+  customer-system:
+    url: "${CUSTOMER_SYSTEM_URL:https://crm.company.com/api}"
+    api-key: "${CUSTOMER_API_KEY:customer-key}"
+
+# Security Configuration
+security:
+  client-id-enforcement: true
+  cors:
+    enabled: true
+    origins: "*"
+    methods: "GET,POST,PUT,DELETE,OPTIONS"
+    headers: "*"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "JSON"
+  include-payload: false
+  max-payload-size: 1000
+
+# Error Handling
+error-handling:
+  global-error-handler: true
+  include-stack-trace: false
+  default-error-format: "application/json"

@@ -1,0 +1,749 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule.xsd">
+
+    <!-- Global Error Handler for Experience API Layer -->
+    <error-handler name="global-error-handler-experience" doc:id="global-error-handler-experience">
+        
+        <!-- 400 Bad Request - Validation Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Validation Errors" 
+                           type="VALIDATION:INVALID_BOOLEAN, VALIDATION:INVALID_EMAIL, VALIDATION:INVALID_IP, VALIDATION:INVALID_NUMBER, VALIDATION:INVALID_SIZE, VALIDATION:INVALID_TIME, VALIDATION:INVALID_URL, VALIDATION:NOT_BLANK_STRING, VALIDATION:NOT_EMPTY_COLLECTION, VALIDATION:NOT_NULL">
+            <ee:transform doc:name="400 - Validation Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "description": error.description default "The request contains invalid data",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "field": error.detailedDescription default "unknown",
+        "value": payload default null,
+        "reason": error.description default "Invalid value provided"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Validation Error" 
+                    message="Validation error in Experience API: #[error.description] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 400 Bad Request - APIKit Bad Request -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="APIKit Bad Request" 
+                           type="APIKIT:BAD_REQUEST">
+            <ee:transform doc:name="400 - Bad Request Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Invalid request format",
+    "description": error.description default "The request format is invalid or malformed",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "reason": "Request format validation failed",
+        "message": error.detailedDescription default error.description
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Bad Request" 
+                    message="Bad request in Experience API: #[error.description] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 401 Unauthorized - Security Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Security Errors" 
+                           type="HTTP:UNAUTHORIZED, CLIENT_SECURITY">
+            <ee:transform doc:name="401 - Unauthorized Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication required",
+    "description": "Valid authentication credentials are required to access this resource",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "reason": "Missing or invalid authentication token",
+        "message": "Please provide valid authentication credentials"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">401</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Security Error" 
+                    message="Authentication error in Experience API: #[error.description] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 403 Forbidden - Authorization Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Authorization Errors" 
+                           type="HTTP:FORBIDDEN">
+            <ee:transform doc:name="403 - Forbidden Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Access denied",
+    "description": "You do not have permission to access this resource",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "reason": "Insufficient privileges",
+        "message": "The provided credentials do not have access to this resource"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">403</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Authorization Error" 
+                    message="Authorization error in Experience API: #[error.description] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 404 Not Found -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Not Found" 
+                           type="APIKIT:NOT_FOUND, HTTP:NOT_FOUND">
+            <ee:transform doc:name="404 - Not Found Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Resource not found",
+    "description": "The requested resource could not be found",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "resource": attributes.requestPath default "unknown",
+        "reason": "Resource does not exist or has been removed"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Not Found" 
+                    message="Resource not found in Experience API: #[attributes.requestPath] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 405 Method Not Allowed -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Method Not Allowed" 
+                           type="APIKIT:METHOD_NOT_ALLOWED">
+            <ee:transform doc:name="405 - Method Not Allowed Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "METHOD_NOT_ALLOWED",
+    "message": "HTTP method not allowed",
+    "description": "The HTTP method is not allowed for this resource",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "method": attributes.method default "unknown",
+        "resource": attributes.requestPath default "unknown",
+        "allowedMethods": error.detailedDescription default "Check API documentation"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Method Not Allowed" 
+                    message="Method not allowed in Experience API: #[attributes.method] on #[attributes.requestPath] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 409 Conflict - Business Logic Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Business Logic Errors" 
+                           type="BUSINESS_ERROR, ORDER:DUPLICATE, ORDER:INVALID_STATUS, ORDER:INSUFFICIENT_INVENTORY">
+            <ee:transform doc:name="409 - Business Logic Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "BUSINESS_LOGIC_ERROR",
+    "message": "Business rule violation",
+    "description": error.description default "The request violates business logic constraints",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "businessRule": error.errorType.identifier default "unknown",
+        "reason": error.detailedDescription default error.description,
+        "action": "Review business requirements and adjust request"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">409</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Business Error" 
+                    message="Business logic error in Experience API: #[error.description] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 429 Too Many Requests - Rate Limiting -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Rate Limit Exceeded" 
+                           type="HTTP:RETRY_EXHAUSTED, THROTTLING">
+            <ee:transform doc:name="429 - Rate Limit Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests",
+    "description": "Rate limit exceeded. Please retry after some time",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "retryAfter": "60 seconds",
+        "reason": "API rate limit exceeded"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">429</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Rate Limit" 
+                    message="Rate limit exceeded in Experience API - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 500 Internal Server Error - System Failures -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="System Failures" 
+                           type="HTTP:INTERNAL_SERVER_ERROR, HTTP:CONNECTIVITY, HTTP:TIMEOUT, DB:CONNECTIVITY, DB:QUERY_EXECUTION, JMS:CONNECTIVITY, CONNECTIVITY, TIMEOUT">
+            <ee:transform doc:name="500 - System Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SYSTEM_ERROR",
+    "message": "Internal server error",
+    "description": "A system error occurred while processing the request",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "errorType": error.errorType.identifier default "SYSTEM_ERROR",
+        "reason": "Internal system failure - please contact support if the problem persists"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log System Error" 
+                    message="System error in Experience API: #[error.description] - Error Type: #[error.errorType] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 502 Bad Gateway - Downstream Service Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Downstream Service Errors" 
+                           type="HTTP:BAD_REQUEST, HTTP:CLIENT_SECURITY, HTTP:PARSING">
+            <ee:transform doc:name="502 - Bad Gateway Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "BAD_GATEWAY",
+    "message": "Downstream service error",
+    "description": "Error communicating with downstream service",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "service": vars.currentService default "downstream",
+        "reason": error.description default "Downstream service returned an error"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">502</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log Gateway Error" 
+                    message="Bad gateway error in Experience API: #[error.description] - Service: #[vars.currentService] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 503 Service Unavailable - Service Down -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Service Unavailable" 
+                           type="HTTP:SERVICE_UNAVAILABLE, REDELIVERY_EXHAUSTED">
+            <ee:transform doc:name="503 - Service Unavailable Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "Service temporarily unavailable",
+    "description": "The service is temporarily unavailable. Please try again later",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "retryAfter": "300 seconds",
+        "reason": "Service is temporarily unavailable"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log Service Unavailable" 
+                    message="Service unavailable in Experience API: #[error.description] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- Catch All - Unknown Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Unknown Errors" 
+                           type="ANY">
+            <ee:transform doc:name="500 - Unknown Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "UNKNOWN_ERROR",
+    "message": "An unexpected error occurred",
+    "description": "An unexpected error occurred while processing the request",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "details": [
+      {
+        "errorType": error.errorType.identifier default "UNKNOWN",
+        "reason": "Unexpected system error - please contact support"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log Unknown Error" 
+                    message="Unknown error in Experience API: #[error.description] - Error Type: #[error.errorType] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+    </error-handler>
+
+    <!-- Global Error Handler for Process API Layer -->
+    <error-handler name="global-error-handler-process" doc:id="global-error-handler-process">
+        
+        <!-- 400 Bad Request - Validation Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Process Validation Errors" 
+                           type="VALIDATION:INVALID_BOOLEAN, VALIDATION:INVALID_EMAIL, VALIDATION:INVALID_IP, VALIDATION:INVALID_NUMBER, VALIDATION:INVALID_SIZE, VALIDATION:INVALID_TIME, VALIDATION:INVALID_URL, VALIDATION:NOT_BLANK_STRING, VALIDATION:NOT_EMPTY_COLLECTION, VALIDATION:NOT_NULL">
+            <ee:transform doc:name="400 - Process Validation Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "PROCESS_VALIDATION_ERROR",
+    "message": "Process validation failed",
+    "description": error.description default "The process request contains invalid data",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "PROCESS",
+    "processStep": vars.currentProcessStep default "validation",
+    "details": [
+      {
+        "field": error.detailedDescription default "unknown",
+        "reason": error.description default "Invalid value provided"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Process Validation Error" 
+                    message="Process validation error: #[error.description] - Step: #[vars.currentProcessStep] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 422 Business Logic Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Process Business Errors" 
+                           type="BUSINESS_ERROR, ORDER:CUSTOMER_INVALID, ORDER:INSUFFICIENT_INVENTORY, ORDER:PAYMENT_FAILED">
+            <ee:transform doc:name="422 - Process Business Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "PROCESS_BUSINESS_ERROR",
+    "message": "Business process validation failed",
+    "description": error.description default "Business rule violation in process layer",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "PROCESS",
+    "processStep": vars.currentProcessStep default "business-validation",
+    "businessErrorCode": error.errorType.identifier default "UNKNOWN",
+    "rollbackRequired": true,
+    "details": [
+      {
+        "businessRule": error.errorType.identifier default "unknown",
+        "reason": error.detailedDescription default error.description
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">422</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log Process Business Error" 
+                    message="Process business error: #[error.description] - Step: #[vars.currentProcessStep] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 500 System Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Process System Errors" 
+                           type="HTTP:CONNECTIVITY, HTTP:TIMEOUT, DB:CONNECTIVITY, CONNECTIVITY, TIMEOUT">
+            <ee:transform doc:name="500 - Process System Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "PROCESS_SYSTEM_ERROR",
+    "message": "System error in process layer",
+    "description": "A system error occurred during process execution",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "PROCESS",
+    "processStep": vars.currentProcessStep default "unknown",
+    "rollbackRequired": vars.rollbackRequired default false,
+    "details": [
+      {
+        "errorType": error.errorType.identifier default "SYSTEM_ERROR",
+        "reason": "Process system failure - please contact support"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log Process System Error" 
+                    message="Process system error: #[error.description] - Step: #[vars.currentProcessStep] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- Catch All for Process API -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Process Unknown Errors" 
+                           type="ANY">
+            <ee:transform doc:name="500 - Process Unknown Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "PROCESS_UNKNOWN_ERROR",
+    "message": "Unknown error in process layer",
+    "description": "An unexpected error occurred during process execution",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "PROCESS",
+    "processStep": vars.currentProcessStep default "unknown",
+    "details": [
+      {
+        "errorType": error.errorType.identifier default "UNKNOWN",
+        "reason": "Unexpected process error - please contact support"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log Process Unknown Error" 
+                    message="Process unknown error: #[error.description] - Step: #[vars.currentProcessStep] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+    </error-handler>
+
+    <!-- Global Error Handler for System API Layer -->
+    <error-handler name="global-error-handler-system" doc:id="global-error-handler-system">
+        
+        <!-- 400 Bad Request - System Validation Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="System Validation Errors" 
+                           type="VALIDATION:INVALID_BOOLEAN, VALIDATION:INVALID_EMAIL, VALIDATION:INVALID_IP, VALIDATION:INVALID_NUMBER, VALIDATION:INVALID_SIZE, VALIDATION:INVALID_TIME, VALIDATION:INVALID_URL, VALIDATION:NOT_BLANK_STRING, VALIDATION:NOT_EMPTY_COLLECTION, VALIDATION:NOT_NULL">
+            <ee:transform doc:name="400 - System Validation Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SYSTEM_VALIDATION_ERROR",
+    "message": "System API validation failed",
+    "description": error.description default "The system API request contains invalid data",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "SYSTEM",
+    "systemName": vars.systemName default "unknown",
+    "retryable": false,
+    "details": [
+      {
+        "field": error.detailedDescription default "unknown",
+        "reason": error.description default "Invalid value provided"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log System Validation Error" 
+                    message="System validation error: #[error.description] - System: #[vars.systemName] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 404 Resource Not Found -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="System Resource Not Found" 
+                           type="HTTP:NOT_FOUND, RESOURCE:NOT_FOUND">
+            <ee:transform doc:name="404 - System Resource Not Found Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SYSTEM_RESOURCE_NOT_FOUND",
+    "message": "Resource not found in backend system",
+    "description": "The requested resource was not found in the backend system",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "SYSTEM",
+    "systemName": vars.systemName default "unknown",
+    "resourceType": vars.resourceType default "unknown",
+    "resourceId": vars.resourceId default "unknown",
+    "retryable": false,
+    "details": [
+      {
+        "resource": vars.resourceType ++ ":" ++ vars.resourceId,
+        "reason": "Resource does not exist in backend system"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="WARN" doc:name="Log System Resource Not Found" 
+                    message="System resource not found: #[vars.resourceType]:#[vars.resourceId] - System: #[vars.systemName] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- 500 Backend System Errors -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="Backend System Errors" 
+                           type="HTTP:INTERNAL_SERVER_ERROR, DB:CONNECTIVITY, DB:QUERY_EXECUTION, HTTP:CONNECTIVITY, HTTP:TIMEOUT, CONNECTIVITY, TIMEOUT">
+            <ee:transform doc:name="500 - Backend System Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "BACKEND_SYSTEM_ERROR",
+    "message": "Backend system error",
+    "description": "Error communicating with backend system",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "SYSTEM",
+    "systemName": vars.systemName default "unknown",
+    "systemErrorCode": vars.systemErrorCode default "unknown",
+    "systemErrorMessage": vars.systemErrorMessage default error.description,
+    "retryable": vars.retryable default true,
+    "details": [
+      {
+        "system": vars.systemName default "unknown",
+        "reason": error.description default "Backend system failure"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log Backend System Error" 
+                    message="Backend system error: #[error.description] - System: #[vars.systemName] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+
+        <!-- Catch All for System API -->
+        <on-error-propagate enableNotifications="true" logException="true" doc:name="System Unknown Errors" 
+                           type="ANY">
+            <ee:transform doc:name="500 - System Unknown Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "error": {
+    "code": "SYSTEM_UNKNOWN_ERROR",
+    "message": "Unknown error in system layer",
+    "description": "An unexpected error occurred in the system API",
+    "timestamp": now() as String { format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ" },
+    "correlationId": vars.correlationId default correlationId,
+    "layer": "SYSTEM",
+    "systemName": vars.systemName default "unknown",
+    "retryable": false,
+    "details": [
+      {
+        "errorType": error.errorType.identifier default "UNKNOWN",
+        "reason": "Unexpected system API error - please contact support"
+      }
+    ]
+  }
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <logger level="ERROR" doc:name="Log System Unknown Error" 
+                    message="System unknown error: #[error.description] - System: #[vars.systemName] - Correlation ID: #[vars.correlationId default correlationId]"/>
+        </on-error-propagate>
+    </error-handler>
+
+    <!-- Helper Sub-flows -->
+    
+    <!-- Circuit Breaker Logic -->
+    <sub-flow name="check-circuit-breaker" doc:id="check-circuit-breaker">
+        <set-variable value="#[payload.serviceKey ++ '-circuit-breaker']" variableName="circuitBreakerKey" doc:name="Set Circuit Breaker Key" doc:id="set-circuit-breaker-key"/>
+        <choice doc:name="Check Circuit State" doc:id="check-circuit-state">
+            <when expression="#[vars.circuitBreakerState == 'OPEN']">
+                <logger level="WARN" doc:name="Log Circuit Open" doc:id="log-circuit-open" 
+                        message="Circuit breaker is OPEN for service: #[payload.serviceKey]"/>
+                <raise-error type="CIRCUIT_BREAKER:OPEN" description="Circuit breaker is open for the requested service" doc:name="Raise Circuit Breaker Error" doc:id="raise-circuit-breaker-error"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG" doc:name="Log Circuit Closed" doc:id="log-circuit-closed" 
+                        message="Circuit breaker is CLOSED for service: #[payload.serviceKey]"/>
+            </otherwise>
+        </choice>
+    </sub-flow>
+
+    <!-- Correlation ID Assignment -->
+    <sub-flow name="set-correlation-id" doc:id="set-correlation-id">
+        <choice doc:name="Check Correlation ID" doc:id="check-correlation-id">
+            <when expression="#[attributes.headers['x-correlation-id'] != null]">
+                <set-variable value="#[attributes.headers['x-correlation-id']]" variableName="correlationId" doc:name="Use Existing Correlation ID" doc:id="use-existing-correlation-id"/>
+            </when>
+            <otherwise>
+                <set-variable value="#[uuid()]" variableName="correlationId" doc:name="Generate New Correlation ID" doc:id="generate-new-correlation-id"/>
+            </otherwise>
+        </choice>
+        <logger level="DEBUG" doc:name="Log Correlation ID" doc:id="log-correlation-id" 
+                message="Processing request with Correlation ID: #[vars.correlationId]"/>
+    </sub-flow>
+
+    <!-- Request Validation Helper -->
+    <sub-flow name="validate-required-fields" doc:id="validate-required-fields">
+        <choice doc:name="Validate Payload" doc:id="validate-payload">
+            <when expression="#[payload == null or payload == '']">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="Request payload is required" doc:name="Raise Payload Required Error" doc:id="raise-payload-required-error"/>
+            </when>
+        </choice>
+        <logger level="DEBUG" doc:name="Log Validation Success" doc:id="log-validation-success" 
+                message="Request validation passed for Correlation ID: #[vars.correlationId]"/>
+    </sub-flow>
+
+    <!-- System Context Setting -->
+    <sub-flow name="set-system-context" doc:id="set-system-context">
+        <set-variable value="#[attributes.headers['system-name'] default 'unknown']" variableName="systemName" doc:name="Set System Name" doc:id="set-system-name"/>
+        <set-variable value="#[attributes.headers['resource-type'] default 'unknown']" variableName="resourceType" doc:name="Set Resource Type" doc:id="set-resource-type"/>
+        <set-variable value="#[attributes.uriParams.id default attributes.uriParams.orderId default attributes.uriParams.customerId default 'unknown']" variableName="resourceId" doc:name="Set Resource ID" doc:id="set-resource-id"/>
+        <logger level="DEBUG" doc:name="Log System Context" doc:id="log-system-context" 
+                message="System context set - System: #[vars.systemName], Resource: #[vars.resourceType]:#[vars.resourceId], Correlation ID: #[vars.correlationId]"/>
+    </sub-flow>
+
+</mule>

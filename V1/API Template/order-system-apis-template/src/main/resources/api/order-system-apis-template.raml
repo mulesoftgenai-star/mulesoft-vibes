@@ -1,0 +1,1019 @@
+#%RAML 1.0
+title: Order Management System APIs Template
+version: v1
+description: |
+  System Layer APIs template for Order Management providing direct access to backend systems.
+  This template follows MuleSoft's API-led connectivity pattern for the System layer.
+  
+  Features:
+  - Direct system integration
+  - CRUD operations on backend systems
+  - Data transformation and normalization
+  - System-specific business logic
+  - Performance optimization
+  - Circuit breaker patterns
+
+baseUri: https://api.{environment}.company.com/system/{version}
+mediaType: application/json
+
+uses:
+  OrderTypes: ../datatypes/order-types.raml
+  CustomerTypes: ../datatypes/customer-types.raml
+  InventoryTypes: ../datatypes/inventory-types.raml
+  PaymentTypes: ../datatypes/payment-types.raml
+  ShippingTypes: ../datatypes/shipping-types.raml
+  ErrorTypes: ../datatypes/error-types.raml
+  SecurityTraits: ../traits/security-traits.raml
+
+traits:
+  systemTracking:
+    headers:
+      X-System-Request-ID:
+        description: Unique identifier for system request tracking
+        type: string
+        pattern: ^SYS-[A-Z0-9]{8}$
+        example: "SYS-12345ABC"
+        required: false
+      X-Source-System:
+        description: Identifier of the calling system
+        type: string
+        example: "order-process-api"
+        required: false
+    responses:
+      200:
+        headers:
+          X-System-Request-ID:
+            description: System request identifier
+            type: string
+          X-Response-Time:
+            description: Response time in milliseconds
+            type: integer
+
+  circuitBreaker:
+    responses:
+      503:
+        description: Circuit breaker is open - system unavailable
+        headers:
+          Retry-After:
+            description: Seconds to wait before retrying
+            type: integer
+            example: 60
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+            example: |
+              {
+                "title": "Circuit Breaker Open",
+                "status": 503,
+                "detail": "System is currently unavailable due to repeated failures",
+                "timestamp": "2023-12-01T10:30:00",
+                "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+                "systemErrorCode": "CIRCUIT_BREAKER_OPEN",
+                "retryable": true,
+                "retryAfter": 60
+              }
+
+/customers:
+  displayName: Customer System API
+  description: Direct integration with Customer Management System
+  
+  /{customerId}:
+    displayName: Customer Operations
+    uriParameters:
+      customerId:
+        description: Customer identifier
+        type: string
+        pattern: ^CUST-[A-Z0-9]{8}$
+        example: CUST-12345ABC
+
+    get:
+      displayName: Get Customer Details
+      description: |
+        Retrieve customer information from Customer Management System.
+        Includes profile data, preferences, and account status.
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      responses:
+        200:
+          description: Customer details retrieved successfully
+          body:
+            application/json:
+              type: CustomerTypes.Customer
+              example: |
+                {
+                  "customerId": "CUST-12345ABC",
+                  "customerNumber": "CUST-000001",
+                  "firstName": "John",
+                  "lastName": "Doe",
+                  "email": "john.doe@email.com",
+                  "phone": "+1-555-0123",
+                  "dateOfBirth": "1985-06-15",
+                  "customerType": "PREMIUM",
+                  "status": "ACTIVE",
+                  "registrationDate": "2020-01-15",
+                  "lastLoginDate": "2023-11-28T14:30:00",
+                  "addresses": [
+                    {
+                      "addressId": "ADDR-001ABC",
+                      "addressType": "BOTH",
+                      "firstName": "John",
+                      "lastName": "Doe",
+                      "addressLine1": "123 Main St",
+                      "city": "New York",
+                      "state": "NY",
+                      "postalCode": "10001",
+                      "country": "US",
+                      "isDefault": true
+                    }
+                  ],
+                  "preferences": {
+                    "communicationChannel": "EMAIL",
+                    "currency": "USD",
+                    "language": "en-US",
+                    "marketingOptIn": true
+                  },
+                  "loyaltyInfo": {
+                    "tier": "GOLD",
+                    "points": 2500,
+                    "nextTierPoints": 5000
+                  }
+                }
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        503:
+          description: Customer system unavailable
+          body:
+            application/json:
+              type: ErrorTypes.SystemErrorResponse
+
+    /validate:
+      post:
+        displayName: Validate Customer
+        description: |
+          Validate customer information and eligibility for order placement.
+          Checks account status, credit limits, and business rules.
+        is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+        body:
+          application/json:
+            type: object
+            properties:
+              validationType:
+                type: string
+                enum: [BASIC, CREDIT_CHECK, FULL_VALIDATION]
+                default: BASIC
+                required: false
+              orderAmount:
+                type: number
+                format: double
+                minimum: 0
+                required: false
+              paymentMethod:
+                type: string
+                enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER]
+                required: false
+            example: |
+              {
+                "validationType": "FULL_VALIDATION",
+                "orderAmount": 299.99,
+                "paymentMethod": "CREDIT_CARD"
+              }
+        responses:
+          200:
+            description: Customer validation completed
+            body:
+              application/json:
+                type: object
+                properties:
+                  customerId:
+                    type: string
+                  validationResult:
+                    type: string
+                    enum: [VALID, INVALID, REQUIRES_REVIEW]
+                  validationChecks:
+                    type: object
+                    properties:
+                      accountStatus:
+                        type: object
+                        properties:
+                          passed:
+                            type: boolean
+                          status:
+                            type: string
+                      creditLimit:
+                        type: object
+                        properties:
+                          passed:
+                            type: boolean
+                          availableCredit:
+                            type: number
+                          requiredAmount:
+                            type: number
+                      fraudCheck:
+                        type: object
+                        properties:
+                          passed:
+                            type: boolean
+                          riskScore:
+                            type: integer
+                            minimum: 0
+                            maximum: 100
+                  eligibilityFlags:
+                    type: object
+                    properties:
+                      canPlaceOrder:
+                        type: boolean
+                      canUseCredit:
+                        type: boolean
+                      requiresApproval:
+                        type: boolean
+                example: |
+                  {
+                    "customerId": "CUST-12345ABC",
+                    "validationResult": "VALID",
+                    "validationChecks": {
+                      "accountStatus": {
+                        "passed": true,
+                        "status": "ACTIVE"
+                      },
+                      "creditLimit": {
+                        "passed": true,
+                        "availableCredit": 5000.00,
+                        "requiredAmount": 299.99
+                      },
+                      "fraudCheck": {
+                        "passed": true,
+                        "riskScore": 15
+                      }
+                    },
+                    "eligibilityFlags": {
+                      "canPlaceOrder": true,
+                      "canUseCredit": true,
+                      "requiresApproval": false
+                    }
+                  }
+          422:
+            description: Customer validation failed
+            body:
+              application/json:
+                type: ErrorTypes.BusinessErrorResponse
+
+/inventory:
+  displayName: Inventory System API
+  description: Direct integration with Inventory Management System
+
+  /products/{productId}/availability:
+    displayName: Product Availability
+    uriParameters:
+      productId:
+        description: Product identifier
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        example: PROD-12345ABC
+
+    get:
+      displayName: Check Product Availability
+      description: |
+        Check real-time product availability across fulfillment centers.
+        Returns current stock levels and allocation status.
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      queryParameters:
+        fulfillmentCenter:
+          description: Specific fulfillment center to check
+          type: string
+          required: false
+          example: "FC-WEST-001"
+        quantity:
+          description: Quantity to check availability for
+          type: integer
+          minimum: 1
+          required: false
+          example: 5
+      responses:
+        200:
+          description: Product availability retrieved successfully
+          body:
+            application/json:
+              type: InventoryTypes.ProductAvailability
+              example: |
+                {
+                  "productId": "PROD-12345ABC",
+                  "sku": "SKU-ABC-123",
+                  "productName": "Premium Wireless Headphones",
+                  "totalAvailable": 150,
+                  "reservedQuantity": 25,
+                  "availableQuantity": 125,
+                  "fulfillmentCenters": [
+                    {
+                      "fulfillmentCenterId": "FC-WEST-001",
+                      "location": "Los Angeles, CA",
+                      "available": 75,
+                      "reserved": 15,
+                      "replenishmentDate": "2023-12-05"
+                    },
+                    {
+                      "fulfillmentCenterId": "FC-EAST-001",
+                      "location": "New York, NY",
+                      "available": 50,
+                      "reserved": 10,
+                      "replenishmentDate": "2023-12-03"
+                    }
+                  ],
+                  "availabilityStatus": "IN_STOCK",
+                  "estimatedRestockDate": null,
+                  "lastUpdated": "2023-12-01T10:25:00"
+                }
+        404:
+          description: Product not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+
+  /reservations:
+    displayName: Inventory Reservations
+    description: Inventory allocation and reservation management
+
+    post:
+      displayName: Reserve Inventory
+      description: |
+        Reserve inventory items for order processing.
+        Creates temporary allocation to prevent overselling.
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      body:
+        application/json:
+          type: object
+          properties:
+            reservationId:
+              type: string
+              pattern: ^RES-[A-Z0-9]{8}$
+              required: true
+            orderId:
+              type: string
+              pattern: ^ORD-[A-Z0-9]{8}$
+              required: false
+            items:
+              type: object[]
+              properties:
+                productId:
+                  type: string
+                  pattern: ^PROD-[A-Z0-9]{8}$
+                  required: true
+                quantity:
+                  type: integer
+                  minimum: 1
+                  required: true
+                fulfillmentCenterId:
+                  type: string
+                  required: false
+              minItems: 1
+              required: true
+            expirationTime:
+              type: datetime-only
+              description: When the reservation expires
+              required: false
+          example: |
+            {
+              "reservationId": "RES-12345ABC",
+              "orderId": "ORD-2023A001",
+              "items": [
+                {
+                  "productId": "PROD-12345ABC",
+                  "quantity": 2,
+                  "fulfillmentCenterId": "FC-WEST-001"
+                }
+              ],
+              "expirationTime": "2023-12-01T11:00:00"
+            }
+      responses:
+        201:
+          description: Inventory reserved successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                reservationId:
+                  type: string
+                status:
+                  type: string
+                  enum: [RESERVED, PARTIALLY_RESERVED, FAILED]
+                reservedItems:
+                  type: object[]
+                  properties:
+                    productId:
+                      type: string
+                    requestedQuantity:
+                      type: integer
+                    reservedQuantity:
+                      type: integer
+                    fulfillmentCenterId:
+                      type: string
+                expirationTime:
+                  type: datetime-only
+                totalReserved:
+                  type: integer
+        409:
+          description: Insufficient inventory
+          body:
+            application/json:
+              type: ErrorTypes.ConflictErrorResponse
+
+    /{reservationId}:
+      uriParameters:
+        reservationId:
+          description: Reservation identifier
+          type: string
+          pattern: ^RES-[A-Z0-9]{8}$
+          example: RES-12345ABC
+
+      delete:
+        displayName: Release Reservation
+        description: Release previously reserved inventory items
+        is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+        responses:
+          200:
+            description: Reservation released successfully
+            body:
+              application/json:
+                type: object
+                properties:
+                  reservationId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [RELEASED]
+                  releasedItems:
+                    type: object[]
+          404:
+            description: Reservation not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+
+/payments:
+  displayName: Payment System API
+  description: Direct integration with Payment Gateway
+
+  /authorize:
+    displayName: Payment Authorization
+    description: Authorize payment for order processing
+
+    post:
+      displayName: Authorize Payment
+      description: |
+        Authorize payment amount without capturing funds.
+        Used for order validation and inventory hold.
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      body:
+        application/json:
+          type: object
+          properties:
+            paymentId:
+              type: string
+              pattern: ^PAY-[A-Z0-9]{8}$
+              required: true
+            orderId:
+              type: string
+              pattern: ^ORD-[A-Z0-9]{8}$
+              required: false
+            amount:
+              type: number
+              format: double
+              minimum: 0.01
+              required: true
+            currency:
+              type: string
+              pattern: ^[A-Z]{3}$
+              required: true
+            paymentMethod:
+              type: PaymentTypes.PaymentMethodDetails
+              required: true
+            billingAddress:
+              type: OrderTypes.Address
+              required: true
+            merchantInfo:
+              type: object
+              properties:
+                merchantId:
+                  type: string
+                merchantName:
+                  type: string
+              required: false
+          example: |
+            {
+              "paymentId": "PAY-12345ABC",
+              "orderId": "ORD-2023A001",
+              "amount": 299.99,
+              "currency": "USD",
+              "paymentMethod": {
+                "type": "CREDIT_CARD",
+                "cardToken": "tok_visa_4242",
+                "last4Digits": "4242",
+                "expiryMonth": 12,
+                "expiryYear": 2025
+              },
+              "billingAddress": {
+                "firstName": "John",
+                "lastName": "Doe",
+                "addressLine1": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "postalCode": "10001",
+                "country": "US"
+              }
+            }
+      responses:
+        200:
+          description: Payment authorized successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                paymentId:
+                  type: string
+                authorizationId:
+                  type: string
+                status:
+                  type: string
+                  enum: [AUTHORIZED, DECLINED, FAILED, REQUIRES_REVIEW]
+                authorizedAmount:
+                  type: number
+                  format: double
+                currency:
+                  type: string
+                authorizationCode:
+                  type: string
+                processorResponse:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                    message:
+                      type: string
+                riskAssessment:
+                  type: object
+                  properties:
+                    riskScore:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+                    riskLevel:
+                      type: string
+                      enum: [LOW, MEDIUM, HIGH]
+                expirationTime:
+                  type: datetime-only
+        402:
+          description: Payment declined or failed
+          body:
+            application/json:
+              type: ErrorTypes.BusinessErrorResponse
+              example: |
+                {
+                  "title": "Payment Authorization Failed",
+                  "status": 402,
+                  "detail": "Payment was declined by the issuing bank",
+                  "timestamp": "2023-12-01T10:30:00",
+                  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+                  "businessErrorCode": "PAYMENT_DECLINED",
+                  "businessContext": {
+                    "declineReason": "INSUFFICIENT_FUNDS",
+                    "processorCode": "51",
+                    "processorMessage": "Insufficient funds"
+                  }
+                }
+
+  /capture:
+    displayName: Payment Capture
+    description: Capture previously authorized payment
+
+    post:
+      displayName: Capture Payment
+      description: |
+        Capture funds from previously authorized payment.
+        Used when order is ready to ship.
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      body:
+        application/json:
+          type: object
+          properties:
+            authorizationId:
+              type: string
+              required: true
+            captureAmount:
+              type: number
+              format: double
+              minimum: 0.01
+              required: false
+            orderId:
+              type: string
+              pattern: ^ORD-[A-Z0-9]{8}$
+              required: false
+            finalCapture:
+              type: boolean
+              default: true
+              required: false
+          example: |
+            {
+              "authorizationId": "AUTH-ABC12345",
+              "captureAmount": 299.99,
+              "orderId": "ORD-2023A001",
+              "finalCapture": true
+            }
+      responses:
+        200:
+          description: Payment captured successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                captureId:
+                  type: string
+                authorizationId:
+                  type: string
+                status:
+                  type: string
+                  enum: [CAPTURED, FAILED]
+                capturedAmount:
+                  type: number
+                  format: double
+                remainingAmount:
+                  type: number
+                  format: double
+                transactionId:
+                  type: string
+
+/shipping:
+  displayName: Shipping System API
+  description: Direct integration with Shipping and Logistics Systems
+
+  /shipments:
+    displayName: Shipment Management
+    description: Create and manage shipments
+
+    post:
+      displayName: Create Shipment
+      description: |
+        Create a new shipment for order fulfillment.
+        Generates tracking numbers and shipping labels.
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      body:
+        application/json:
+          type: object
+          properties:
+            shipmentId:
+              type: string
+              pattern: ^SHIP-[A-Z0-9]{8}$
+              required: true
+            orderId:
+              type: string
+              pattern: ^ORD-[A-Z0-9]{8}$
+              required: true
+            items:
+              type: OrderTypes.OrderItem[]
+              minItems: 1
+              required: true
+            fromAddress:
+              type: OrderTypes.Address
+              required: true
+            toAddress:
+              type: OrderTypes.Address
+              required: true
+            shippingService:
+              type: string
+              enum: [STANDARD, EXPEDITED, OVERNIGHT, TWO_DAY]
+              required: true
+            packageDetails:
+              type: object
+              properties:
+                weight:
+                  type: number
+                  format: double
+                  minimum: 0
+                weightUnit:
+                  type: string
+                  enum: [LB, KG, OZ, G]
+                dimensions:
+                  type: object
+                  properties:
+                    length:
+                      type: number
+                      format: double
+                    width:
+                      type: number
+                      format: double
+                    height:
+                      type: number
+                      format: double
+                    unit:
+                      type: string
+                      enum: [IN, CM]
+              required: true
+            specialInstructions:
+              type: string
+              maxLength: 500
+              required: false
+          example: |
+            {
+              "shipmentId": "SHIP-12345ABC",
+              "orderId": "ORD-2023A001",
+              "items": [
+                {
+                  "itemId": "ITEM-001",
+                  "productId": "PROD-12345ABC",
+                  "quantity": 2,
+                  "weight": 1.5,
+                  "weightUnit": "LB"
+                }
+              ],
+              "fromAddress": {
+                "company": "Fulfillment Center",
+                "addressLine1": "123 Warehouse St",
+                "city": "Los Angeles",
+                "state": "CA",
+                "postalCode": "90210",
+                "country": "US"
+              },
+              "toAddress": {
+                "firstName": "John",
+                "lastName": "Doe",
+                "addressLine1": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "postalCode": "10001",
+                "country": "US"
+              },
+              "shippingService": "STANDARD",
+              "packageDetails": {
+                "weight": 3.0,
+                "weightUnit": "LB",
+                "dimensions": {
+                  "length": 12.0,
+                  "width": 8.0,
+                  "height": 4.0,
+                  "unit": "IN"
+                }
+              }
+            }
+      responses:
+        201:
+          description: Shipment created successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                shipmentId:
+                  type: string
+                orderId:
+                  type: string
+                trackingNumber:
+                  type: string
+                carrier:
+                  type: string
+                  enum: [UPS, FEDEX, USPS, DHL]
+                shippingService:
+                  type: string
+                estimatedDelivery:
+                  type: date-only
+                shippingCost:
+                  type: number
+                  format: double
+                currency:
+                  type: string
+                shippingLabel:
+                  type: object
+                  properties:
+                    format:
+                      type: string
+                      enum: [PDF, PNG, ZPL]
+                    url:
+                      type: string
+                    data:
+                      type: string
+                      description: Base64 encoded label data
+                status:
+                  type: string
+                  enum: [CREATED, LABEL_GENERATED, PICKED_UP, IN_TRANSIT, DELIVERED]
+
+    /{trackingNumber}/status:
+      displayName: Tracking Status
+      uriParameters:
+        trackingNumber:
+          description: Shipment tracking number
+          type: string
+          example: "TRK-12345678"
+
+      get:
+        displayName: Get Tracking Status
+        description: |
+          Retrieve real-time tracking status from carrier.
+          Returns current location and delivery updates.
+        is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+        responses:
+          200:
+            description: Tracking status retrieved successfully
+            body:
+              application/json:
+                type: ShippingTypes.TrackingStatus
+                example: |
+                  {
+                    "trackingNumber": "TRK-12345678",
+                    "carrier": "FEDEX",
+                    "status": "IN_TRANSIT",
+                    "currentLocation": "Hartford, CT",
+                    "estimatedDelivery": "2023-12-05",
+                    "actualDelivery": null,
+                    "events": [
+                      {
+                        "timestamp": "2023-12-02T09:15:00",
+                        "location": "Los Angeles, CA",
+                        "status": "PICKED_UP",
+                        "description": "Package picked up by carrier"
+                      },
+                      {
+                        "timestamp": "2023-12-02T15:30:00",
+                        "location": "Phoenix, AZ",
+                        "status": "IN_TRANSIT",
+                        "description": "Package in transit to next facility"
+                      },
+                      {
+                        "timestamp": "2023-12-03T08:45:00",
+                        "location": "Denver, CO",
+                        "status": "IN_TRANSIT",
+                        "description": "Package arrived at sort facility"
+                      }
+                    ]
+                  }
+          404:
+            description: Tracking number not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+
+/orders:
+  displayName: Order System API
+  description: Direct integration with Order Management Database
+
+  post:
+    displayName: Create Order Record
+    description: |
+      Persist order information to the order management database.
+      Creates the master order record with all details.
+    is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+    body:
+      application/json:
+        type: OrderTypes.Order
+    responses:
+      201:
+        description: Order record created successfully
+        body:
+          application/json:
+            type: OrderTypes.Order
+      400:
+        description: Invalid order data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+
+  /{orderId}:
+    displayName: Order Record Operations
+    uriParameters:
+      orderId:
+        description: Order identifier
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        example: ORD-2023A001
+
+    get:
+      displayName: Get Order Record
+      description: Retrieve order details from the database
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      responses:
+        200:
+          description: Order record retrieved successfully
+          body:
+            application/json:
+              type: OrderTypes.Order
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+
+    patch:
+      displayName: Update Order Record
+      description: Update specific fields of the order record
+      is: [SecurityTraits.api-key-secured, systemTracking, circuitBreaker]
+      body:
+        application/json:
+          type: object
+          properties:
+            orderStatus:
+              type: string
+              enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+              required: false
+            lastModifiedDate:
+              type: datetime-only
+              required: false
+            version:
+              type: integer
+              required: false
+      responses:
+        200:
+          description: Order updated successfully
+          body:
+            application/json:
+              type: OrderTypes.Order
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        409:
+          description: Version conflict - order was modified by another process
+          body:
+            application/json:
+              type: ErrorTypes.ConflictErrorResponse
+
+/health:
+  displayName: Health Check
+  description: System APIs health and backend system status
+  get:
+    displayName: Health Check
+    description: Returns system APIs health status and backend system connectivity
+    responses:
+      200:
+        description: System APIs are healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime-only
+              version:
+                type: string
+              systems:
+                type: object
+                properties:
+                  customerSystem:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                      lastCheck:
+                        type: datetime-only
+                  inventorySystem:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                      lastCheck:
+                        type: datetime-only
+                  paymentGateway:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                      lastCheck:
+                        type: datetime-only
+                  shippingSystem:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                      lastCheck:
+                        type: datetime-only
+                  orderDatabase:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                      lastCheck:
+                        type: datetime-only
+      503:
+        description: System APIs are unhealthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [DOWN, DEGRADED]
+              timestamp:
+                type: datetime-only
+              errors:
+                type: string[]
+              failedSystems:
+                type: string[]

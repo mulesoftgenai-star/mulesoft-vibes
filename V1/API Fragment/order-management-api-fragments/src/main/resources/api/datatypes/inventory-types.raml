@@ -1,0 +1,851 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains comprehensive data types for Inventory Management within Order Management APIs.
+  It defines Inventory, Stock, and related structures for Experience, Process, and System layer APIs.
+
+types:
+  # Experience API Inventory Types
+  ExperienceInventoryRequest:
+    displayName: Experience Inventory Request
+    description: Inventory check request from customer-facing channels
+    type: object
+    properties:
+      requestId:
+        type: string
+        description: Unique request identifier
+        required: true
+      items:
+        type: ExperienceInventoryItem[]
+        description: Items to check availability for
+        minItems: 1
+        required: true
+      reservationRequired:
+        type: boolean
+        description: Whether to reserve inventory if available
+        default: false
+        required: false
+      customerType:
+        type: string
+        enum: [STANDARD, PREMIUM, VIP]
+        description: Customer type for priority handling
+        default: STANDARD
+        required: false
+      requestedDeliveryDate:
+        type: date-only
+        description: When customer needs the items
+        required: false
+      preferredWarehouse:
+        type: string
+        description: Preferred fulfillment location
+        required: false
+
+  ExperienceInventoryItem:
+    displayName: Experience Inventory Item
+    description: Item for inventory check from customer perspective
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      productName:
+        type: string
+        description: Product display name
+        maxLength: 200
+        required: false
+      quantity:
+        type: integer
+        description: Requested quantity
+        minimum: 1
+        required: true
+      alternativesAccepted:
+        type: boolean
+        description: Whether customer accepts alternative products
+        default: false
+        required: false
+
+  ExperienceInventoryResponse:
+    displayName: Experience Inventory Response
+    description: Inventory availability response for customer channels
+    type: object
+    properties:
+      requestId:
+        type: string
+        description: Original request identifier
+        required: true
+      overallStatus:
+        type: string
+        enum: [AVAILABLE, PARTIAL, UNAVAILABLE]
+        description: Overall availability status
+        required: true
+      items:
+        type: ExperienceInventoryResult[]
+        description: Availability results per item
+        required: true
+      alternativeProducts:
+        type: AlternativeProduct[]
+        description: Suggested alternative products
+        required: false
+      estimatedAvailability:
+        type: date-only
+        description: When out-of-stock items might be available
+        required: false
+      reservationId:
+        type: string
+        description: Reservation identifier if inventory was reserved
+        required: false
+      reservationExpiry:
+        type: datetime-only
+        description: When reservation expires
+        required: false
+
+  ExperienceInventoryResult:
+    displayName: Experience Inventory Result
+    description: Availability result for individual item
+    type: object
+    properties:
+      productId:
+        type: string
+        required: true
+      productName:
+        type: string
+        required: false
+      requestedQuantity:
+        type: integer
+        required: true
+      availableQuantity:
+        type: integer
+        description: Currently available quantity
+        minimum: 0
+        required: true
+      status:
+        type: string
+        enum: [AVAILABLE, PARTIAL, OUT_OF_STOCK, DISCONTINUED]
+        required: true
+      price:
+        type: number
+        description: Current unit price
+        minimum: 0
+        required: false
+      estimatedRestockDate:
+        type: date-only
+        description: Expected restock date if out of stock
+        required: false
+      fulfillmentOptions:
+        type: FulfillmentOption[]
+        description: Available fulfillment options
+        required: false
+
+  # Process API Inventory Types
+  ProcessInventoryRequest:
+    displayName: Process Inventory Request
+    description: Internal inventory processing request
+    type: object
+    properties:
+      requestId:
+        type: string
+        description: Unique request identifier
+        required: true
+      orderId:
+        type: string
+        description: Associated order identifier
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: false
+      customerId:
+        type: string
+        description: Customer identifier for priority handling
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: false
+      items:
+        type: ProcessInventoryItem[]
+        description: Items for inventory processing
+        minItems: 1
+        required: true
+      operation:
+        type: string
+        enum: [CHECK, RESERVE, ALLOCATE, RELEASE, ADJUST]
+        description: Inventory operation to perform
+        required: true
+      businessRules:
+        type: InventoryBusinessRules
+        description: Business rules context
+        required: false
+      priority:
+        type: string
+        enum: [LOW, NORMAL, HIGH, URGENT]
+        description: Processing priority
+        default: NORMAL
+        required: false
+
+  ProcessInventoryItem:
+    displayName: Process Inventory Item
+    description: Item for internal inventory processing
+    type: object
+    properties:
+      lineItemId:
+        type: string
+        description: Order line item identifier
+        required: true
+      productId:
+        type: string
+        description: Product identifier
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        description: Stock keeping unit
+        required: true
+      quantity:
+        type: integer
+        description: Quantity to process
+        minimum: 0
+        required: true
+      warehousePreference:
+        type: string[]
+        description: Preferred warehouses in priority order
+        required: false
+      reservationId:
+        type: string
+        description: Existing reservation ID for operations
+        required: false
+      expirationTime:
+        type: datetime-only
+        description: When reservation should expire
+        required: false
+      backorderAllowed:
+        type: boolean
+        description: Whether backorder is allowed
+        default: false
+        required: false
+
+  ProcessInventoryResponse:
+    displayName: Process Inventory Response
+    description: Internal inventory processing result
+    type: object
+    properties:
+      requestId:
+        type: string
+        description: Original request identifier
+        required: true
+      processingStatus:
+        type: string
+        enum: [COMPLETED, PARTIAL, FAILED, PENDING]
+        description: Overall processing status
+        required: true
+      items:
+        type: ProcessInventoryResult[]
+        description: Processing results per item
+        required: true
+      allocations:
+        type: InventoryAllocation[]
+        description: Inventory allocations made
+        required: false
+      backorders:
+        type: BackorderRecord[]
+        description: Items placed on backorder
+        required: false
+      exceptions:
+        type: InventoryException[]
+        description: Processing exceptions
+        required: false
+      totalReservedValue:
+        type: number
+        description: Total value of reserved inventory
+        minimum: 0
+        required: false
+
+  ProcessInventoryResult:
+    displayName: Process Inventory Result
+    description: Processing result for individual item
+    type: object
+    properties:
+      lineItemId:
+        type: string
+        required: true
+      productId:
+        type: string
+        required: true
+      sku:
+        type: string
+        required: true
+      requestedQuantity:
+        type: integer
+        required: true
+      processedQuantity:
+        type: integer
+        description: Quantity successfully processed
+        minimum: 0
+        required: true
+      remainingQuantity:
+        type: integer
+        description: Quantity not processed (backorder/unavailable)
+        minimum: 0
+        required: true
+      status:
+        type: string
+        enum: [FULFILLED, PARTIAL, FAILED, BACKORDERED]
+        required: true
+      allocatedWarehouses:
+        type: WarehouseAllocation[]
+        description: Warehouse allocations
+        required: false
+      reservationId:
+        type: string
+        description: Generated reservation ID
+        required: false
+      unitCost:
+        type: number
+        description: Unit cost for allocated inventory
+        minimum: 0
+        required: false
+
+  # System API Inventory Types
+  SystemInventoryRecord:
+    displayName: System Inventory Record
+    description: System-level inventory record for persistence
+    type: object
+    properties:
+      inventoryId:
+        type: string
+        description: Unique inventory record identifier
+        required: true
+      productId:
+        type: string
+        description: Product identifier
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        description: Stock keeping unit
+        required: true
+      warehouseId:
+        type: string
+        description: Warehouse identifier
+        required: true
+      locationCode:
+        type: string
+        description: Specific location within warehouse
+        required: false
+      quantityOnHand:
+        type: integer
+        description: Physical quantity on hand
+        minimum: 0
+        required: true
+      quantityReserved:
+        type: integer
+        description: Quantity reserved for orders
+        minimum: 0
+        required: true
+      quantityAllocated:
+        type: integer
+        description: Quantity allocated to specific orders
+        minimum: 0
+        required: true
+      quantityAvailable:
+        type: integer
+        description: Available quantity (on hand - reserved - allocated)
+        minimum: 0
+        required: true
+      quantityOnOrder:
+        type: integer
+        description: Quantity on purchase order
+        minimum: 0
+        required: false
+      quantityInTransit:
+        type: integer
+        description: Quantity being transferred
+        minimum: 0
+        required: false
+      reorderPoint:
+        type: integer
+        description: Reorder threshold
+        minimum: 0
+        required: false
+      maximumStock:
+        type: integer
+        description: Maximum stock level
+        minimum: 0
+        required: false
+      minimumStock:
+        type: integer
+        description: Minimum stock level
+        minimum: 0
+        required: false
+      unitCost:
+        type: number
+        description: Unit cost of inventory
+        minimum: 0
+        required: false
+      totalValue:
+        type: number
+        description: Total inventory value
+        minimum: 0
+        required: false
+      lastUpdated:
+        type: datetime-only
+        description: Last inventory update timestamp
+        required: true
+      lastCountDate:
+        type: date-only
+        description: Last physical count date
+        required: false
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, DISCONTINUED, QUARANTINED]
+        description: Inventory status
+        required: true
+      serialTracked:
+        type: boolean
+        description: Whether serial numbers are tracked
+        default: false
+        required: false
+      lotTracked:
+        type: boolean
+        description: Whether lot numbers are tracked
+        default: false
+        required: false
+      expirationTracked:
+        type: boolean
+        description: Whether expiration dates are tracked
+        default: false
+        required: false
+
+  # Supporting Types
+  AlternativeProduct:
+    displayName: Alternative Product
+    description: Suggested alternative product
+    type: object
+    properties:
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      productName:
+        type: string
+        maxLength: 200
+        required: true
+      sku:
+        type: string
+        required: true
+      availableQuantity:
+        type: integer
+        minimum: 0
+        required: true
+      unitPrice:
+        type: number
+        minimum: 0
+        required: true
+      similarityScore:
+        type: number
+        description: How similar to original product (0-1)
+        minimum: 0
+        maximum: 1
+        required: false
+      reason:
+        type: string
+        enum: [SIMILAR_PRODUCT, UPGRADED_VERSION, SAME_CATEGORY, CROSS_SELL]
+        description: Why this is suggested as alternative
+        required: false
+
+  FulfillmentOption:
+    displayName: Fulfillment Option
+    description: Available fulfillment option for a product
+    type: object
+    properties:
+      warehouseId:
+        type: string
+        description: Fulfillment warehouse identifier
+        required: true
+      warehouseName:
+        type: string
+        description: Warehouse display name
+        required: false
+      availableQuantity:
+        type: integer
+        description: Available quantity at this location
+        minimum: 0
+        required: true
+      estimatedShipDate:
+        type: date-only
+        description: Estimated ship date from this location
+        required: false
+      shippingCost:
+        type: number
+        description: Shipping cost from this location
+        minimum: 0
+        required: false
+      deliveryTime:
+        type: string
+        enum: [SAME_DAY, NEXT_DAY, TWO_DAY, STANDARD, EXTENDED]
+        description: Delivery time option
+        required: false
+
+  InventoryBusinessRules:
+    displayName: Inventory Business Rules
+    description: Business rules context for inventory processing
+    type: object
+    properties:
+      customerTier:
+        type: string
+        enum: [BRONZE, SILVER, GOLD, PLATINUM]
+        description: Customer tier for priority allocation
+        required: false
+      seasonalRules:
+        type: boolean
+        description: Apply seasonal inventory rules
+        default: false
+        required: false
+      promotionalReserve:
+        type: boolean
+        description: Reserve inventory for promotions
+        default: false
+        required: false
+      crossDockAllowed:
+        type: boolean
+        description: Allow cross-docking fulfillment
+        default: true
+        required: false
+      dropShipAllowed:
+        type: boolean
+        description: Allow drop-ship fulfillment
+        default: false
+        required: false
+      backorderLimitDays:
+        type: integer
+        description: Maximum days for backorder
+        minimum: 0
+        required: false
+
+  InventoryAllocation:
+    displayName: Inventory Allocation
+    description: Specific inventory allocation details
+    type: object
+    properties:
+      allocationId:
+        type: string
+        description: Unique allocation identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      orderId:
+        type: string
+        description: Associated order identifier
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: false
+      lineItemId:
+        type: string
+        description: Associated line item identifier
+        required: false
+      warehouseId:
+        type: string
+        description: Source warehouse
+        required: true
+      quantity:
+        type: integer
+        description: Allocated quantity
+        minimum: 1
+        required: true
+      reservationId:
+        type: string
+        description: Associated reservation ID
+        required: false
+      allocationDate:
+        type: datetime-only
+        description: When allocation was made
+        required: true
+      expirationDate:
+        type: datetime-only
+        description: When allocation expires
+        required: false
+      status:
+        type: string
+        enum: [ACTIVE, EXPIRED, CONSUMED, RELEASED]
+        description: Allocation status
+        required: true
+      unitCost:
+        type: number
+        description: Unit cost of allocated inventory
+        minimum: 0
+        required: false
+      serialNumbers:
+        type: string[]
+        description: Serial numbers if applicable
+        required: false
+      lotNumbers:
+        type: string[]
+        description: Lot numbers if applicable
+        required: false
+
+  BackorderRecord:
+    displayName: Backorder Record
+    description: Record of backordered inventory
+    type: object
+    properties:
+      backorderId:
+        type: string
+        description: Unique backorder identifier
+        required: true
+      orderId:
+        type: string
+        description: Associated order identifier
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      lineItemId:
+        type: string
+        description: Associated line item identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      quantity:
+        type: integer
+        description: Backordered quantity
+        minimum: 1
+        required: true
+      backorderDate:
+        type: datetime-only
+        description: When backorder was created
+        required: true
+      expectedAvailabilityDate:
+        type: date-only
+        description: Expected availability date
+        required: false
+      priority:
+        type: integer
+        description: Backorder priority (1=highest)
+        minimum: 1
+        required: false
+      status:
+        type: string
+        enum: [PENDING, PARTIAL_FILLED, FULFILLED, CANCELLED]
+        description: Backorder status
+        required: true
+      customerNotified:
+        type: boolean
+        description: Whether customer was notified
+        default: false
+        required: false
+
+  WarehouseAllocation:
+    displayName: Warehouse Allocation
+    description: Inventory allocation from specific warehouse
+    type: object
+    properties:
+      warehouseId:
+        type: string
+        description: Warehouse identifier
+        required: true
+      warehouseName:
+        type: string
+        description: Warehouse display name
+        required: false
+      allocatedQuantity:
+        type: integer
+        description: Quantity allocated from this warehouse
+        minimum: 1
+        required: true
+      availableQuantity:
+        type: integer
+        description: Total available at this warehouse
+        minimum: 0
+        required: false
+      estimatedShipDate:
+        type: date-only
+        description: Estimated ship date from this warehouse
+        required: false
+
+  InventoryException:
+    displayName: Inventory Exception
+    description: Exception during inventory processing
+    type: object
+    properties:
+      exceptionId:
+        type: string
+        description: Unique exception identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      exceptionType:
+        type: string
+        enum: [INSUFFICIENT_INVENTORY, SYSTEM_ERROR, BUSINESS_RULE_VIOLATION, DATA_INCONSISTENCY]
+        required: true
+      exceptionMessage:
+        type: string
+        description: Detailed exception message
+        maxLength: 500
+        required: true
+      severity:
+        type: string
+        enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        description: Exception severity
+        required: true
+      resolutionRequired:
+        type: boolean
+        description: Whether manual resolution is required
+        default: false
+        required: false
+      occurrenceTime:
+        type: datetime-only
+        description: When exception occurred
+        required: true
+
+  # Inventory Transaction Types
+  InventoryTransaction:
+    displayName: Inventory Transaction
+    description: Individual inventory movement transaction
+    type: object
+    properties:
+      transactionId:
+        type: string
+        description: Unique transaction identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      warehouseId:
+        type: string
+        description: Warehouse where transaction occurred
+        required: true
+      transactionType:
+        type: string
+        enum: [RECEIPT, ISSUE, TRANSFER, ADJUSTMENT, RESERVATION, RELEASE]
+        description: Type of inventory transaction
+        required: true
+      quantity:
+        type: integer
+        description: Transaction quantity (positive/negative)
+        required: true
+      unitCost:
+        type: number
+        description: Unit cost for the transaction
+        minimum: 0
+        required: false
+      totalCost:
+        type: number
+        description: Total cost for the transaction
+        minimum: 0
+        required: false
+      referenceNumber:
+        type: string
+        description: Reference document number (PO, Order, etc.)
+        required: false
+      referenceType:
+        type: string
+        enum: [PURCHASE_ORDER, SALES_ORDER, TRANSFER_ORDER, ADJUSTMENT, CYCLE_COUNT]
+        description: Type of reference document
+        required: false
+      transactionDate:
+        type: datetime-only
+        description: When transaction occurred
+        required: true
+      reasonCode:
+        type: string
+        description: Reason for the transaction
+        required: false
+      performedBy:
+        type: string
+        description: User or system that performed transaction
+        required: true
+      lotNumber:
+        type: string
+        description: Lot number if applicable
+        required: false
+      serialNumber:
+        type: string
+        description: Serial number if applicable
+        required: false
+      expirationDate:
+        type: date-only
+        description: Expiration date if applicable
+        required: false
+
+  # Search and Query Types
+  InventorySearchCriteria:
+    displayName: Inventory Search Criteria
+    description: Criteria for searching inventory records
+    type: object
+    properties:
+      productIds:
+        type: string[]
+        description: Filter by product IDs
+        required: false
+      skus:
+        type: string[]
+        description: Filter by SKUs
+        required: false
+      warehouseIds:
+        type: string[]
+        description: Filter by warehouse IDs
+        required: false
+      status:
+        type: string[]
+        description: Filter by inventory status
+        required: false
+      availabilityOnly:
+        type: boolean
+        description: Only return items with available quantity > 0
+        default: false
+        required: false
+      lowStockOnly:
+        type: boolean
+        description: Only return items below reorder point
+        default: false
+        required: false
+      categoryIds:
+        type: string[]
+        description: Filter by product categories
+        required: false
+      lastUpdatedFrom:
+        type: datetime-only
+        description: Filter by last updated date (from)
+        required: false
+      lastUpdatedTo:
+        type: datetime-only
+        description: Filter by last updated date (to)
+        required: false
+
+  InventorySearchResults:
+    displayName: Inventory Search Results
+    description: Results of inventory search query
+    type: object
+    properties:
+      inventoryRecords:
+        type: SystemInventoryRecord[]
+        description: Matching inventory records
+        required: true
+      totalCount:
+        type: integer
+        description: Total number of matching records
+        required: true
+      page:
+        type: integer
+        description: Current page number
+        required: true
+      pageSize:
+        type: integer
+        description: Number of items per page
+        required: true
+      hasMorePages:
+        type: boolean
+        description: Whether there are more pages available
+        required: true

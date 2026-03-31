@@ -1,0 +1,229 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains standardized error response structures for Order Management APIs.
+  It defines error formats for Experience, Process, and System layer APIs following RFC 7807 Problem Details standard.
+
+types:
+  ErrorResponse:
+    displayName: Standard Error Response
+    description: |
+      Standardized error response format following RFC 7807 Problem Details for HTTP APIs.
+      Used consistently across all API layers for uniform error handling.
+    type: object
+    properties:
+      type:
+        type: string
+        description: |
+          A URI reference that identifies the problem type.
+          This specification encourages that, when dereferenced, it provide human-readable documentation.
+        example: "https://api.company.com/problems/validation-error"
+        required: false
+      title:
+        type: string
+        description: |
+          A short, human-readable summary of the problem type.
+          Should not change from occurrence to occurrence of the problem.
+        maxLength: 100
+        example: "Validation Error"
+        required: true
+      status:
+        type: integer
+        description: |
+          The HTTP status code for this occurrence of the problem.
+        minimum: 100
+        maximum: 599
+        example: 400
+        required: true
+      detail:
+        type: string
+        description: |
+          A human-readable explanation specific to this occurrence of the problem.
+        maxLength: 500
+        example: "The request contains invalid field values"
+        required: false
+      instance:
+        type: string
+        description: |
+          A URI reference that identifies the specific occurrence of the problem.
+        example: "/orders/ORD-12345ABC"
+        required: false
+      timestamp:
+        type: datetime-only
+        description: When the error occurred
+        example: 2024-03-24T16:30:00
+        required: true
+      correlationId:
+        type: string
+        description: Unique identifier for request correlation and debugging
+        pattern: ^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$
+        example: "550e8400-e29b-41d4-a716-446655440000"
+        required: true
+      errors:
+        type: ErrorDetail[]
+        description: Array of detailed error information
+        required: false
+
+  ErrorDetail:
+    displayName: Detailed Error Information
+    description: Detailed information about specific field or validation errors
+    type: object
+    properties:
+      code:
+        type: string
+        description: Machine-readable error code
+        example: "FIELD_REQUIRED"
+        required: true
+      field:
+        type: string
+        description: Field name that caused the error
+        example: "customerId"
+        required: false
+      message:
+        type: string
+        description: Human-readable error message
+        maxLength: 200
+        example: "Customer ID is required"
+        required: true
+      value:
+        type: string
+        description: The invalid value that caused the error
+        required: false
+      location:
+        type: string
+        description: Location of the error (path, header, query parameter)
+        enum: [BODY, HEADER, QUERY, PATH]
+        example: "BODY"
+        required: false
+
+  ValidationErrorResponse:
+    displayName: Validation Error Response
+    description: Specialized error response for validation failures
+    type: ErrorResponse
+    properties:
+      errors:
+        type: ErrorDetail[]
+        description: Specific validation errors
+        minItems: 1
+        required: true
+
+  BusinessErrorResponse:
+    displayName: Business Logic Error Response
+    description: Error response for business rule violations
+    type: ErrorResponse
+    properties:
+      businessErrorCode:
+        type: string
+        description: Specific business error code
+        example: "INSUFFICIENT_INVENTORY"
+        required: true
+      businessContext:
+        type: object
+        description: Business-specific context information
+        required: false
+
+  SystemErrorResponse:
+    displayName: System Error Response
+    description: Error response for system-level failures
+    type: ErrorResponse
+    properties:
+      systemErrorCode:
+        type: string
+        description: Internal system error code
+        required: false
+      retryable:
+        type: boolean
+        description: Whether the operation can be retried
+        default: false
+        required: false
+      retryAfter:
+        type: integer
+        description: Seconds to wait before retrying (if retryable)
+        minimum: 0
+        required: false
+
+  NotFoundErrorResponse:
+    displayName: Resource Not Found Error Response
+    description: Error response when a requested resource is not found
+    type: ErrorResponse
+    properties:
+      resourceType:
+        type: string
+        description: Type of resource that was not found
+        example: "ORDER"
+        required: false
+      resourceId:
+        type: string
+        description: Identifier of the resource that was not found
+        example: "ORD-12345ABC"
+        required: false
+
+  AuthenticationErrorResponse:
+    displayName: Authentication Error Response
+    description: Error response for authentication failures
+    type: ErrorResponse
+    properties:
+      authErrorCode:
+        type: string
+        description: Authentication-specific error code
+        enum: [INVALID_CREDENTIALS, EXPIRED_TOKEN, MISSING_TOKEN, INVALID_TOKEN, TOKEN_REVOKED]
+        required: true
+      realm:
+        type: string
+        description: Authentication realm
+        required: false
+
+  AuthorizationErrorResponse:
+    displayName: Authorization Error Response
+    description: Error response for authorization failures
+    type: ErrorResponse
+    properties:
+      requiredPermissions:
+        type: string[]
+        description: Permissions required to access the resource
+        required: false
+      userPermissions:
+        type: string[]
+        description: Permissions the user currently has
+        required: false
+
+  RateLimitErrorResponse:
+    displayName: Rate Limit Error Response
+    description: Error response when rate limits are exceeded
+    type: ErrorResponse
+    properties:
+      limit:
+        type: integer
+        description: Rate limit threshold
+        required: true
+      remaining:
+        type: integer
+        description: Requests remaining in current window
+        required: true
+      resetTime:
+        type: datetime-only
+        description: When the rate limit resets
+        required: true
+      retryAfter:
+        type: integer
+        description: Seconds to wait before retrying
+        required: true
+
+  ConflictErrorResponse:
+    displayName: Conflict Error Response
+    description: Error response for resource conflicts
+    type: ErrorResponse
+    properties:
+      conflictType:
+        type: string
+        description: Type of conflict
+        enum: [VERSION_MISMATCH, DUPLICATE_RESOURCE, CONCURRENT_MODIFICATION, BUSINESS_RULE_CONFLICT]
+        required: true
+      currentVersion:
+        type: integer
+        description: Current version of the resource
+        required: false
+      providedVersion:
+        type: integer
+        description: Version provided in the request
+        required: false

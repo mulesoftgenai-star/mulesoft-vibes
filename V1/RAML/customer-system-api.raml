@@ -1,0 +1,657 @@
+#%RAML 1.0
+title: Customer System API
+version: v1.0
+baseUri: https://api.customersystem.internal/{version}
+description: |
+  System API for Customer Management System providing customer data operations.
+  This API interfaces with the customer database and provides customer validation services.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  CustomerTypes: order-management-api-fragments/src/main/resources/api/datatypes/customer-types.raml
+  ErrorTypes: order-management-api-fragments/src/main/resources/api/datatypes/error-types.raml
+  ApiLayerTypes: order-management-api-fragments/src/main/resources/api/datatypes/api-layer-types.raml
+  SecurityTraits: order-management-api-fragments/src/main/resources/api/traits/security-traits.raml
+
+traits:
+  apiKeyAuth: SecurityTraits.api-key-secured
+  systemLogged: SecurityTraits.audit-logged
+
+securitySchemes:
+  apiKey:
+    description: API Key authentication for system access
+    type: x-api-key
+    describedBy:
+      headers:
+        X-API-Key:
+          description: API Key for system authentication
+          type: string
+          example: "ak_1234567890abcdef1234567890abcdef12345678"
+          required: true
+        X-API-Secret:
+          description: API Secret for enhanced security
+          type: string
+          example: "as_abcdef1234567890abcdef1234567890abcdef12"
+          required: false
+      responses:
+        401:
+          description: Unauthorized - Invalid or missing API key
+        403:
+          description: Forbidden - Valid key but insufficient permissions
+
+/customers:
+  displayName: Customer Management
+  description: Customer data operations for system integration
+  
+  get:
+    displayName: List Customers
+    description: Retrieve list of customers with filtering and pagination
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      status?:
+        type: string
+        enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+        description: Filter customers by status
+      customerType?:
+        type: string
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        description: Filter customers by type
+      email?:
+        type: string
+        description: Filter by email address
+      phoneNumber?:
+        type: string
+        description: Filter by phone number
+      registeredAfter?:
+        type: date-only
+        description: Filter customers registered after this date
+      limit?:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Number of customers to return
+      offset?:
+        type: integer
+        minimum: 0
+        default: 0
+        description: Number of customers to skip
+    responses:
+      200:
+        description: Successfully retrieved customers
+        body:
+          application/json:
+            type: CustomerTypes.Customer[]
+            example: |
+              [
+                {
+                  "customerId": "CUST-12345678",
+                  "customerNumber": "CUST-2024-000001",
+                  "customerType": "INDIVIDUAL",
+                  "status": "ACTIVE",
+                  "firstName": "John",
+                  "lastName": "Doe",
+                  "email": "john.doe@email.com",
+                  "phoneNumber": "+1234567890",
+                  "registrationDate": "2024-01-15T10:30:00Z",
+                  "lastLoginDate": "2024-03-20T14:30:00Z"
+                }
+              ]
+      400:
+        description: Bad request
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+  post:
+    displayName: Create Customer
+    description: Create a new customer record
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: CustomerTypes.CustomerRequest
+        example: |
+          {
+            "firstName": "John",
+            "lastName": "Doe",
+            "email": "john.doe@email.com",
+            "phoneNumber": "+1234567890",
+            "customerType": "INDIVIDUAL",
+            "addresses": [
+              {
+                "addressType": "HOME",
+                "firstName": "John",
+                "lastName": "Doe",
+                "addressLine1": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "postalCode": "10001",
+                "country": "US",
+                "isDefault": true
+              }
+            ],
+            "marketingConsent": {
+              "emailConsent": {
+                "granted": true,
+                "grantedDate": "2024-01-15T10:30:00Z",
+                "consentMethod": "WEB_FORM"
+              }
+            },
+            "source": "WEB"
+          }
+    responses:
+      201:
+        description: Customer created successfully
+        headers:
+          Location:
+            description: URL of the created customer
+            type: string
+        body:
+          application/json:
+            type: CustomerTypes.Customer
+            example: |
+              {
+                "customerId": "CUST-12345678",
+                "customerNumber": "CUST-2024-000001",
+                "customerType": "INDIVIDUAL",
+                "status": "ACTIVE",
+                "firstName": "John",
+                "lastName": "Doe",
+                "email": "john.doe@email.com",
+                "phoneNumber": "+1234567890",
+                "registrationDate": "2024-01-15T10:30:00Z",
+                "source": "WEB",
+                "version": 1
+              }
+      400:
+        description: Invalid customer data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      409:
+        description: Customer already exists (duplicate email/phone)
+        body:
+          application/json:
+            type: ErrorTypes.ConflictErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+  /{customerId}:
+    displayName: Customer Details
+    uriParameters:
+      customerId:
+        type: string
+        description: Unique customer identifier
+        pattern: ^CUST-[A-Z0-9]{8}$
+        example: "CUST-12345678"
+    
+    get:
+      displayName: Get Customer
+      description: Retrieve detailed customer information
+      is: [apiKeyAuth, systemLogged]
+      securedBy: [apiKey]
+      queryParameters:
+        includeAddresses?:
+          type: boolean
+          default: true
+          description: Include customer addresses in response
+        includePaymentMethods?:
+          type: boolean
+          default: false
+          description: Include payment method references
+        includeLoyalty?:
+          type: boolean
+          default: false
+          description: Include loyalty program information
+        includeCredit?:
+          type: boolean
+          default: false
+          description: Include credit information
+      responses:
+        200:
+          description: Customer details retrieved successfully
+          body:
+            application/json:
+              type: CustomerTypes.Customer
+              example: |
+                {
+                  "customerId": "CUST-12345678",
+                  "customerNumber": "CUST-2024-000001",
+                  "customerType": "INDIVIDUAL",
+                  "status": "ACTIVE",
+                  "firstName": "John",
+                  "lastName": "Doe",
+                  "email": "john.doe@email.com",
+                  "phoneNumber": "+1234567890",
+                  "preferredContactMethod": "EMAIL",
+                  "language": "en",
+                  "currency": "USD",
+                  "addresses": [
+                    {
+                      "addressId": "ADDR-001",
+                      "addressType": "HOME",
+                      "firstName": "John",
+                      "lastName": "Doe",
+                      "addressLine1": "123 Main St",
+                      "city": "New York",
+                      "state": "NY",
+                      "postalCode": "10001",
+                      "country": "US",
+                      "isDefault": true,
+                      "isActive": true
+                    }
+                  ],
+                  "registrationDate": "2024-01-15T10:30:00Z",
+                  "lastLoginDate": "2024-03-20T14:30:00Z",
+                  "source": "WEB",
+                  "version": 1
+                }
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorTypes.AuthenticationErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorTypes.SystemErrorResponse
+    
+    put:
+      displayName: Update Customer
+      description: Update customer information
+      is: [apiKeyAuth, systemLogged]
+      securedBy: [apiKey]
+      body:
+        application/json:
+          type: CustomerTypes.CustomerUpdate
+          example: |
+            {
+              "firstName": "John",
+              "lastName": "Smith",
+              "email": "john.smith@email.com",
+              "phoneNumber": "+1234567890",
+              "customerType": "PREMIUM",
+              "status": "ACTIVE",
+              "preferences": {
+                "communicationPreferences": {
+                  "preferredChannel": "EMAIL",
+                  "emailNotifications": true,
+                  "smsNotifications": false
+                }
+              },
+              "version": 1
+            }
+      responses:
+        200:
+          description: Customer updated successfully
+          body:
+            application/json:
+              type: CustomerTypes.Customer
+        400:
+          description: Invalid update data
+          body:
+            application/json:
+              type: ErrorTypes.ValidationErrorResponse
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        409:
+          description: Version mismatch (optimistic locking)
+          body:
+            application/json:
+              type: ErrorTypes.ConflictErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorTypes.SystemErrorResponse
+    
+    delete:
+      displayName: Deactivate Customer
+      description: Deactivate customer account (soft delete)
+      is: [apiKeyAuth, systemLogged]
+      securedBy: [apiKey]
+      responses:
+        204:
+          description: Customer deactivated successfully
+        404:
+          description: Customer not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        409:
+          description: Customer cannot be deactivated (active orders)
+          body:
+            application/json:
+              type: ErrorTypes.ConflictErrorResponse
+        500:
+          description: Internal server error
+          body:
+            application/json:
+              type: ErrorTypes.SystemErrorResponse
+
+/customers/validate:
+  displayName: Customer Validation
+  description: Validate customer information for order processing
+  
+  post:
+    displayName: Validate Customer
+    description: Validate customer data and return validation status
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: ApiLayerTypes.SystemCustomerValidationRequest
+        example: |
+          {
+            "customerId": "CUST-12345678",
+            "email": "john.doe@email.com",
+            "phoneNumber": "+1234567890",
+            "validationType": "COMPREHENSIVE",
+            "includeProfile": true
+          }
+    responses:
+      200:
+        description: Customer validation completed
+        body:
+          application/json:
+            type: ApiLayerTypes.SystemCustomerValidationResponse
+            example: |
+              {
+                "customerId": "CUST-12345678",
+                "validationStatus": "VALID",
+                "customerProfile": {
+                  "customerId": "CUST-12345678",
+                  "customerType": "INDIVIDUAL",
+                  "status": "ACTIVE",
+                  "registrationDate": "2024-01-15",
+                  "tierLevel": "SILVER",
+                  "lifetimeValue": 2500.00,
+                  "orderCount": 15,
+                  "lastOrderDate": "2024-03-20"
+                },
+                "creditInfo": {
+                  "creditLimit": 5000.00,
+                  "availableCredit": 4500.00,
+                  "creditUsed": 500.00,
+                  "paymentTerms": "IMMEDIATE",
+                  "creditStatus": "ACTIVE"
+                },
+                "validationTimestamp": "2024-03-24T16:30:00Z",
+                "validationMessages": []
+              }
+      400:
+        description: Invalid validation request
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Validation service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/customers/{customerId}/addresses:
+  displayName: Customer Addresses
+  uriParameters:
+    customerId:
+      type: string
+      description: Unique customer identifier
+      pattern: ^CUST-[A-Z0-9]{8}$
+  
+  get:
+    displayName: Get Customer Addresses
+    description: Retrieve all addresses for a customer
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    queryParameters:
+      addressType?:
+        type: string
+        enum: [HOME, WORK, BILLING, SHIPPING, OTHER]
+        description: Filter by address type
+      activeOnly?:
+        type: boolean
+        default: true
+        description: Return only active addresses
+    responses:
+      200:
+        description: Customer addresses retrieved successfully
+        body:
+          application/json:
+            type: CustomerTypes.CustomerAddress[]
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  post:
+    displayName: Add Customer Address
+    description: Add a new address for a customer
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: CustomerTypes.CustomerAddress
+        example: |
+          {
+            "addressType": "WORK",
+            "firstName": "John",
+            "lastName": "Doe",
+            "company": "Acme Corp",
+            "addressLine1": "456 Business Ave",
+            "city": "Chicago",
+            "state": "IL",
+            "postalCode": "60601",
+            "country": "US",
+            "phoneNumber": "+1987654321",
+            "isDefault": false
+          }
+    responses:
+      201:
+        description: Address added successfully
+        headers:
+          Location:
+            description: URL of the created address
+            type: string
+        body:
+          application/json:
+            type: CustomerTypes.CustomerAddress
+      400:
+        description: Invalid address data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/customers/search:
+  displayName: Customer Search
+  description: Search customers by various criteria
+  
+  post:
+    displayName: Search Customers
+    description: Advanced customer search with multiple criteria
+    is: [apiKeyAuth, systemLogged]
+    securedBy: [apiKey]
+    body:
+      application/json:
+        type: object
+        properties:
+          searchCriteria:
+            type: object
+            properties:
+              email?:
+                type: string
+              phoneNumber?:
+                type: string
+              firstName?:
+                type: string
+              lastName?:
+                type: string
+              customerNumber?:
+                type: string
+              status?:
+                type: string[]
+                enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+              customerType?:
+                type: string[]
+                enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+              registrationDateFrom?:
+                type: date-only
+              registrationDateTo?:
+                type: date-only
+            required: false
+          returnFields?:
+            type: string[]
+            description: Specific fields to return in results
+          limit?:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          offset?:
+            type: integer
+            minimum: 0
+            default: 0
+        example: |
+          {
+            "searchCriteria": {
+              "email": "john.doe@email.com",
+              "status": ["ACTIVE"],
+              "customerType": ["INDIVIDUAL", "PREMIUM"]
+            },
+            "returnFields": ["customerId", "firstName", "lastName", "email", "status"],
+            "limit": 10,
+            "offset": 0
+          }
+    responses:
+      200:
+        description: Search completed successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              customers:
+                type: CustomerTypes.CustomerSummary[]
+              totalCount:
+                type: integer
+                description: Total number of matching customers
+              hasMore:
+                type: boolean
+                description: Whether there are more results available
+            example: |
+              {
+                "customers": [
+                  {
+                    "customerId": "CUST-12345678",
+                    "customerNumber": "CUST-2024-000001",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "email": "john.doe@email.com",
+                    "customerType": "INDIVIDUAL",
+                    "status": "ACTIVE"
+                  }
+                ],
+                "totalCount": 1,
+                "hasMore": false
+              }
+      400:
+        description: Invalid search criteria
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      500:
+        description: Search service error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+/health:
+  displayName: Health Check
+  description: Customer System API health status
+  
+  get:
+    displayName: Health Check
+    description: Check API and database connectivity
+    responses:
+      200:
+        description: System is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-24T16:30:00Z",
+                "version": "1.0.0",
+                "checks": {
+                  "database": "UP",
+                  "cache": "UP",
+                  "externalServices": "UP"
+                },
+                "responseTime": 45
+              }
+      503:
+        description: System is unhealthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "DOWN",
+                "timestamp": "2024-03-24T16:30:00Z",
+                "version": "1.0.0",
+                "checks": {
+                  "database": "DOWN",
+                  "cache": "UP",
+                  "externalServices": "DEGRADED"
+                },
+                "errors": [
+                  {
+                    "component": "database",
+                    "error": "Connection timeout"
+                  }
+                ]
+              }

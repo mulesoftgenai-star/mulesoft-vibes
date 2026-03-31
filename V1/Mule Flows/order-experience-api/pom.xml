@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+    <!-- Configuration Properties -->
+    <configuration-properties file="config.properties" doc:name="Configuration Properties"/>
+
+    <!-- HTTP Listener Configuration -->
+    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
+        <http:listener-connection host="0.0.0.0" port="8082"/>
+    </http:listener-config>
+
+    <!-- HTTP Request Configurations for System APIs -->
+    <http:request-config name="Customer_System_API_Config" doc:name="Customer System API Config" basePath="/api/v1">
+        <http:request-connection host="localhost" port="8083" protocol="HTTP"/>
+    </http:request-config>
+
+    <http:request-config name="Inventory_System_API_Config" doc:name="Inventory System API Config" basePath="/api/v1">
+        <http:request-connection host="localhost" port="8084" protocol="HTTP"/>
+    </http:request-config>
+
+    <http:request-config name="Payment_System_API_Config" doc:name="Payment System API Config" basePath="/api/v1">
+        <http:request-connection host="localhost" port="8085" protocol="HTTP"/>
+    </http:request-config>
+
+    <http:request-config name="Shipping_System_API_Config" doc:name="Shipping System API Config" basePath="/api/v1">
+        <http:request-connection host="localhost" port="8086" protocol="HTTP"/>
+    </http:request-config>
+
+    <!-- Database Configuration -->
+    <db:config name="Database_Config" doc:name="Database Config">
+        <db:generic-connection driverClassName="org.postgresql.Driver" 
+                              password="orderpass" 
+                              url="jdbc:postgresql://localhost:5432/order_management" 
+                              user="orderuser"/>
+    </db:config>
+
+    <!-- Order Process API Main Flow -->
+    <flow name="order-process-api-main" doc:id="order-process-api-main">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders" allowedMethods="POST,GET" doc:name="HTTP Listener - Orders"/>
+        
+        <flow-ref name="set-correlation-id-process" doc:name="Set Correlation ID"/>
+        
+        <choice doc:name="Route by Method">
+            <when expression="#[attributes.method == 'POST']">
+                <flow-ref name="process-order-creation-flow" doc:name="Process Order Creation"/>
+            </when>
+            <when expression="#[attributes.method == 'GET']">
+                <flow-ref name="list-orders-process-flow" doc:name="List Orders"/>
+            </when>
+            <otherwise>
+                <raise-error type="HTTP:METHOD_NOT_ALLOWED" description="Method not supported"/>
+            </otherwise>
+        </choice>
+        
+        <error-handler>
+            <on-error-propagate type="ANY">
+                <logger level="ERROR" message="Process API error: #[error.description]"/>
+                <set-payload value='{"error": "Internal process error", "message": "#[error.description]"}' mimeType="application/json"/>
+                <set-variable variableName="httpStatus" value="500"/>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Individual Order Operations -->
+    <flow name="order-process-api-individual" doc:id="order-process-api-individual">
+        <http:listener config-ref="HTTP_Listener_config" path="/orders/{orderId}" allowedMethods="GET,PATCH,DELETE" doc:name="HTTP Listener - Individual Order"/>
+        
+        <flow-ref name="set-correlation-id-process" doc:name="Set Correlation ID"/>
+        <set-variable value="#[attributes.uriParams.orderId]" variableName="orderId" doc:name="Extract Order ID"/>
+        
+        <choice doc:name="Route Individual Operations">
+            <when expression="#[attributes.method == 'GET']">
+                <flow-ref name="get-order-process-flow" doc:name="Get Order"/>
+            </when>
+            <when expression="#[attributes.method == 'PATCH']">
+                <flow-ref name="update-order-process-flow" doc:name="Update Order"/>
+            </when>
+            <when expression="#[attributes.method == 'DELETE']">
+                <flow-ref name="cancel-order-process-flow" doc:name="Cancel Order"/>
+            </when>
+        </choice>
+    </flow>
+
+    <!-- Process Order Creation Flow -->
+    <flow name="process-order-creation-flow" doc:id="process-order-creation-flow">
+        <logger level="INFO" message="Processing order creation - Correlation ID: #[vars.correlationId]"/>
+        
+        <!-- Validate business rules -->
+        <flow-ref name="validate-order-business-rules" doc:name="Validate Business Rules"/>
+        
+        <!-- Customer Validation -->
+        <flow-ref name="validate-customer-subflow" doc:name="Validate Customer"/>
+        
+        <!-- Check inventory availability -->
+        <flow-ref name="check-inventory-availability-subflow" doc:name="Check Inventory"/>
+        
+        <!-- Reserve inventory -->
+        <flow-ref name="reserve-inventory-subflow" doc:name="Reserve Inventory"/>
+        
+        <!-- Process payment -->
+        <flow-ref name="process-payment-subflow" doc:name="Process Payment"/>
+        
+        <!-- Create order record -->
+        <flow-ref name="create-order-record-subflow" doc:name="Create Order Record"/>
+        
+        <!-- Setup shipping -->
+        <flow-ref name="setup-shipping-subflow" doc:name="Setup Shipping"/>
+        
+        <!-- Transform final response -->
+        <ee:transform doc:name="Transform Order Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderId,
+    customerId: payload.customerId,
+    orderDate: now(),
+    status: "CONFIRMED",
+    totalAmount: payload.totalAmount,
+    currency: "USD",
+    items: payload.items,
+    shippingAddress: payload.shippingAddress,
+    paymentMethod: payload.paymentMethod,
+    estimatedDeliveryDate: vars.estimatedDelivery,
+    trackingNumber: vars.trackingNumber,
+    orderNumber: vars.orderNumber
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <logger level="INFO" message="Order processing completed successfully - Order ID: #[payload.orderId]"/>
+        
+        <error-handler>
+            <on-error-propagate type="CUSTOMER:INVALID">
+                <flow-ref name="rollback-order-transaction" doc:name="Rollback Transaction"/>
+                <raise-error type="ORDER:CUSTOMER_INVALID" description="Invalid customer information"/>
+            </on-error-propagate>
+            <on-error-propagate type="INVENTORY:INSUFFICIENT">
+                <flow-ref name="rollback-order-transaction" doc:name="Rollback Transaction"/>
+                <raise-error type="ORDER:INSUFFICIENT_INVENTORY" description="Insufficient inventory"/>
+            </on-error-propagate>
+            <on-error-propagate type="PAYMENT:FAILED">
+                <flow-ref name="rollback-inventory-reservation" doc:name="Rollback Inventory"/>
+                <raise-error type="ORDER:PAYMENT_FAILED" description="Payment processing failed"/>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- Get Order Process Flow -->
+    <flow name="get-order-process-flow" doc:id="get-order-process-flow">
+        <logger level="INFO" message="Retrieving order - Order ID: #[vars.orderId]"/>
+        
+        <db:select config-ref="Database_Config" doc:name="Get Order from Database">
+            <db:sql><![CDATA[
+                SELECT o.order_id, o.customer_id, o.order_date, o.status, o.total_amount, o.currency,
+                       o.shipping_address, o.billing_address, o.payment_method, o.tracking_number,
+                       o.estimated_delivery_date, o.created_at, o.updated_at
+                FROM orders o 
+                WHERE o.order_id = :orderId
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{orderId: vars.orderId}]]]></db:input-parameters>
+        </db:select>
+        
+        <choice doc:name="Check if Order Found">
+            <when expression="#[sizeOf(payload) > 0]">
+                <!-- Get order items -->
+                <db:select config-ref="Database_Config" doc:name="Get Order Items">
+                    <db:sql><![CDATA[
+                        SELECT line_item_id, product_id, product_name, sku, quantity, unit_price, total_price
+                        FROM order_items 
+                        WHERE order_id = :orderId
+                    ]]></db:sql>
+                    <db:input-parameters><![CDATA[#[{orderId: vars.orderId}]]]></db:input-parameters>
+                </db:select>
+                <set-variable value="#[payload]" variableName="orderItems" doc:name="Store Order Items"/>
+                
+                <!-- Transform response -->
+                <ee:transform doc:name="Transform Order Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    orderId: vars.orderData[0].order_id,
+    customerId: vars.orderData[0].customer_id,
+    orderDate: vars.orderData[0].order_date,
+    status: vars.orderData[0].status,
+    totalAmount: vars.orderData[0].total_amount,
+    currency: vars.orderData[0].currency default "USD",
+    items: vars.orderItems map {
+        lineItemId: $.line_item_id,
+        productId: $.product_id,
+        productName: $.product_name,
+        sku: $.sku,
+        quantity: $.quantity,
+        unitPrice: $.unit_price,
+        totalPrice: $.total_price
+    },
+    shippingAddress: vars.orderData[0].shipping_address,
+    billingAddress: vars.orderData[0].billing_address,
+    paymentMethod: vars.orderData[0].payment_method,
+    trackingNumber: vars.orderData[0].tracking_number,
+    estimatedDeliveryDate: vars.orderData[0].estimated_delivery_date,
+    createdAt: vars.orderData[0].created_at,
+    lastUpdated: vars.orderData[0].updated_at
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise>
+                <raise-error type="ORDER:NOT_FOUND" description="Order not found"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+    <!-- Validation Sub-flows -->
+    <sub-flow name="validate-order-business-rules" doc:id="validate-order-business-rules">
+        <logger level="DEBUG" message="Validating business rules for order"/>
+        <!-- Business rule validations would go here -->
+        <choice doc:name="Validate Order Amount">
+            <when expression="#[sum(payload.items map ($.quantity * $.unitPrice)) &lt;= 0]">
+                <raise-error type="BUSINESS:VALIDATION_ERROR" description="Order total must be greater than zero"/>
+            </when>
+        </choice>
+    </sub-flow>
+
+    <sub-flow name="validate-customer-subflow" doc:id="validate-customer-subflow">
+        <logger level="DEBUG" message="Validating customer: #[payload.customerId]"/>
+        
+        <http:request method="GET" url="/customers/{customerId}/validate" config-ref="Customer_System_API_Config" doc:name="Validate Customer">
+            <http:uri-params><![CDATA[#[{customerId: payload.customerId}]]]></http:uri-params>
+        </http:request>
+        
+        <choice doc:name="Check Customer Validity">
+            <when expression="#[payload.isValid != true]">
+                <raise-error type="CUSTOMER:INVALID" description="Customer validation failed"/>
+            </when>
+        </choice>
+        
+        <set-variable value="#[payload]" variableName="customerInfo" doc:name="Store Customer Info"/>
+    </sub-flow>
+
+    <sub-flow name="check-inventory-availability-subflow" doc:id="check-inventory-availability-subflow">
+        <logger level="DEBUG" message="Checking inventory availability"/>
+        
+        <ee:transform doc:name="Transform Inventory Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    requestId: vars.correlationId,
+    items: payload.items map {
+        itemId: "ITEM-" ++ $$,
+        productId: $.productId,
+        quantity: $.quantity
+    },
+    reservationRequired: true
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <http:request method="POST" url="/inventory/check" config-ref="Inventory_System_API_Config" doc:name="Check Inventory">
+            <http:headers><![CDATA[#[{"Content-Type": "application/json"}]]]></http:headers>
+        </http:request>
+        
+        <choice doc:name="Check Availability">
+            <when expression="#[payload.overallStatus != 'AVAILABLE']">
+                <raise-error type="INVENTORY:INSUFFICIENT" description="Insufficient inventory available"/>
+            </when>
+        </choice>
+        
+        <set-variable value="#[payload]" variableName="inventoryCheck" doc:name="Store Inventory Check"/>
+    </sub-flow>
+
+    <sub-flow name="reserve-inventory-subflow" doc:id="reserve-inventory-subflow">
+        <logger level="DEBUG" message="Reserving inventory"/>
+        
+        <ee:transform doc:name="Transform Reserve Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    requestId: vars.correlationId,
+    orderId: vars.orderId,
+    items: vars.inventoryCheck.items map {
+        lineItemId: $.itemId,
+        productId: $.productId,
+        quantity: $.requestedQuantity
+    },
+    operation: "RESERVE",
+    priority: "NORMAL"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <http:request method="POST" url="/inventory/reserve" config-ref="Inventory_System_API_Config" doc:name="Reserve Inventory">
+            <http:headers><![CDATA[#[{"Content-Type": "application/json"}]]]></http:headers>
+        </http:request>
+        
+        <set-variable value="#[payload.items[0].reservationId]" variableName="reservationId" doc:name="Store Reservation ID"/>
+    </sub-flow>
+
+    <sub-flow name="process-payment-subflow" doc:id="process-payment-subflow">
+        <logger level="DEBUG" message="Processing payment"/>
+        
+        <ee:transform doc:name="Transform Payment Request">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    transactionId: "TXN-" ++ uuid(),
+    orderId: vars.orderId,
+    amount: payload.totalAmount,
+    currency: "USD",
+    paymentMethod: payload.paymentMethod,
+    customerId: payload.customerId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        
+        <http:request method="POST" url="/payments" config-ref="Payment_System_API_Config" doc:name="Process Payment">
+            <http:headers><![CDATA[#[{"Content-Type": "application/json"}]]]></http:headers>
+        </http:request>
+        
+        <choice doc:name="Check Payment Status">
+            <when expression="#[payload.authorizationStatus != 'APPROVED']">
+                <raise-error type="PAYMENT:FAILED" description="Payment authorization failed"/>
+            </when>
+        </choice>
+        
+        <set-variable value="#[payload]" variableName="paymentResult" doc:name="Store Payment Result"/>
+    </sub-flow>
+
+    <sub-flow name="create-order-record-subflow" doc:id="create-order-record-subflow">
+        <logger level="DEBUG" message="Creating order record in database"/>
+        
+        <set-variable value="#[uuid()]" variableName="orderId" doc:name="Generate Order ID"/>
+        <set-variable value="#['ORD-' ++ now() as String {format: 'yyyyMMdd'} ++ '-' ++ randomInt(10000)]" variableName="orderNumber" doc:name="Generate Order Number"/>
+        
+        <!-- Insert order -->
+        <db:insert config-ref="Database_Config" doc:name="Insert Order">
+            <db:sql><![CDATA[
+                INSERT INTO orders (order_id, customer_id, order_date, status, total_amount, currency, 
+                                   shipping_address, billing_address, payment_method, created_at, updated_at)
+                VALUES (:orderId, :customerId, :orderDate, :status, :totalAmount, :currency,
+                        :shippingAddress, :billingAddress, :paymentMethod, :createdAt, :updatedAt)
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{

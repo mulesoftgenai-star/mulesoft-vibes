@@ -1,0 +1,652 @@
+#%RAML 1.0
+title: Order Management Experience API Template
+version: v1
+description: |
+  Experience Layer API template for Order Management system providing unified consumer-facing endpoints.
+  This template follows MuleSoft's API-led connectivity pattern for the Experience layer.
+  
+  Features:
+  - Consumer-friendly aggregated data
+  - Simplified business operations
+  - Mobile and web channel optimization
+  - Authentication and authorization
+  - Rate limiting and throttling
+  - Comprehensive error handling
+
+baseUri: https://api.{environment}.company.com/experience/orders/{version}
+mediaType: application/json
+
+uses:
+  OrderTypes: ../datatypes/order-types.raml
+  ErrorTypes: ../datatypes/error-types.raml
+  SecurityTraits: ../traits/security-traits.raml
+
+traits:
+  rateLimited:
+    headers:
+      X-RateLimit-Limit:
+        description: Number of allowed requests per hour
+        type: integer
+        example: 1000
+      X-RateLimit-Remaining:
+        description: Number of remaining requests in current window
+        type: integer
+        example: 999
+      X-RateLimit-Reset:
+        description: Time when rate limit window resets
+        type: datetime
+        example: 2023-12-01T10:30:00Z
+    responses:
+      429:
+        description: Rate limit exceeded
+        body:
+          application/json:
+            type: ErrorTypes.RateLimitErrorResponse
+
+  cacheable:
+    headers:
+      Cache-Control:
+        description: Cache control directives
+        type: string
+        example: "max-age=300, public"
+      ETag:
+        description: Entity tag for resource version
+        type: string
+        example: "33a64df551425fcc55e4d42a148795d9f25f89d4"
+
+  paginable:
+    queryParameters:
+      limit:
+        description: Maximum number of items to return
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+      offset:
+        description: Number of items to skip
+        type: integer
+        minimum: 0
+        default: 0
+        example: 0
+
+/orders:
+  displayName: Order Management
+  description: Unified order management operations for consumers
+  
+  get:
+    displayName: Get Orders
+    description: |
+      Retrieve orders with optional filtering, sorting, and pagination.
+      Aggregates data from multiple systems for consumer convenience.
+    is: [SecurityTraits.oauth2-secured, rateLimited, paginable, cacheable]
+    queryParameters:
+      customerId:
+        description: Filter by customer ID
+        type: string
+        required: false
+        example: "CUST-12345"
+      status:
+        description: Filter by order status
+        type: string
+        enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+        required: false
+        example: "confirmed"
+      dateFrom:
+        description: Filter orders from this date (ISO 8601)
+        type: date-only
+        required: false
+        example: 2023-01-01
+      dateTo:
+        description: Filter orders until this date (ISO 8601)
+        type: date-only
+        required: false
+        example: 2023-12-31
+      sortBy:
+        description: Sort field
+        type: string
+        enum: [orderDate, status, totalAmount]
+        default: orderDate
+        required: false
+      sortOrder:
+        description: Sort order
+        type: string
+        enum: [asc, desc]
+        default: desc
+        required: false
+    responses:
+      200:
+        description: Orders retrieved successfully
+        headers:
+          X-Total-Count:
+            description: Total number of orders matching criteria
+            type: integer
+            example: 150
+        body:
+          application/json:
+            type: object
+            properties:
+              orders:
+                type: OrderTypes.OrderSummary[]
+                description: List of order summaries
+              pagination:
+                type: object
+                properties:
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  hasMore:
+                    type: boolean
+            example: |
+              {
+                "orders": [
+                  {
+                    "orderId": "ORD-2023A001",
+                    "orderNumber": "2023-000001",
+                    "customerId": "CUST-12345ABC",
+                    "orderDate": "2023-12-01T10:30:00",
+                    "orderStatus": "CONFIRMED",
+                    "totalAmount": 299.99,
+                    "currency": "USD",
+                    "itemCount": 3,
+                    "expectedDeliveryDate": "2023-12-05"
+                  }
+                ],
+                "pagination": {
+                  "limit": 20,
+                  "offset": 0,
+                  "total": 150,
+                  "hasMore": true
+                }
+              }
+      400:
+        description: Invalid request parameters
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.AuthenticationErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorTypes.AuthorizationErrorResponse
+      429:
+        description: Rate limit exceeded
+        body:
+          application/json:
+            type: ErrorTypes.RateLimitErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  post:
+    displayName: Create Order
+    description: |
+      Create a new order with comprehensive validation and orchestration.
+      Handles payment processing, inventory allocation, and notifications.
+    is: [SecurityTraits.oauth2-secured, rateLimited, SecurityTraits.idempotent]
+    body:
+      application/json:
+        type: OrderTypes.OrderRequest
+        example: |
+          {
+            "customerId": "CUST-12345ABC",
+            "orderType": "STANDARD",
+            "priority": "MEDIUM",
+            "items": [
+              {
+                "productId": "PROD-001ABCDE",
+                "quantity": 2
+              },
+              {
+                "productId": "PROD-002FGHIJ",
+                "quantity": 1
+              }
+            ],
+            "shippingAddress": {
+              "firstName": "John",
+              "lastName": "Doe",
+              "addressLine1": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "postalCode": "10001",
+              "country": "US"
+            },
+            "billingAddress": {
+              "firstName": "John",
+              "lastName": "Doe",
+              "addressLine1": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "postalCode": "10001",
+              "country": "US"
+            },
+            "paymentInfo": {
+              "paymentMethod": "CREDIT_CARD",
+              "cardToken": "tok_visa_4242"
+            },
+            "source": "WEB",
+            "specialInstructions": "Leave at door"
+          }
+    responses:
+      201:
+        description: Order created successfully
+        headers:
+          Location:
+            description: URI of the created order
+            type: string
+            example: "/api/experience/orders/v1/orders/ORD-2023A001"
+        body:
+          application/json:
+            type: OrderTypes.Order
+            example: |
+              {
+                "orderId": "ORD-2023A001",
+                "orderNumber": "2023-000001",
+                "customerId": "CUST-12345ABC",
+                "orderDate": "2023-12-01T10:30:00",
+                "orderStatus": "CONFIRMED",
+                "totalAmount": 349.97,
+                "currency": "USD",
+                "items": [
+                  {
+                    "itemId": "ITEM-001",
+                    "productId": "PROD-001ABCDE",
+                    "sku": "SKU-ABC-123",
+                    "productName": "Premium Wireless Headphones",
+                    "quantity": 2,
+                    "unitPrice": 149.99,
+                    "totalPrice": 274.98
+                  }
+                ]
+              }
+      400:
+        description: Invalid order data
+        body:
+          application/json:
+            type: ErrorTypes.ValidationErrorResponse
+      402:
+        description: Payment required or failed
+        body:
+          application/json:
+            type: ErrorTypes.BusinessErrorResponse
+      409:
+        description: Inventory not available or duplicate request
+        body:
+          application/json:
+            type: ErrorTypes.ConflictErrorResponse
+      422:
+        description: Business rule validation failed
+        body:
+          application/json:
+            type: ErrorTypes.BusinessErrorResponse
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            type: ErrorTypes.SystemErrorResponse
+
+  /{orderId}:
+    displayName: Order Details
+    description: Individual order management operations
+    uriParameters:
+      orderId:
+        description: Unique order identifier
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        example: ORD-2023A001
+
+    get:
+      displayName: Get Order Details
+      description: |
+        Retrieve comprehensive order details including items, status, tracking, and history.
+        Aggregates information from multiple systems.
+      is: [SecurityTraits.oauth2-secured, rateLimited, cacheable]
+      responses:
+        200:
+          description: Order details retrieved successfully
+          body:
+            application/json:
+              type: OrderTypes.Order
+              example: |
+                {
+                  "orderId": "ORD-2023A001",
+                  "orderNumber": "2023-000001",
+                  "customerId": "CUST-12345ABC",
+                  "orderDate": "2023-12-01T10:30:00",
+                  "orderStatus": "SHIPPED",
+                  "orderType": "STANDARD",
+                  "priority": "MEDIUM",
+                  "totalAmount": 387.96,
+                  "currency": "USD",
+                  "taxAmount": 28.00,
+                  "shippingAmount": 9.99,
+                  "items": [
+                    {
+                      "itemId": "ITEM-001",
+                      "productId": "PROD-001ABCDE",
+                      "sku": "SKU-ABC-123",
+                      "productName": "Premium Wireless Headphones",
+                      "quantity": 2,
+                      "unitPrice": 149.99,
+                      "totalPrice": 274.98,
+                      "fulfillmentStatus": "SHIPPED",
+                      "trackingNumber": "TRK-12345678"
+                    }
+                  ],
+                  "shippingAddress": {
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "addressLine1": "123 Main St",
+                    "city": "New York",
+                    "state": "NY",
+                    "postalCode": "10001",
+                    "country": "US"
+                  },
+                  "expectedDeliveryDate": "2023-12-05"
+                }
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        401:
+          description: Unauthorized
+          body:
+            application/json:
+              type: ErrorTypes.AuthenticationErrorResponse
+        403:
+          description: Forbidden
+          body:
+            application/json:
+              type: ErrorTypes.AuthorizationErrorResponse
+
+    patch:
+      displayName: Update Order
+      description: |
+        Partial update of order details such as shipping address or preferences.
+        Limited updates based on order status.
+      is: [SecurityTraits.oauth2-secured, rateLimited]
+      body:
+        application/json:
+          type: object
+          properties:
+            shippingAddress:
+              type: OrderTypes.Address
+              required: false
+            specialInstructions:
+              type: string
+              required: false
+          example: |
+            {
+              "shippingAddress": {
+                "firstName": "John",
+                "lastName": "Doe",
+                "addressLine1": "456 Oak Ave",
+                "city": "Boston",
+                "state": "MA",
+                "postalCode": "02101",
+                "country": "US"
+              },
+              "specialInstructions": "Ring doorbell"
+            }
+      responses:
+        200:
+          description: Order updated successfully
+          body:
+            application/json:
+              type: OrderTypes.Order
+        400:
+          description: Invalid update data
+          body:
+            application/json:
+              type: ErrorTypes.ValidationErrorResponse
+        404:
+          description: Order not found
+          body:
+            application/json:
+              type: ErrorTypes.NotFoundErrorResponse
+        409:
+          description: Order cannot be updated in current status
+          body:
+            application/json:
+              type: ErrorTypes.ConflictErrorResponse
+        422:
+          description: Business rule validation failed
+          body:
+            application/json:
+              type: ErrorTypes.BusinessErrorResponse
+
+    /cancel:
+      post:
+        displayName: Cancel Order
+        description: |
+          Cancel an order if it's in a cancellable state.
+          Handles refunds, inventory release, and notifications.
+        is: [SecurityTraits.oauth2-secured, rateLimited]
+        body:
+          application/json:
+            type: object
+            properties:
+              reason:
+                type: string
+                enum: [customer_request, inventory_unavailable, payment_failed, duplicate_order]
+                required: true
+              notes:
+                type: string
+                maxLength: 500
+                required: false
+            example: |
+              {
+                "reason": "customer_request",
+                "notes": "Customer changed mind"
+              }
+        responses:
+          200:
+            description: Order cancelled successfully
+            body:
+              application/json:
+                type: object
+                properties:
+                  orderId:
+                    type: string
+                  status:
+                    type: string
+                  cancelledAt:
+                    type: datetime-only
+                  refundAmount:
+                    type: number
+                    format: double
+                example: |
+                  {
+                    "orderId": "ORD-2023A001",
+                    "status": "CANCELLED",
+                    "cancelledAt": "2023-12-01T12:00:00",
+                    "refundAmount": 387.96
+                  }
+          404:
+            description: Order not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+          409:
+            description: Order cannot be cancelled
+            body:
+              application/json:
+                type: ErrorTypes.ConflictErrorResponse
+
+    /tracking:
+      get:
+        displayName: Get Order Tracking
+        description: |
+          Get real-time tracking information for shipped orders.
+          Aggregates data from shipping carriers.
+        is: [SecurityTraits.oauth2-secured, rateLimited, cacheable]
+        responses:
+          200:
+            description: Tracking information retrieved
+            body:
+              application/json:
+                type: OrderTypes.TrackingInfo
+                example: |
+                  {
+                    "trackingNumber": "TRK-12345678",
+                    "carrier": "FEDEX",
+                    "trackingUrl": "https://www.fedex.com/track?trknbr=TRK-12345678",
+                    "estimatedDelivery": "2023-12-05",
+                    "shippedDate": "2023-12-02T09:15:00"
+                  }
+          404:
+            description: Order or tracking not found
+            body:
+              application/json:
+                type: ErrorTypes.NotFoundErrorResponse
+
+/customers/{customerId}/orders:
+  displayName: Customer Orders
+  description: Customer-specific order operations
+  uriParameters:
+    customerId:
+      description: Customer identifier
+      type: string
+      pattern: ^CUST-[A-Z0-9]{8}$
+      example: CUST-12345ABC
+
+  get:
+    displayName: Get Customer Orders
+    description: |
+      Retrieve all orders for a specific customer with filtering options.
+      Optimized for customer self-service portals.
+    is: [SecurityTraits.oauth2-secured, rateLimited, paginable, cacheable]
+    queryParameters:
+      status:
+        description: Filter by order status
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+        required: false
+      orderType:
+        description: Filter by order type
+        type: string
+        enum: [STANDARD, EXPRESS, BULK, SUBSCRIPTION]
+        required: false
+      dateFrom:
+        description: Filter orders from this date
+        type: date-only
+        required: false
+      dateTo:
+        description: Filter orders until this date
+        type: date-only
+        required: false
+    responses:
+      200:
+        description: Customer orders retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              customerId:
+                type: string
+              orders:
+                type: OrderTypes.OrderSummary[]
+              pagination:
+                type: object
+                properties:
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  hasMore:
+                    type: boolean
+      404:
+        description: Customer not found
+        body:
+          application/json:
+            type: ErrorTypes.NotFoundErrorResponse
+      401:
+        description: Unauthorized
+        body:
+          application/json:
+            type: ErrorTypes.AuthenticationErrorResponse
+      403:
+        description: Forbidden
+        body:
+          application/json:
+            type: ErrorTypes.AuthorizationErrorResponse
+
+/health:
+  displayName: Health Check
+  description: API health and status endpoint
+  get:
+    displayName: Health Check
+    description: Returns API health status and dependencies
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime-only
+              version:
+                type: string
+              dependencies:
+                type: object
+                properties:
+                  orderProcessApi:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+                  customerSystemApi:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      responseTime:
+                        type: integer
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2023-12-01T10:30:00",
+                "version": "v1.0.0",
+                "dependencies": {
+                  "orderProcessApi": {
+                    "status": "UP",
+                    "responseTime": 145
+                  },
+                  "customerSystemApi": {
+                    "status": "UP",
+                    "responseTime": 89
+                  }
+                }
+              }
+      503:
+        description: API is unhealthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [DOWN, DEGRADED]
+              timestamp:
+                type: datetime-only
+              errors:
+                type: string[]

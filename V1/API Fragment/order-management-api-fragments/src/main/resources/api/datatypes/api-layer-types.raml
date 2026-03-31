@@ -1,0 +1,1787 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains comprehensive data types for Experience API, Process API, and System API layers
+  specifically for Order Management integration based on BRD requirements section 11.
+
+types:
+  # =============================================
+  # EXPERIENCE API DATA TYPES
+  # =============================================
+  
+  # Experience API Request Types
+  ExperienceOrderCreateRequest:
+    displayName: Experience Order Create Request
+    description: Order creation request from customer-facing channels (Web, Mobile, Store)
+    type: object
+    properties:
+      customer:
+        type: ExperienceCustomer
+        description: Customer information for the order
+        required: true
+      orderDetails:
+        type: ExperienceOrderDetails
+        description: Order-specific details
+        required: true
+      items:
+        type: ExperienceOrderItem[]
+        description: Items to be ordered
+        minItems: 1
+        required: true
+      addresses:
+        type: ExperienceOrderAddresses
+        description: Shipping and billing addresses
+        required: true
+      payment:
+        type: ExperiencePaymentInfo
+        description: Payment information
+        required: true
+      preferences:
+        type: ExperienceOrderPreferences
+        description: Customer preferences for this order
+        required: false
+      channel:
+        type: string
+        enum: [WEB, MOBILE, STORE, CALL_CENTER, PARTNER_API]
+        description: Channel through which order was placed
+        required: true
+      source:
+        type: string
+        description: Specific source identifier within channel
+        example: "mobile-app-v2.1"
+        required: false
+
+  ExperienceCustomer:
+    displayName: Experience Customer
+    description: Customer information for experience layer
+    type: object
+    properties:
+      customerId:
+        type: string
+        description: Existing customer ID (if returning customer)
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: false
+      email:
+        type: string
+        description: Customer email address
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: true
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      customerType:
+        type: string
+        enum: [GUEST, REGISTERED, PREMIUM, VIP]
+        default: GUEST
+        required: false
+      loyaltyNumber:
+        type: string
+        description: Loyalty program member number
+        required: false
+
+  ExperienceOrderDetails:
+    displayName: Experience Order Details
+    description: Order-specific details from customer perspective
+    type: object
+    properties:
+      orderType:
+        type: string
+        enum: [STANDARD, EXPRESS, RUSH, SCHEDULED]
+        default: STANDARD
+        required: false
+      requestedDeliveryDate:
+        type: date-only
+        description: Customer requested delivery date
+        required: false
+      specialInstructions:
+        type: string
+        maxLength: 500
+        description: Special delivery or handling instructions
+        required: false
+      giftMessage:
+        type: string
+        maxLength: 200
+        description: Gift message if this is a gift order
+        required: false
+      promotionCode:
+        type: string
+        description: Promotional code applied
+        required: false
+      isGift:
+        type: boolean
+        default: false
+        required: false
+
+  ExperienceOrderItem:
+    displayName: Experience Order Item
+    description: Order item from customer perspective
+    type: object
+    properties:
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      productName:
+        type: string
+        maxLength: 200
+        required: false
+      sku:
+        type: string
+        required: false
+      quantity:
+        type: integer
+        minimum: 1
+        required: true
+      customizations:
+        type: ProductCustomization[]
+        description: Product customizations (size, color, etc.)
+        required: false
+      giftWrapRequested:
+        type: boolean
+        default: false
+        required: false
+      personalizedMessage:
+        type: string
+        maxLength: 100
+        description: Personalization text if applicable
+        required: false
+
+  ExperienceOrderAddresses:
+    displayName: Experience Order Addresses
+    description: Shipping and billing addresses
+    type: object
+    properties:
+      shipping:
+        type: ExperienceAddress
+        required: true
+      billing:
+        type: ExperienceAddress
+        required: false
+      sameAsBilling:
+        type: boolean
+        description: Whether billing address is same as shipping
+        default: true
+        required: false
+
+  ExperienceAddress:
+    displayName: Experience Address
+    description: Address information for experience layer
+    type: object
+    properties:
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      company:
+        type: string
+        maxLength: 100
+        required: false
+      addressLine1:
+        type: string
+        maxLength: 100
+        required: true
+      addressLine2:
+        type: string
+        maxLength: 100
+        required: false
+      city:
+        type: string
+        maxLength: 50
+        required: true
+      state:
+        type: string
+        maxLength: 50
+        required: true
+      zipCode:
+        type: string
+        pattern: ^[0-9A-Z\-\s]{3,10}$
+        required: true
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        default: "US"
+        required: true
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      deliveryInstructions:
+        type: string
+        maxLength: 200
+        description: Specific delivery instructions
+        required: false
+
+  ExperiencePaymentInfo:
+    displayName: Experience Payment Info
+    description: Payment information for experience layer
+    type: object
+    properties:
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, APPLE_PAY, GOOGLE_PAY, GIFT_CARD, STORE_CREDIT, BUY_NOW_PAY_LATER]
+        required: true
+      paymentToken:
+        type: string
+        description: Tokenized payment method reference
+        required: false
+      billingAddress:
+        type: ExperienceAddress
+        description: Billing address for payment
+        required: false
+      savePaymentMethod:
+        type: boolean
+        description: Whether to save payment method for future use
+        default: false
+        required: false
+
+  ExperienceOrderPreferences:
+    displayName: Experience Order Preferences
+    description: Customer preferences specific to this order
+    type: object
+    properties:
+      communicationPreferences:
+        type: ExperienceCommunicationPrefs
+        required: false
+      deliveryPreferences:
+        type: ExperienceDeliveryPrefs
+        required: false
+      marketingOptIn:
+        type: boolean
+        description: Opt in to marketing communications
+        default: false
+        required: false
+
+  ExperienceCommunicationPrefs:
+    displayName: Experience Communication Preferences
+    description: How customer wants to be contacted about this order
+    type: object
+    properties:
+      orderConfirmation:
+        type: string
+        enum: [EMAIL, SMS, BOTH, NONE]
+        default: EMAIL
+        required: false
+      shippingUpdates:
+        type: string
+        enum: [EMAIL, SMS, BOTH, NONE]
+        default: EMAIL
+        required: false
+      deliveryNotification:
+        type: string
+        enum: [EMAIL, SMS, BOTH, NONE]
+        default: EMAIL
+        required: false
+
+  ExperienceDeliveryPrefs:
+    displayName: Experience Delivery Preferences
+    description: Delivery preferences for this order
+    type: object
+    properties:
+      preferredCarrier:
+        type: string
+        enum: [UPS, FEDEX, USPS, DHL, ANY]
+        default: ANY
+        required: false
+      signatureRequired:
+        type: boolean
+        default: false
+        required: false
+      leaveAtDoor:
+        type: boolean
+        default: true
+        required: false
+      preferredDeliveryWindow:
+        type: string
+        enum: [MORNING, AFTERNOON, EVENING, ANY_TIME]
+        default: ANY_TIME
+        required: false
+
+  # Experience API Response Types
+  ExperienceOrderCreateResponse:
+    displayName: Experience Order Create Response
+    description: Order creation response for customer channels
+    type: object
+    properties:
+      orderId:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      orderNumber:
+        type: string
+        description: Customer-friendly order number
+        required: true
+      orderStatus:
+        type: string
+        enum: [RECEIVED, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+        required: true
+      customerMessage:
+        type: string
+        description: Customer-friendly status message
+        required: true
+      orderSummary:
+        type: ExperienceOrderSummary
+        required: true
+      confirmation:
+        type: ExperienceOrderConfirmation
+        required: true
+      nextSteps:
+        type: string[]
+        description: What happens next from customer perspective
+        required: false
+      supportContact:
+        type: SupportContactInfo
+        description: Customer support contact information
+        required: false
+
+  ExperienceOrderSummary:
+    displayName: Experience Order Summary
+    description: Order summary for customer confirmation
+    type: object
+    properties:
+      itemCount:
+        type: integer
+        description: Total number of items ordered
+        required: true
+      subtotal:
+        type: number
+        description: Subtotal before taxes and fees
+        minimum: 0
+        required: true
+      tax:
+        type: number
+        description: Tax amount
+        minimum: 0
+        required: true
+      shipping:
+        type: number
+        description: Shipping cost
+        minimum: 0
+        required: true
+      discount:
+        type: number
+        description: Total discount applied
+        minimum: 0
+        required: false
+      total:
+        type: number
+        description: Final total amount
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        default: USD
+        required: true
+
+  ExperienceOrderConfirmation:
+    displayName: Experience Order Confirmation
+    description: Order confirmation details
+    type: object
+    properties:
+      confirmationNumber:
+        type: string
+        description: Order confirmation number
+        required: true
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+        required: false
+      trackingAvailable:
+        type: boolean
+        description: Whether tracking will be available
+        default: true
+        required: false
+      estimatedShipDate:
+        type: date-only
+        description: Estimated ship date
+        required: false
+      fulfillmentMethod:
+        type: string
+        enum: [SHIP_TO_HOME, STORE_PICKUP, CURBSIDE_PICKUP, LOCKER_DELIVERY]
+        required: false
+
+  # =============================================
+  # PROCESS API DATA TYPES
+  # =============================================
+
+  # Process API Request Types
+  ProcessOrderRequest:
+    displayName: Process Order Request
+    description: Internal order processing request for orchestration
+    type: object
+    properties:
+      orderId:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      externalOrderId:
+        type: string
+        description: External system order identifier if applicable
+        required: false
+      customer:
+        type: ProcessCustomerInfo
+        required: true
+      orderData:
+        type: ProcessOrderData
+        required: true
+      items:
+        type: ProcessOrderItem[]
+        minItems: 1
+        required: true
+      fulfillment:
+        type: ProcessFulfillmentInfo
+        required: true
+      payment:
+        type: ProcessPaymentInfo
+        required: true
+      businessContext:
+        type: ProcessBusinessContext
+        required: false
+      orchestrationRules:
+        type: OrchestrationRules
+        description: Rules governing order processing
+        required: false
+
+  ProcessCustomerInfo:
+    displayName: Process Customer Info
+    description: Customer information for process orchestration
+    type: object
+    properties:
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: true
+      customerType:
+        type: string
+        enum: [STANDARD, PREMIUM, VIP, ENTERPRISE]
+        required: true
+      tierLevel:
+        type: string
+        enum: [BRONZE, SILVER, GOLD, PLATINUM, DIAMOND]
+        required: false
+      accountStatus:
+        type: string
+        enum: [ACTIVE, INACTIVE, SUSPENDED, RESTRICTED]
+        required: true
+      paymentTerms:
+        type: string
+        enum: [IMMEDIATE, NET_15, NET_30, NET_45, NET_60]
+        default: IMMEDIATE
+        required: false
+      creditLimit:
+        type: number
+        description: Customer credit limit
+        minimum: 0
+        required: false
+      availableCredit:
+        type: number
+        description: Available credit amount
+        minimum: 0
+        required: false
+
+  ProcessOrderData:
+    displayName: Process Order Data
+    description: Order data for internal processing
+    type: object
+    properties:
+      orderDate:
+        type: datetime-only
+        required: true
+      orderType:
+        type: string
+        enum: [STANDARD, RUSH, BACKORDER, PREORDER, SUBSCRIPTION]
+        required: true
+      priority:
+        type: string
+        enum: [LOW, NORMAL, HIGH, URGENT, CRITICAL]
+        default: NORMAL
+        required: false
+      channel:
+        type: string
+        enum: [ECOMMERCE, MOBILE, RETAIL, B2B, MARKETPLACE]
+        required: true
+      source:
+        type: string
+        description: Specific source system or application
+        required: false
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        default: USD
+        required: true
+      totalAmount:
+        type: number
+        minimum: 0
+        required: true
+      taxAmount:
+        type: number
+        minimum: 0
+        required: false
+      shippingAmount:
+        type: number
+        minimum: 0
+        required: false
+      discountAmount:
+        type: number
+        minimum: 0
+        required: false
+
+  ProcessOrderItem:
+    displayName: Process Order Item
+    description: Order item for process orchestration
+    type: object
+    properties:
+      lineItemId:
+        type: string
+        description: Unique line item identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      quantity:
+        type: integer
+        minimum: 1
+        required: true
+      unitPrice:
+        type: number
+        minimum: 0
+        required: true
+      totalPrice:
+        type: number
+        minimum: 0
+        required: true
+      productDetails:
+        type: ProcessProductDetails
+        required: false
+      fulfillmentRequirements:
+        type: FulfillmentRequirements
+        description: Special fulfillment requirements
+        required: false
+      backorderAllowed:
+        type: boolean
+        default: false
+        required: false
+
+  ProcessProductDetails:
+    displayName: Process Product Details
+    description: Product details for processing
+    type: object
+    properties:
+      productName:
+        type: string
+        maxLength: 200
+        required: true
+      productCategory:
+        type: string
+        required: false
+      weight:
+        type: number
+        description: Product weight
+        minimum: 0
+        required: false
+      weightUnit:
+        type: string
+        enum: [LB, KG, OZ, G]
+        default: LB
+        required: false
+      dimensions:
+        type: ProductDimensions
+        required: false
+      hazardousMaterial:
+        type: boolean
+        default: false
+        required: false
+      requiresSpecialHandling:
+        type: boolean
+        default: false
+        required: false
+      shelfLife:
+        type: integer
+        description: Shelf life in days
+        minimum: 0
+        required: false
+
+  ProcessFulfillmentInfo:
+    displayName: Process Fulfillment Info
+    description: Fulfillment information for processing
+    type: object
+    properties:
+      fulfillmentType:
+        type: string
+        enum: [SHIP_TO_HOME, STORE_PICKUP, CURBSIDE, DROP_SHIP, DIGITAL_DELIVERY]
+        required: true
+      shippingAddress:
+        type: ProcessAddress
+        required: false
+      requestedDeliveryDate:
+        type: date-only
+        required: false
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, SAME_DAY]
+        default: STANDARD
+        required: false
+      specialInstructions:
+        type: string
+        maxLength: 500
+        required: false
+      consolidationAllowed:
+        type: boolean
+        description: Allow consolidating with other orders
+        default: true
+        required: false
+      partialShipmentAllowed:
+        type: boolean
+        description: Allow partial shipments
+        default: true
+        required: false
+
+  ProcessPaymentInfo:
+    displayName: Process Payment Info
+    description: Payment information for processing
+    type: object
+    properties:
+      paymentMethodType:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, ACH, WIRE, CHECK, CREDIT_ACCOUNT, GIFT_CARD]
+        required: true
+      paymentAmount:
+        type: number
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        required: true
+      paymentTiming:
+        type: string
+        enum: [IMMEDIATE, ON_SHIP, ON_DELIVERY, NET_TERMS]
+        default: IMMEDIATE
+        required: false
+      authorizationRequired:
+        type: boolean
+        default: true
+        required: false
+      fraudCheckRequired:
+        type: boolean
+        default: true
+        required: false
+      billingAddress:
+        type: ProcessAddress
+        required: false
+
+  ProcessBusinessContext:
+    displayName: Process Business Context
+    description: Business context for order processing
+    type: object
+    properties:
+      businessUnit:
+        type: string
+        description: Business unit handling the order
+        required: false
+      salesChannel:
+        type: string
+        description: Sales channel identifier
+        required: false
+      campaignCode:
+        type: string
+        description: Marketing campaign code
+        required: false
+      partnerCode:
+        type: string
+        description: Partner or affiliate code
+        required: false
+      seasonCode:
+        type: string
+        description: Seasonal business code
+        required: false
+      regionalCode:
+        type: string
+        description: Regional business code
+        required: false
+
+  # Process API Response Types
+  ProcessOrderResponse:
+    displayName: Process Order Response
+    description: Order processing result
+    type: object
+    properties:
+      orderId:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      processingStatus:
+        type: string
+        enum: [ACCEPTED, REJECTED, PARTIAL, PENDING, ERROR]
+        required: true
+      validationResults:
+        type: ValidationResult[]
+        description: Results of various validations
+        required: false
+      fulfillmentPlan:
+        type: FulfillmentPlan
+        description: Planned fulfillment approach
+        required: false
+      paymentResult:
+        type: PaymentProcessingResult
+        description: Payment processing outcome
+        required: false
+      inventoryReservations:
+        type: InventoryReservation[]
+        description: Inventory reservations made
+        required: false
+      estimatedTimeline:
+        type: OrderTimeline
+        description: Estimated order timeline
+        required: false
+      exceptions:
+        type: ProcessingException[]
+        description: Any processing exceptions
+        required: false
+      nextActions:
+        type: string[]
+        description: Required next processing steps
+        required: false
+
+  # =============================================
+  # SYSTEM API DATA TYPES
+  # =============================================
+
+  # System API Request Types for specific systems
+  SystemCustomerValidationRequest:
+    displayName: System Customer Validation Request
+    description: Request for validating customer in customer management system
+    type: object
+    properties:
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: false
+      email:
+        type: string
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: false
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      validationType:
+        type: string
+        enum: [IDENTITY, CREDIT, STATUS, COMPREHENSIVE]
+        default: IDENTITY
+        required: false
+      includeProfile:
+        type: boolean
+        description: Include full customer profile in response
+        default: false
+        required: false
+
+  # Supporting Types for Experience, Process, and System APIs
+  ProductCustomization:
+    displayName: Product Customization
+    description: Product customization option
+    type: object
+    properties:
+      type:
+        type: string
+        enum: [SIZE, COLOR, MATERIAL, ENGRAVING, MONOGRAM, CONFIGURATION]
+        required: true
+      name:
+        type: string
+        description: Customization name
+        maxLength: 100
+        required: true
+      value:
+        type: string
+        description: Selected customization value
+        maxLength: 200
+        required: true
+      additionalCost:
+        type: number
+        description: Additional cost for this customization
+        minimum: 0
+        required: false
+
+  SupportContactInfo:
+    displayName: Support Contact Info
+    description: Customer support contact information
+    type: object
+    properties:
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: true
+      email:
+        type: string
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: true
+      chatUrl:
+        type: string
+        description: URL for customer chat support
+        required: false
+      hours:
+        type: string
+        description: Support hours
+        example: "Monday-Friday 9AM-6PM EST"
+        required: false
+
+  ProcessAddress:
+    displayName: Process Address
+    description: Address for process API layer
+    type: object
+    properties:
+      addressId:
+        type: string
+        description: Unique address identifier
+        required: false
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      company:
+        type: string
+        maxLength: 100
+        required: false
+      addressLine1:
+        type: string
+        maxLength: 100
+        required: true
+      addressLine2:
+        type: string
+        maxLength: 100
+        required: false
+      city:
+        type: string
+        maxLength: 50
+        required: true
+      state:
+        type: string
+        maxLength: 50
+        required: true
+      postalCode:
+        type: string
+        pattern: ^[0-9A-Z\-\s]{3,10}$
+        required: true
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        required: true
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      addressType:
+        type: string
+        enum: [SHIPPING, BILLING, BOTH]
+        required: false
+      isValidated:
+        type: boolean
+        description: Whether address has been validated
+        default: false
+        required: false
+
+  ProductDimensions:
+    displayName: Product Dimensions
+    description: Physical dimensions of a product
+    type: object
+    properties:
+      length:
+        type: number
+        description: Product length
+        minimum: 0
+        required: true
+      width:
+        type: number
+        description: Product width
+        minimum: 0
+        required: true
+      height:
+        type: number
+        description: Product height
+        minimum: 0
+        required: true
+      unit:
+        type: string
+        enum: [IN, CM, FT, M]
+        default: IN
+        required: true
+      volume:
+        type: number
+        description: Calculated volume
+        minimum: 0
+        required: false
+
+  FulfillmentRequirements:
+    displayName: Fulfillment Requirements
+    description: Special requirements for fulfilling an item
+    type: object
+    properties:
+      requiresSpecialHandling:
+        type: boolean
+        default: false
+        required: false
+      hazardousMaterial:
+        type: boolean
+        default: false
+        required: false
+      temperatureControlled:
+        type: boolean
+        default: false
+        required: false
+      temperatureRange:
+        type: string
+        description: Required temperature range
+        required: false
+      fragile:
+        type: boolean
+        default: false
+        required: false
+      oversized:
+        type: boolean
+        default: false
+        required: false
+      requiresAdultSignature:
+        type: boolean
+        default: false
+        required: false
+      cannotShipAir:
+        type: boolean
+        default: false
+        required: false
+
+  OrchestrationRules:
+    displayName: Orchestration Rules
+    description: Rules governing order processing orchestration
+    type: object
+    properties:
+      parallelProcessingAllowed:
+        type: boolean
+        description: Allow parallel processing of validations
+        default: true
+        required: false
+      timeoutSeconds:
+        type: integer
+        description: Maximum processing timeout in seconds
+        minimum: 30
+        maximum: 600
+        default: 300
+        required: false
+      retryOnFailure:
+        type: boolean
+        description: Retry failed operations
+        default: true
+        required: false
+      maxRetries:
+        type: integer
+        description: Maximum retry attempts
+        minimum: 0
+        maximum: 5
+        default: 3
+        required: false
+      requireAllValidations:
+        type: boolean
+        description: All validations must pass to proceed
+        default: true
+        required: false
+      allowPartialFulfillment:
+        type: boolean
+        description: Allow partial order fulfillment
+        default: true
+        required: false
+
+  ValidationResult:
+    displayName: Validation Result
+    description: Result of a validation step
+    type: object
+    properties:
+      validationType:
+        type: string
+        enum: [CUSTOMER, INVENTORY, PAYMENT, ADDRESS, BUSINESS_RULES]
+        required: true
+      status:
+        type: string
+        enum: [PASSED, FAILED, WARNING, SKIPPED]
+        required: true
+      message:
+        type: string
+        description: Validation message
+        maxLength: 500
+        required: false
+      errorCode:
+        type: string
+        description: Error code if validation failed
+        required: false
+      details:
+        type: object
+        description: Additional validation details
+        required: false
+      timestamp:
+        type: datetime-only
+        description: When validation was performed
+        required: true
+
+  FulfillmentPlan:
+    displayName: Fulfillment Plan
+    description: Plan for fulfilling the order
+    type: object
+    properties:
+      planId:
+        type: string
+        description: Unique fulfillment plan identifier
+        required: true
+      fulfillmentGroups:
+        type: FulfillmentGroup[]
+        description: Groups of items for fulfillment
+        minItems: 1
+        required: true
+      totalEstimatedCost:
+        type: number
+        description: Total estimated fulfillment cost
+        minimum: 0
+        required: false
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date for complete order
+        required: false
+      requiresSpecialHandling:
+        type: boolean
+        default: false
+        required: false
+      consolidationPossible:
+        type: boolean
+        description: Whether items can be consolidated
+        default: true
+        required: false
+
+  FulfillmentGroup:
+    displayName: Fulfillment Group
+    description: Group of items fulfilled together
+    type: object
+    properties:
+      groupId:
+        type: string
+        description: Unique group identifier
+        required: true
+      warehouseId:
+        type: string
+        description: Fulfillment warehouse
+        required: true
+      items:
+        type: string[]
+        description: Line item IDs in this group
+        minItems: 1
+        required: true
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, SAME_DAY]
+        required: true
+      estimatedShipDate:
+        type: date-only
+        description: Estimated ship date
+        required: false
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+        required: false
+      shippingCost:
+        type: number
+        description: Shipping cost for this group
+        minimum: 0
+        required: false
+
+  PaymentProcessingResult:
+    displayName: Payment Processing Result
+    description: Result of payment processing
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Payment transaction identifier
+        required: true
+      status:
+        type: string
+        enum: [AUTHORIZED, DECLINED, ERROR, PENDING]
+        required: true
+      amount:
+        type: number
+        description: Processed amount
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        required: true
+      authorizationCode:
+        type: string
+        description: Authorization code if successful
+        required: false
+      declineReason:
+        type: string
+        description: Reason for decline if applicable
+        required: false
+      transactionId:
+        type: string
+        description: Transaction ID from payment processor
+        required: false
+      processingTime:
+        type: datetime-only
+        description: When payment was processed
+        required: true
+      expiryDate:
+        type: datetime-only
+        description: Authorization expiry date
+        required: false
+
+  InventoryReservation:
+    displayName: Inventory Reservation
+    description: Inventory reservation details
+    type: object
+    properties:
+      reservationId:
+        type: string
+        description: Unique reservation identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      warehouseId:
+        type: string
+        description: Warehouse holding the reservation
+        required: true
+      quantity:
+        type: integer
+        description: Reserved quantity
+        minimum: 1
+        required: true
+      reservationDate:
+        type: datetime-only
+        description: When reservation was made
+        required: true
+      expiryDate:
+        type: datetime-only
+        description: When reservation expires
+        required: true
+      status:
+        type: string
+        enum: [ACTIVE, EXPIRED, CONSUMED, RELEASED]
+        required: true
+
+  OrderTimeline:
+    displayName: Order Timeline
+    description: Estimated timeline for order processing
+    type: object
+    properties:
+      orderReceived:
+        type: datetime-only
+        description: When order was received
+        required: true
+      estimatedProcessing:
+        type: datetime-only
+        description: Estimated processing completion
+        required: false
+      estimatedShipping:
+        type: date-only
+        description: Estimated shipping date
+        required: false
+      estimatedDelivery:
+        type: date-only
+        description: Estimated delivery date
+        required: false
+      milestones:
+        type: TimelineMilestone[]
+        description: Key processing milestones
+        required: false
+
+  TimelineMilestone:
+    displayName: Timeline Milestone
+    description: Key milestone in order processing
+    type: object
+    properties:
+      milestone:
+        type: string
+        enum: [ORDER_VALIDATION, INVENTORY_ALLOCATION, PAYMENT_PROCESSING, FULFILLMENT_START, SHIPMENT_CREATED, IN_TRANSIT, DELIVERED]
+        required: true
+      estimatedTime:
+        type: datetime-only
+        description: Estimated completion time
+        required: false
+      actualTime:
+        type: datetime-only
+        description: Actual completion time
+        required: false
+      status:
+        type: string
+        enum: [PENDING, IN_PROGRESS, COMPLETED, DELAYED, FAILED]
+        required: true
+
+  ProcessingException:
+    displayName: Processing Exception
+    description: Exception during order processing
+    type: object
+    properties:
+      exceptionId:
+        type: string
+        description: Unique exception identifier
+        required: true
+      exceptionType:
+        type: string
+        enum: [VALIDATION_ERROR, SYSTEM_ERROR, BUSINESS_RULE_VIOLATION, TIMEOUT, INTEGRATION_FAILURE]
+        required: true
+      severity:
+        type: string
+        enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        required: true
+      message:
+        type: string
+        description: Exception message
+        maxLength: 500
+        required: true
+      component:
+        type: string
+        description: System component that generated the exception
+        required: false
+      timestamp:
+        type: datetime-only
+        description: When exception occurred
+        required: true
+      resolutionRequired:
+        type: boolean
+        description: Whether manual resolution is needed
+        default: false
+        required: false
+      suggestedAction:
+        type: string
+        description: Suggested resolution action
+        maxLength: 200
+        required: false
+
+  # System API Response Types
+  SystemCustomerValidationResponse:
+    displayName: System Customer Validation Response
+    description: Customer validation response from customer system
+    type: object
+    properties:
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: true
+      validationStatus:
+        type: string
+        enum: [VALID, INVALID, SUSPENDED, RESTRICTED]
+        required: true
+      customerProfile:
+        type: SystemCustomerProfile
+        description: Customer profile if includeProfile was true
+        required: false
+      creditInfo:
+        type: SystemCreditInfo
+        description: Credit information if validation type included credit
+        required: false
+      validationTimestamp:
+        type: datetime-only
+        required: true
+      validationMessages:
+        type: string[]
+        description: Any validation messages or warnings
+        required: false
+
+  SystemCustomerProfile:
+    displayName: System Customer Profile
+    description: Customer profile from system API
+    type: object
+    properties:
+      customerId:
+        type: string
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: true
+      customerType:
+        type: string
+        enum: [INDIVIDUAL, BUSINESS, PREMIUM, VIP]
+        required: true
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, SUSPENDED, CLOSED]
+        required: true
+      registrationDate:
+        type: date-only
+        required: true
+      tierLevel:
+        type: string
+        enum: [BRONZE, SILVER, GOLD, PLATINUM, DIAMOND]
+        required: false
+      lifetimeValue:
+        type: number
+        description: Customer lifetime value
+        minimum: 0
+        required: false
+      orderCount:
+        type: integer
+        description: Total number of orders
+        minimum: 0
+        required: false
+      lastOrderDate:
+        type: date-only
+        description: Date of last order
+        required: false
+
+  SystemCreditInfo:
+    displayName: System Credit Info
+    description: Credit information from system API
+    type: object
+    properties:
+      creditLimit:
+        type: number
+        minimum: 0
+        required: true
+      availableCredit:
+        type: number
+        minimum: 0
+        required: true
+      creditUsed:
+        type: number
+        minimum: 0
+        required: true
+      paymentTerms:
+        type: string
+        enum: [IMMEDIATE, NET_15, NET_30, NET_45, NET_60]
+        required: true
+      creditStatus:
+        type: string
+        enum: [ACTIVE, SUSPENDED, UNDER_REVIEW, CLOSED]
+        required: true
+      lastCreditReview:
+        type: date-only
+        required: false
+
+  # System API - Inventory System Types
+  SystemInventoryCheckRequest:
+    displayName: System Inventory Check Request
+    description: Request to check inventory in inventory management system
+    type: object
+    properties:
+      requestId:
+        type: string
+        description: Unique request identifier
+        required: true
+      items:
+        type: SystemInventoryItem[]
+        description: Items to check
+        minItems: 1
+        required: true
+      reservationRequired:
+        type: boolean
+        description: Whether to reserve inventory
+        default: false
+        required: false
+      warehousePreferences:
+        type: string[]
+        description: Preferred warehouses in order
+        required: false
+
+  SystemInventoryItem:
+    displayName: System Inventory Item
+    description: Inventory item for system API
+    type: object
+    properties:
+      itemId:
+        type: string
+        description: Request item identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      quantity:
+        type: integer
+        minimum: 1
+        required: true
+
+  SystemInventoryCheckResponse:
+    displayName: System Inventory Check Response
+    description: Response from inventory system
+    type: object
+    properties:
+      requestId:
+        type: string
+        required: true
+      overallStatus:
+        type: string
+        enum: [AVAILABLE, PARTIAL, UNAVAILABLE]
+        required: true
+      items:
+        type: SystemInventoryItemResult[]
+        required: true
+      reservationId:
+        type: string
+        description: Reservation ID if inventory was reserved
+        required: false
+      checkTimestamp:
+        type: datetime-only
+        required: true
+
+  SystemInventoryItemResult:
+    displayName: System Inventory Item Result
+    description: Inventory check result for individual item
+    type: object
+    properties:
+      itemId:
+        type: string
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      requestedQuantity:
+        type: integer
+        required: true
+      availableQuantity:
+        type: integer
+        minimum: 0
+        required: true
+      allocatedQuantity:
+        type: integer
+        description: Quantity allocated (if reservation was made)
+        minimum: 0
+        required: false
+      warehouseId:
+        type: string
+        description: Warehouse holding the inventory
+        required: false
+      unitCost:
+        type: number
+        description: Unit cost for allocated inventory
+        minimum: 0
+        required: false
+      estimatedRestockDate:
+        type: date-only
+        description: Expected restock date if out of stock
+        required: false
+
+  # System API - Payment System Types
+  SystemPaymentAuthRequest:
+    displayName: System Payment Authorization Request
+    description: Payment authorization request to payment system
+    type: object
+    properties:
+      transactionId:
+        type: string
+        description: Unique transaction identifier
+        required: true
+      orderId:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      amount:
+        type: number
+        minimum: 0.01
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        required: true
+      paymentMethod:
+        type: SystemPaymentMethod
+        required: true
+      billingAddress:
+        type: ProcessAddress
+        required: false
+      merchantInfo:
+        type: SystemMerchantInfo
+        required: true
+
+  SystemPaymentMethod:
+    displayName: System Payment Method
+    description: Payment method details for system API
+    type: object
+    properties:
+      type:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, ACH, WIRE, GIFT_CARD, STORE_CREDIT]
+        required: true
+      token:
+        type: string
+        description: Tokenized payment method
+        required: false
+      cardInfo:
+        type: SystemCardInfo
+        description: Card information (if card payment)
+        required: false
+      accountInfo:
+        type: SystemAccountInfo
+        description: Account information (if ACH/wire)
+        required: false
+
+  SystemCardInfo:
+    displayName: System Card Info
+    description: Credit/debit card information
+    type: object
+    properties:
+      maskedNumber:
+        type: string
+        description: Masked card number
+        pattern: ^\*{12}\d{4}$
+        required: true
+      expiryMonth:
+        type: integer
+        minimum: 1
+        maximum: 12
+        required: true
+      expiryYear:
+        type: integer
+        minimum: 2024
+        maximum: 2050
+        required: true
+      cardType:
+        type: string
+        enum: [VISA, MASTERCARD, AMEX, DISCOVER, DINNERS, JCB]
+        required: false
+      issuerBank:
+        type: string
+        required: false
+
+  SystemAccountInfo:
+    displayName: System Account Info
+    description: Bank account information
+    type: object
+    properties:
+      maskedAccountNumber:
+        type: string
+        description: Masked account number
+        required: true
+      routingNumber:
+        type: string
+        description: Bank routing number
+        pattern: ^\d{9}$
+        required: true
+      accountType:
+        type: string
+        enum: [CHECKING, SAVINGS, BUSINESS_CHECKING, BUSINESS_SAVINGS]
+        required: true
+      bankName:
+        type: string
+        required: false
+
+  SystemMerchantInfo:
+    displayName: System Merchant Info
+    description: Merchant information for payment processing
+    type: object
+    properties:
+      merchantId:
+        type: string
+        required: true
+      terminalId:
+        type: string
+        required: false
+      categoryCode:
+        type: string
+        description: Merchant category code
+        required: false
+      businessName:
+        type: string
+        required: false
+
+  SystemPaymentAuthResponse:
+    displayName: System Payment Authorization Response
+    description: Payment authorization response from payment system
+    type: object
+    properties:
+      transactionId:
+        type: string
+        required: true
+      authorizationStatus:
+        type: string
+        enum: [APPROVED, DECLINED, ERROR, PENDING]
+        required: true
+      authorizationCode:
+        type: string
+        description: Authorization code if approved
+        required: false
+      declineReason:
+        type: string
+        description: Decline reason if declined
+        required: false
+      amount:
+        type: number
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        required: true
+      processorTransactionId:
+        type: string
+        description: Processor's transaction ID
+        required: false
+      authorizationDate:
+        type: datetime-only
+        required: true
+      expiryDate:
+        type: datetime-only
+        description: Authorization expiry
+        required: false
+      avsResult:
+        type: string
+        enum: [MATCH, NO_MATCH, PARTIAL, NOT_SUPPORTED, ERROR]
+        description: Address verification result
+        required: false
+      cvvResult:
+        type: string
+        enum: [MATCH, NO_MATCH, NOT_PROCESSED, NOT_SUPPORTED, ERROR]
+        description: CVV verification result
+        required: false
+
+  # System API - Shipping System Types  
+  SystemShipmentCreateRequest:
+    displayName: System Shipment Create Request
+    description: Request to create shipment in shipping system
+    type: object
+    properties:
+      orderId:
+        type: string
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      shipmentId:
+        type: string
+        description: Preferred shipment identifier
+        required: false
+      items:
+        type: SystemShipmentItem[]
+        description: Items to ship
+        minItems: 1
+        required: true
+      shippingAddress:
+        type: ProcessAddress
+        required: true
+      originAddress:
+        type: ProcessAddress
+        description: Origin/warehouse address
+        required: false
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, SAME_DAY]
+        default: STANDARD
+        required: false
+      specialInstructions:
+        type: string
+        maxLength: 500
+        description: Special shipping instructions
+        required: false
+
+  SystemShipmentItem:
+    displayName: System Shipment Item
+    description: Individual item in a shipment for system API
+    type: object
+    properties:
+      lineItemId:
+        type: string
+        description: Order line item identifier
+        required: true
+      productId:
+        type: string
+        pattern: ^PROD-[A-Z0-9]{8}$
+        required: true
+      sku:
+        type: string
+        required: true
+      quantity:
+        type: integer
+        minimum: 1
+        required: true
+      weight:
+        type: number
+        description: Item weight
+        minimum: 0
+        required: false
+      weightUnit:
+        type: string
+        enum: [LB, KG, OZ, G]
+        default: LB
+        required: false
+      dimensions:
+        type: ProductDimensions
+        description: Item dimensions
+        required: false
+      value:
+        type: number
+        description: Item value for insurance
+        minimum: 0
+        required: false
+      hsCode:
+        type: string
+        description: Harmonized System code for customs
+        required: false
+      countryOfOrigin:
+        type: string
+        pattern: ^[A-Z]{2}$
+        description: Country of origin
+        required: false
+
+  SystemShipmentCreateResponse:
+    displayName: System Shipment Create Response
+    description: Response from shipping system after creating shipment
+    type: object
+    properties:
+      shipmentId:
+        type: string
+        description: Generated shipment identifier
+        required: true
+      trackingNumber:
+        type: string
+        description: Tracking number for the shipment
+        required: true
+      carrier:
+        type: string
+        enum: [UPS, FEDEX, USPS, DHL, CUSTOM]
+        required: true
+      shippingLabel:
+        type: string
+        description: Base64 encoded shipping label
+        required: false
+      estimatedDelivery:
+        type: date-only
+        description: Estimated delivery date
+        required: false
+      shippingCost:
+        type: number
+        description: Calculated shipping cost
+        minimum: 0
+        required: false
+      creationTimestamp:
+        type: datetime-only
+        required: true
+      status:
+        type: string
+        enum: [CREATED, LABEL_PRINTED, PICKED_UP, IN_TRANSIT, DELIVERED, EXCEPTION]
+        default: CREATED
+        required: true

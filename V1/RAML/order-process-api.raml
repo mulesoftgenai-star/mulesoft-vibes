@@ -1,0 +1,143 @@
+#%RAML 1.0
+title: Order Process API
+version: v1.0
+baseUri: https://api.orderprocess.internal/{version}
+description: |
+  Process API for Order Management System handling order processing workflows.
+  This API orchestrates business logic and coordinates between system APIs.
+
+protocols: [HTTPS]
+mediaType: application/json
+
+uses:
+  OrderTypes: order-management-api-fragments/src/main/resources/api/datatypes/order-types.raml
+  CustomerTypes: order-management-api-fragments/src/main/resources/api/datatypes/customer-types.raml
+  InventoryTypes: order-management-api-fragments/src/main/resources/api/datatypes/inventory-types.raml
+  PaymentTypes: order-management-api-fragments/src/main/resources/api/datatypes/payment-types.raml
+  ShipmentTypes: order-management-api-fragments/src/main/resources/api/datatypes/shipment-types.raml
+  ErrorTypes: order-management-api-fragments/src/main/resources/api/datatypes/error-types.raml
+  ApiLayerTypes: order-management-api-fragments/src/main/resources/api/datatypes/api-layer-types.raml
+  SecurityTraits: order-management-api-fragments/src/main/resources/api/traits/security-traits.raml
+
+traits:
+  internalHeaders: SecurityTraits.internalHeaders
+  monitored: SecurityTraits.monitored
+
+securitySchemes:
+  client_credentials:
+    description: OAuth 2.0 Client Credentials for internal services
+    type: OAuth 2.0
+    describedBy:
+      headers:
+        Authorization:
+          description: Bearer token
+          pattern: "Bearer .*"
+          example: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9
+      responses:
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+    settings:
+      accessTokenUri: https://auth.orderprocess.internal/oauth/token
+      authorizationGrants: [client_credentials]
+
+/orders:
+  displayName: Order Processing
+  description: Internal order processing operations
+  
+  post:
+    displayName: Process Order
+    description: Process a new order through the complete workflow
+    is: [internalHeaders, monitored]
+    securedBy: [client_credentials]
+    body:
+      application/json:
+        type: OrderTypes.ProcessOrderRequest
+        example: |
+          {
+            "orderId": "ORD001",
+            "customerId": "CUST001",
+            "items": [
+              {
+                "productId": "PROD001",
+                "quantity": 2,
+                "unitPrice": 149.99
+              }
+            ],
+            "shippingAddress": {
+              "street": "123 Main St",
+              "city": "New York",
+              "state": "NY",
+              "zipCode": "10001",
+              "country": "USA"
+            },
+            "paymentDetails": {
+              "paymentMethod": "CREDIT_CARD",
+              "cardToken": "tok_visa_4242",
+              "amount": 299.99,
+              "currency": "USD"
+            },
+            "priority": "NORMAL",
+            "requestId": "REQ001",
+            "source": "WEB_APP"
+          }
+    responses:
+      202:
+        description: Order processing initiated
+        body:
+          application/json:
+            type: ApiLayerTypes.ProcessingResponse
+            example: |
+              {
+                "processId": "PROC001",
+                "orderId": "ORD001",
+                "status": "PROCESSING",
+                "estimatedCompletionTime": "2024-01-15T10:35:00Z",
+                "trackingUrl": "/orders/ORD001/status"
+              }
+      400:
+        description: Invalid order data
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      409:
+        description: Order already exists
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+      500:
+        description: Processing error
+        body:
+          application/json:
+            type: ErrorTypes.ErrorResponse
+
+  /{orderId}:
+    displayName: Order Process Management
+    uriParameters:
+      orderId:
+        type: string
+        description: Unique order identifier
+        example: "ORD001"
+    
+    get:
+      displayName: Get Order Processing Status
+      description: Retrieve current processing status of an order
+      is: [internalHeaders, monitored]
+      securedBy: [client_credentials]
+      responses:
+        200:
+          description: Order processing status retrieved
+          body:
+            application/json:
+              type: ApiLayerTypes.OrderProcessingStatus
+              example: |
+                {
+                  "orderId": "ORD001",
+                  "processId": "PROC001",
+                  "currentStatus": "INVENTORY_VALIDATED",
+                  "overallProgress": 60,
+                  "steps": [
+                    {
+                      "stepName": "CUSTOMER_VALIDATION",
+                      "status": "

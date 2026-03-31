@@ -1,0 +1,694 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains data types for Payment Management within Order Management APIs.
+  It defines Payment, Transaction, and related structures for Experience, Process, and System layer APIs.
+
+types:
+  PaymentInfo:
+    displayName: Payment Information
+    description: Complete payment information for processing transactions
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Unique payment identifier
+        pattern: ^PAY-[A-Z0-9]{8}$
+        example: PAY-12345678
+        required: true
+      paymentMethod:
+        type: string
+        description: Payment method type
+        enum: [CREDIT_CARD, DEBIT_CARD, BANK_ACCOUNT, DIGITAL_WALLET, PAYPAL, APPLE_PAY, GOOGLE_PAY, GIFT_CARD, STORE_CREDIT, CRYPTOCURRENCY]
+        required: true
+      amount:
+        type: number
+        description: Payment amount
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        description: Currency code (ISO 4217)
+        pattern: ^[A-Z]{3}$
+        example: USD
+        required: true
+      status:
+        type: string
+        description: Payment status
+        enum: [PENDING, AUTHORIZED, CAPTURED, SETTLED, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED, DISPUTED]
+        required: true
+      transactionId:
+        type: string
+        description: Transaction identifier from payment processor
+        required: false
+      authorizationCode:
+        type: string
+        description: Authorization code from payment processor
+        required: false
+      merchantId:
+        type: string
+        description: Merchant identifier
+        required: true
+      orderId:
+        type: string
+        description: Associated order identifier
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      customerId:
+        type: string
+        description: Customer identifier
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: true
+      billingAddress:
+        type: BillingAddress
+        description: Billing address for payment
+        required: true
+      paymentDetails:
+        type: PaymentDetails
+        description: Payment method specific details
+        required: true
+      createdDate:
+        type: datetime-only
+        description: Payment creation timestamp
+        required: true
+      processedDate:
+        type: datetime-only
+        description: Payment processing timestamp
+        required: false
+      expiryDate:
+        type: datetime-only
+        description: Payment authorization expiry
+        required: false
+      processorResponse:
+        type: ProcessorResponse
+        description: Response from payment processor
+        required: false
+      riskAssessment:
+        type: RiskAssessment
+        description: Fraud risk assessment results
+        required: false
+      fees:
+        type: PaymentFee[]
+        description: Associated payment fees
+        required: false
+      metadata:
+        type: object
+        description: Additional payment metadata
+        required: false
+
+  PaymentDetails:
+    displayName: Payment Details
+    description: Payment method specific details (sensitive data masked)
+    type: object
+    properties:
+      cardType:
+        type: string
+        description: Type of payment card
+        enum: [VISA, MASTERCARD, AMEX, DISCOVER, DINNERS, JCB, MAESTRO, OTHER]
+        required: false
+      lastFourDigits:
+        type: string
+        description: Last four digits of payment method
+        pattern: ^\d{4}$
+        required: false
+      expiryMonth:
+        type: integer
+        description: Expiry month (1-12)
+        minimum: 1
+        maximum: 12
+        required: false
+      expiryYear:
+        type: integer
+        description: Expiry year
+        minimum: 2024
+        maximum: 2050
+        required: false
+      cardholderName:
+        type: string
+        description: Name on payment card
+        maxLength: 100
+        required: false
+      bankName:
+        type: string
+        description: Issuing bank name
+        maxLength: 100
+        required: false
+      countryCode:
+        type: string
+        description: Issuing country code
+        pattern: ^[A-Z]{2}$
+        required: false
+      fingerprint:
+        type: string
+        description: Unique payment method fingerprint
+        required: false
+      tokenId:
+        type: string
+        description: Tokenized payment method reference
+        required: false
+      walletType:
+        type: string
+        description: Digital wallet type
+        enum: [APPLE_PAY, GOOGLE_PAY, SAMSUNG_PAY, PAYPAL, VENMO, OTHER]
+        required: false
+      accountType:
+        type: string
+        description: Bank account type
+        enum: [CHECKING, SAVINGS, BUSINESS_CHECKING, BUSINESS_SAVINGS]
+        required: false
+      routingNumber:
+        type: string
+        description: Bank routing number (masked)
+        pattern: ^\*{5}\d{4}$
+        required: false
+
+  BillingAddress:
+    displayName: Billing Address
+    description: Billing address for payment verification
+    type: object
+    properties:
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      company:
+        type: string
+        maxLength: 100
+        required: false
+      addressLine1:
+        type: string
+        maxLength: 100
+        required: true
+      addressLine2:
+        type: string
+        maxLength: 100
+        required: false
+      city:
+        type: string
+        maxLength: 50
+        required: true
+      state:
+        type: string
+        maxLength: 50
+        required: true
+      postalCode:
+        type: string
+        pattern: ^[0-9A-Z\-\s]{3,10}$
+        required: true
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        example: US
+        required: true
+      phoneNumber:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      email:
+        type: string
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: false
+
+  ProcessorResponse:
+    displayName: Processor Response
+    description: Response details from payment processor
+    type: object
+    properties:
+      processorId:
+        type: string
+        description: Payment processor identifier
+        required: true
+      processorName:
+        type: string
+        description: Payment processor name
+        enum: [STRIPE, SQUARE, PAYPAL, AUTHORIZE_NET, BRAINTREE, WORLDPAY, ADYEN, CYBERSOURCE, OTHER]
+        required: true
+      responseCode:
+        type: string
+        description: Processor response code
+        required: true
+      responseMessage:
+        type: string
+        description: Processor response message
+        maxLength: 500
+        required: false
+      avsResult:
+        type: string
+        description: Address Verification Service result
+        enum: [MATCH, NO_MATCH, PARTIAL_MATCH, NOT_SUPPORTED, ERROR]
+        required: false
+      cvvResult:
+        type: string
+        description: Card Verification Value result
+        enum: [MATCH, NO_MATCH, NOT_PROCESSED, NOT_SUPPORTED, ERROR]
+        required: false
+      networkTransactionId:
+        type: string
+        description: Network transaction identifier
+        required: false
+      processorTransactionId:
+        type: string
+        description: Processor specific transaction ID
+        required: false
+      gatewayReferenceId:
+        type: string
+        description: Gateway reference identifier
+        required: false
+      settlementDate:
+        type: date-only
+        description: Expected settlement date
+        required: false
+
+  RiskAssessment:
+    displayName: Risk Assessment
+    description: Fraud and risk assessment results
+    type: object
+    properties:
+      riskScore:
+        type: number
+        description: Risk score (0-100, higher is riskier)
+        minimum: 0
+        maximum: 100
+        required: true
+      riskLevel:
+        type: string
+        description: Risk level assessment
+        enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        required: true
+      fraudFlags:
+        type: string[]
+        description: Identified fraud indicators
+        required: false
+      deviceFingerprint:
+        type: string
+        description: Device fingerprint identifier
+        required: false
+      ipAddress:
+        type: string
+        description: Customer IP address
+        required: false
+      geoLocation:
+        type: GeoLocation
+        description: Geographic location data
+        required: false
+      velocityChecks:
+        type: VelocityCheck[]
+        description: Transaction velocity analysis
+        required: false
+      blacklistChecks:
+        type: BlacklistCheck[]
+        description: Blacklist verification results
+        required: false
+      recommendation:
+        type: string
+        description: Risk assessment recommendation
+        enum: [APPROVE, REVIEW, DECLINE]
+        required: true
+
+  GeoLocation:
+    displayName: Geographic Location
+    description: Geographic location information
+    type: object
+    properties:
+      country:
+        type: string
+        description: Country code
+        pattern: ^[A-Z]{2}$
+        required: false
+      region:
+        type: string
+        description: Region or state
+        required: false
+      city:
+        type: string
+        description: City name
+        required: false
+      latitude:
+        type: number
+        description: Latitude coordinate
+        required: false
+      longitude:
+        type: number
+        description: Longitude coordinate
+        required: false
+      accuracy:
+        type: integer
+        description: Location accuracy in meters
+        required: false
+
+  VelocityCheck:
+    displayName: Velocity Check
+    description: Transaction velocity analysis
+    type: object
+    properties:
+      checkType:
+        type: string
+        description: Type of velocity check
+        enum: [CARD_VELOCITY, IP_VELOCITY, EMAIL_VELOCITY, DEVICE_VELOCITY]
+        required: true
+      timeWindow:
+        type: string
+        description: Time window for the check
+        enum: [HOURLY, DAILY, WEEKLY, MONTHLY]
+        required: true
+      transactionCount:
+        type: integer
+        description: Number of transactions in time window
+        required: true
+      threshold:
+        type: integer
+        description: Maximum allowed transactions
+        required: true
+      exceeded:
+        type: boolean
+        description: Whether threshold was exceeded
+        required: true
+
+  BlacklistCheck:
+    displayName: Blacklist Check
+    description: Blacklist verification result
+    type: object
+    properties:
+      listType:
+        type: string
+        description: Type of blacklist
+        enum: [CARD, EMAIL, IP, DEVICE, PHONE]
+        required: true
+      listName:
+        type: string
+        description: Name of the blacklist
+        required: true
+      matched:
+        type: boolean
+        description: Whether item was found on blacklist
+        required: true
+      matchReason:
+        type: string
+        description: Reason for blacklist match
+        required: false
+
+  PaymentFee:
+    displayName: Payment Fee
+    description: Fee associated with payment processing
+    type: object
+    properties:
+      feeId:
+        type: string
+        description: Unique fee identifier
+        required: true
+      feeType:
+        type: string
+        description: Type of fee
+        enum: [PROCESSING, GATEWAY, INTERCHANGE, ASSESSMENT, MARKUP, FOREIGN_EXCHANGE]
+        required: true
+      feeName:
+        type: string
+        description: Human-readable fee name
+        required: true
+      amount:
+        type: number
+        description: Fee amount
+        minimum: 0
+        required: true
+      percentage:
+        type: number
+        description: Fee percentage (if applicable)
+        minimum: 0
+        maximum: 100
+        required: false
+      currency:
+        type: string
+        description: Fee currency
+        pattern: ^[A-Z]{3}$
+        required: true
+      description:
+        type: string
+        description: Fee description
+        maxLength: 200
+        required: false
+
+  PaymentRequest:
+    displayName: Payment Request
+    description: Request payload for initiating a payment
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Associated order identifier
+        pattern: ^ORD-[A-Z0-9]{8}$
+        required: true
+      customerId:
+        type: string
+        description: Customer identifier
+        pattern: ^CUST-[A-Z0-9]{8}$
+        required: true
+      amount:
+        type: number
+        description: Payment amount
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        description: Payment currency
+        pattern: ^[A-Z]{3}$
+        required: true
+      paymentMethod:
+        type: string
+        description: Payment method type
+        enum: [CREDIT_CARD, DEBIT_CARD, BANK_ACCOUNT, DIGITAL_WALLET, PAYPAL, APPLE_PAY, GOOGLE_PAY, GIFT_CARD, STORE_CREDIT]
+        required: true
+      paymentDetails:
+        type: PaymentDetails
+        description: Payment method details
+        required: true
+      billingAddress:
+        type: BillingAddress
+        description: Billing address
+        required: true
+      merchantId:
+        type: string
+        description: Merchant identifier
+        required: true
+      description:
+        type: string
+        description: Payment description
+        maxLength: 200
+        required: false
+      metadata:
+        type: object
+        description: Additional payment metadata
+        required: false
+
+  PaymentResponse:
+    displayName: Payment Response
+    description: Response from payment processing
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Unique payment identifier
+        required: true
+      status:
+        type: string
+        description: Payment processing status
+        enum: [SUCCESS, FAILED, PENDING, DECLINED, ERROR]
+        required: true
+      transactionId:
+        type: string
+        description: Transaction identifier
+        required: false
+      authorizationCode:
+        type: string
+        description: Authorization code
+        required: false
+      amount:
+        type: number
+        description: Processed amount
+        required: true
+      currency:
+        type: string
+        description: Processing currency
+        required: true
+      processorResponse:
+        type: ProcessorResponse
+        description: Processor response details
+        required: false
+      riskAssessment:
+        type: RiskAssessment
+        description: Risk assessment results
+        required: false
+      fees:
+        type: PaymentFee[]
+        description: Processing fees
+        required: false
+      processedDate:
+        type: datetime-only
+        description: Processing timestamp
+        required: true
+      message:
+        type: string
+        description: Response message
+        maxLength: 500
+        required: false
+
+  RefundRequest:
+    displayName: Refund Request
+    description: Request payload for processing a refund
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Original payment identifier
+        required: true
+      orderId:
+        type: string
+        description: Associated order identifier
+        required: false
+      amount:
+        type: number
+        description: Refund amount (partial refunds allowed)
+        minimum: 0
+        required: true
+      currency:
+        type: string
+        description: Refund currency
+        pattern: ^[A-Z]{3}$
+        required: true
+      reason:
+        type: string
+        description: Refund reason
+        enum: [CUSTOMER_REQUEST, ORDER_CANCELLED, DEFECTIVE_PRODUCT, DUPLICATE_CHARGE, FRAUDULENT_TRANSACTION, OTHER]
+        required: true
+      description:
+        type: string
+        description: Detailed refund description
+        maxLength: 500
+        required: false
+      requestedBy:
+        type: string
+        description: User or system requesting refund
+        required: true
+      metadata:
+        type: object
+        description: Additional refund metadata
+        required: false
+
+  RefundResponse:
+    displayName: Refund Response
+    description: Response from refund processing
+    type: object
+    properties:
+      refundId:
+        type: string
+        description: Unique refund identifier
+        required: true
+      paymentId:
+        type: string
+        description: Original payment identifier
+        required: true
+      status:
+        type: string
+        description: Refund processing status
+        enum: [SUCCESS, FAILED, PENDING, DECLINED, ERROR]
+        required: true
+      amount:
+        type: number
+        description: Refunded amount
+        required: true
+      currency:
+        type: string
+        description: Refund currency
+        required: true
+      transactionId:
+        type: string
+        description: Refund transaction identifier
+        required: false
+      processorResponse:
+        type: ProcessorResponse
+        description: Processor response details
+        required: false
+      processedDate:
+        type: datetime-only
+        description: Refund processing timestamp
+        required: true
+      expectedSettlement:
+        type: date-only
+        description: Expected settlement date
+        required: false
+      message:
+        type: string
+        description: Refund response message
+        maxLength: 500
+        required: false
+
+  PaymentSummary:
+    displayName: Payment Summary
+    description: Lightweight payment representation for list views
+    type: object
+    properties:
+      paymentId:
+        type: string
+        required: true
+      orderId:
+        type: string
+        required: true
+      customerId:
+        type: string
+        required: true
+      amount:
+        type: number
+        required: true
+      currency:
+        type: string
+        required: true
+      paymentMethod:
+        type: string
+        required: true
+      status:
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, SETTLED, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED, DISPUTED]
+        required: true
+      createdDate:
+        type: datetime-only
+        required: true
+      lastFourDigits:
+        type: string
+        pattern: ^\d{4}$
+        required: false
+
+  PaymentStatusUpdate:
+    displayName: Payment Status Update
+    description: Request payload for updating payment status
+    type: object
+    properties:
+      paymentId:
+        type: string
+        required: true
+      newStatus:
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, SETTLED, FAILED, CANCELLED, REFUNDED, PARTIALLY_REFUNDED, DISPUTED]
+        required: true
+      reason:
+        type: string
+        description: Reason for status change
+        maxLength: 500
+        required: false
+      updatedBy:
+        type: string
+        description: User or system making the update
+        required: true
+      timestamp:
+        type: datetime-only
+        required: true
+      transactionId:
+        type: string
+        description: Associated transaction identifier
+        required: false
+      notes:
+        type: string
+        maxLength: 1000
+        required: false

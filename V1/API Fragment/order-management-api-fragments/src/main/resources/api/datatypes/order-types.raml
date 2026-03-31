@@ -1,0 +1,535 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains data types for Order Management APIs.
+  It defines Order, OrderItem, and related structures for Experience, Process, and System layer APIs.
+
+types:
+  Order:
+    displayName: Order
+    description: Complete order information containing customer details, items, payment, and shipping information
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Unique order identifier
+        pattern: ^ORD-[A-Z0-9]{8}$
+        example: ORD-12345678
+        required: true
+      orderNumber:
+        type: string
+        description: Human-readable order number
+        example: "2024-000001"
+        required: true
+      customerId:
+        type: string
+        description: Customer identifier
+        pattern: ^CUST-[A-Z0-9]{8}$
+        example: CUST-87654321
+        required: true
+      orderDate:
+        type: datetime-only
+        description: Order creation date and time
+        format: rfc3339
+        example: 2024-03-24T16:30:00
+        required: true
+      orderStatus:
+        type: string
+        description: Current status of the order
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+        example: CONFIRMED
+        required: true
+      orderType:
+        type: string
+        description: Type of order
+        enum: [STANDARD, EXPRESS, BULK, SUBSCRIPTION]
+        example: STANDARD
+        required: true
+      priority:
+        type: string
+        description: Order priority level
+        enum: [LOW, MEDIUM, HIGH, URGENT]
+        example: MEDIUM
+        required: false
+      totalAmount:
+        type: number
+        description: Total order amount including taxes and shipping
+        format: double
+        minimum: 0
+        example: 299.99
+        required: true
+      currency:
+        type: string
+        description: Currency code (ISO 4217)
+        pattern: ^[A-Z]{3}$
+        example: USD
+        required: true
+      taxAmount:
+        type: number
+        description: Total tax amount
+        format: double
+        minimum: 0
+        example: 24.99
+        required: false
+      shippingAmount:
+        type: number
+        description: Shipping cost
+        format: double
+        minimum: 0
+        example: 9.99
+        required: false
+      discountAmount:
+        type: number
+        description: Total discount applied
+        format: double
+        minimum: 0
+        example: 25.00
+        required: false
+      items:
+        type: OrderItem[]
+        description: List of ordered items
+        minItems: 1
+        required: true
+      shippingAddress:
+        type: Address
+        description: Shipping address
+        required: true
+      billingAddress:
+        type: Address
+        description: Billing address
+        required: false
+      paymentInfo:
+        type: PaymentReference
+        description: Payment information reference
+        required: true
+      fulfillmentCenter:
+        type: string
+        description: Fulfillment center code
+        example: FC-WEST-001
+        required: false
+      expectedDeliveryDate:
+        type: date-only
+        description: Expected delivery date
+        example: 2024-03-30
+        required: false
+      specialInstructions:
+        type: string
+        description: Special delivery or handling instructions
+        maxLength: 500
+        required: false
+      source:
+        type: string
+        description: Order source channel
+        enum: [WEB, MOBILE, STORE, CALL_CENTER, API]
+        example: WEB
+        required: true
+      createdBy:
+        type: string
+        description: User or system that created the order
+        example: customer-portal
+        required: true
+      lastModifiedDate:
+        type: datetime-only
+        description: Last modification timestamp
+        format: rfc3339
+        required: false
+      version:
+        type: integer
+        description: Order version for optimistic locking
+        minimum: 1
+        example: 1
+        required: false
+
+  OrderItem:
+    displayName: Order Item
+    description: Individual item within an order
+    type: object
+    properties:
+      itemId:
+        type: string
+        description: Unique item identifier within the order
+        example: ITEM-001
+        required: true
+      productId:
+        type: string
+        description: Product identifier
+        pattern: ^PROD-[A-Z0-9]{8}$
+        example: PROD-12345678
+        required: true
+      sku:
+        type: string
+        description: Stock Keeping Unit
+        example: SKU-ABC-123
+        required: true
+      productName:
+        type: string
+        description: Product name
+        maxLength: 200
+        example: "Premium Wireless Headphones"
+        required: true
+      productDescription:
+        type: string
+        description: Product description
+        maxLength: 1000
+        required: false
+      quantity:
+        type: integer
+        description: Quantity ordered
+        minimum: 1
+        example: 2
+        required: true
+      unitPrice:
+        type: number
+        description: Unit price before discounts
+        format: double
+        minimum: 0
+        example: 149.99
+        required: true
+      totalPrice:
+        type: number
+        description: Total price for this item (quantity * unit price - discounts)
+        format: double
+        minimum: 0
+        example: 274.98
+        required: true
+      discountAmount:
+        type: number
+        description: Discount applied to this item
+        format: double
+        minimum: 0
+        example: 24.98
+        required: false
+      taxAmount:
+        type: number
+        description: Tax amount for this item
+        format: double
+        minimum: 0
+        example: 22.00
+        required: false
+      weight:
+        type: number
+        description: Item weight in specified unit
+        format: double
+        minimum: 0
+        example: 0.5
+        required: false
+      weightUnit:
+        type: string
+        description: Weight measurement unit
+        enum: [LB, KG, OZ, G]
+        example: LB
+        required: false
+      dimensions:
+        type: Dimensions
+        description: Item dimensions
+        required: false
+      category:
+        type: string
+        description: Product category
+        example: Electronics
+        required: false
+      vendor:
+        type: string
+        description: Vendor or supplier name
+        example: TechCorp
+        required: false
+      fulfillmentStatus:
+        type: string
+        description: Fulfillment status for this item
+        enum: [PENDING, ALLOCATED, PICKED, PACKED, SHIPPED, DELIVERED]
+        example: PENDING
+        required: false
+      trackingNumber:
+        type: string
+        description: Shipping tracking number for this item
+        required: false
+      estimatedDelivery:
+        type: date-only
+        description: Estimated delivery date for this item
+        required: false
+
+  OrderSummary:
+    displayName: Order Summary
+    description: Lightweight order representation for list views
+    type: object
+    properties:
+      orderId:
+        type: string
+        required: true
+      orderNumber:
+        type: string
+        required: true
+      customerId:
+        type: string
+        required: true
+      orderDate:
+        type: datetime-only
+        required: true
+      orderStatus:
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+        required: true
+      totalAmount:
+        type: number
+        format: double
+        required: true
+      currency:
+        type: string
+        required: true
+      itemCount:
+        type: integer
+        description: Total number of items in the order
+        minimum: 0
+        required: true
+      priority:
+        type: string
+        enum: [LOW, MEDIUM, HIGH, URGENT]
+        required: false
+      expectedDeliveryDate:
+        type: date-only
+        required: false
+
+  OrderRequest:
+    displayName: Order Creation Request
+    description: Request payload for creating a new order
+    type: object
+    properties:
+      customerId:
+        type: string
+        required: true
+      orderType:
+        type: string
+        enum: [STANDARD, EXPRESS, BULK, SUBSCRIPTION]
+        default: STANDARD
+        required: false
+      priority:
+        type: string
+        enum: [LOW, MEDIUM, HIGH, URGENT]
+        default: MEDIUM
+        required: false
+      items:
+        type: OrderItemRequest[]
+        minItems: 1
+        required: true
+      shippingAddress:
+        type: Address
+        required: true
+      billingAddress:
+        type: Address
+        required: false
+      paymentInfo:
+        type: PaymentInfo
+        required: true
+      specialInstructions:
+        type: string
+        maxLength: 500
+        required: false
+      source:
+        type: string
+        enum: [WEB, MOBILE, STORE, CALL_CENTER, API]
+        required: true
+      requestedDeliveryDate:
+        type: date-only
+        required: false
+
+  OrderItemRequest:
+    displayName: Order Item Request
+    description: Request payload for order items
+    type: object
+    properties:
+      productId:
+        type: string
+        required: true
+      quantity:
+        type: integer
+        minimum: 1
+        required: true
+      unitPrice:
+        type: number
+        format: double
+        minimum: 0
+        required: false
+      specialInstructions:
+        type: string
+        maxLength: 200
+        required: false
+
+  OrderStatusUpdate:
+    displayName: Order Status Update
+    description: Request payload for updating order status
+    type: object
+    properties:
+      orderId:
+        type: string
+        required: true
+      newStatus:
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+        required: true
+      reason:
+        type: string
+        description: Reason for status change
+        maxLength: 500
+        required: false
+      updatedBy:
+        type: string
+        description: User or system making the update
+        required: true
+      timestamp:
+        type: datetime-only
+        format: rfc3339
+        required: true
+      notes:
+        type: string
+        maxLength: 1000
+        required: false
+      trackingInfo:
+        type: TrackingInfo
+        required: false
+
+  Dimensions:
+    displayName: Dimensions
+    description: Physical dimensions of an item
+    type: object
+    properties:
+      length:
+        type: number
+        format: double
+        minimum: 0
+        required: true
+      width:
+        type: number
+        format: double
+        minimum: 0
+        required: true
+      height:
+        type: number
+        format: double
+        minimum: 0
+        required: true
+      unit:
+        type: string
+        enum: [IN, CM, FT, M]
+        example: IN
+        required: true
+
+  Address:
+    displayName: Address
+    description: Shipping or billing address
+    type: object
+    properties:
+      addressId:
+        type: string
+        description: Unique address identifier
+        required: false
+      addressType:
+        type: string
+        enum: [SHIPPING, BILLING, BOTH]
+        required: false
+      firstName:
+        type: string
+        maxLength: 50
+        required: true
+      lastName:
+        type: string
+        maxLength: 50
+        required: true
+      company:
+        type: string
+        maxLength: 100
+        required: false
+      addressLine1:
+        type: string
+        description: Street address line 1
+        maxLength: 100
+        required: true
+      addressLine2:
+        type: string
+        description: Street address line 2 (apartment, suite, etc.)
+        maxLength: 100
+        required: false
+      city:
+        type: string
+        maxLength: 50
+        required: true
+      state:
+        type: string
+        description: State or province
+        maxLength: 50
+        required: true
+      postalCode:
+        type: string
+        description: ZIP or postal code
+        pattern: ^[0-9A-Z\-\s]{3,10}$
+        required: true
+      country:
+        type: string
+        description: Country code (ISO 3166-1 alpha-2)
+        pattern: ^[A-Z]{2}$
+        example: US
+        required: true
+      phoneNumber:
+        type: string
+        description: Contact phone number
+        pattern: ^\+?[1-9]\d{1,14}$
+        required: false
+      email:
+        type: string
+        description: Contact email address
+        pattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+        required: false
+      isDefault:
+        type: boolean
+        description: Whether this is the default address
+        default: false
+        required: false
+
+  PaymentReference:
+    displayName: Payment Reference
+    description: Reference to payment information (for security, actual payment details stored separately)
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Payment transaction identifier
+        required: true
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER, GIFT_CARD, STORE_CREDIT]
+        required: true
+      paymentStatus:
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, FAILED, REFUNDED, CANCELLED]
+        required: true
+      authorizationCode:
+        type: string
+        description: Payment authorization code
+        required: false
+      lastFourDigits:
+        type: string
+        description: Last four digits of payment method (for reference)
+        pattern: ^\d{4}$
+        required: false
+
+  TrackingInfo:
+    displayName: Tracking Information
+    description: Shipping tracking details
+    type: object
+    properties:
+      trackingNumber:
+        type: string
+        required: true
+      carrier:
+        type: string
+        enum: [UPS, FEDEX, USPS, DHL, CUSTOM]
+        required: true
+      trackingUrl:
+        type: string
+        description: URL for tracking the shipment
+        required: false
+      estimatedDelivery:
+        type: date-only
+        required: false
+      shippedDate:
+        type: datetime-only
+        required: false

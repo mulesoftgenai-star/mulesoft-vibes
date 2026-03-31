@@ -1,0 +1,239 @@
+#%RAML 1.0 Library
+
+usage: |
+  This library contains security traits for Order Management APIs.
+  It defines OAuth 2.0, Client Credentials, and other security patterns for Experience, Process, and System layer APIs.
+
+traits:
+  oauth2-secured:
+    displayName: OAuth 2.0 Security
+    description: |
+      Applies OAuth 2.0 authorization to the API endpoint.
+      Requires a valid access token in the Authorization header.
+    usage: Apply to endpoints that require user authentication and authorization.
+    headers:
+      Authorization:
+        displayName: Authorization Header
+        description: |
+          OAuth 2.0 access token. Format: "Bearer {access_token}"
+          
+          Example: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+        pattern: ^Bearer\s+[A-Za-z0-9\-._~+/]+=*$
+        example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        required: true
+    responses:
+      401:
+        description: |
+          Unauthorized - Invalid, expired, or missing access token.
+          
+          Common causes:
+          - Missing Authorization header
+          - Invalid token format
+          - Expired access token
+          - Invalid token signature
+        body:
+          application/json:
+            type: object
+            properties:
+              error:
+                type: string
+                enum: [invalid_token, token_expired, missing_token, insufficient_scope]
+                example: invalid_token
+              error_description:
+                type: string
+                example: "The access token is invalid or has expired"
+              timestamp:
+                type: datetime-only
+                example: 2024-03-24T16:30:00
+              correlationId:
+                type: string
+                example: "550e8400-e29b-41d4-a716-446655440000"
+      403:
+        description: |
+          Forbidden - Valid token but insufficient permissions.
+          
+          The access token is valid but does not have the required scope or permissions
+          to access this resource.
+        body:
+          application/json:
+            type: object
+            properties:
+              error:
+                type: string
+                enum: [insufficient_scope, access_denied]
+                example: insufficient_scope
+              error_description:
+                type: string
+                example: "The access token does not have sufficient scope to access this resource"
+              required_scope:
+                type: string[]
+                example: ["orders:read", "orders:write"]
+              timestamp:
+                type: datetime-only
+              correlationId:
+                type: string
+
+  client-credentials:
+    displayName: Client Credentials Security
+    description: |
+      Applies OAuth 2.0 Client Credentials flow for system-to-system authentication.
+      Used for server applications that authenticate as themselves rather than on behalf of a user.
+    usage: Apply to system APIs and process APIs that handle server-to-server communication.
+    headers:
+      Authorization:
+        displayName: Authorization Header
+        description: |
+          OAuth 2.0 client credentials access token. Format: "Bearer {access_token}"
+          
+          This token is obtained using the client credentials flow with client_id and client_secret.
+        type: string
+        pattern: ^Bearer\s+[A-Za-z0-9\-._~+/]+=*$
+        example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+        required: true
+      X-Client-ID:
+        displayName: Client Identifier
+        description: |
+          Client identifier for the calling application.
+          Used for rate limiting, monitoring, and audit purposes.
+        type: string
+        pattern: ^[a-zA-Z0-9\-_]{8,64}$
+        example: "order-management-client-v1"
+        required: true
+    responses:
+      401:
+        description: Unauthorized - Invalid client credentials or expired token
+        body:
+          application/json:
+            type: object
+            properties:
+              error:
+                type: string
+                enum: [invalid_client, invalid_token, token_expired]
+              error_description:
+                type: string
+              timestamp:
+                type: datetime-only
+              correlationId:
+                type: string
+      403:
+        description: Forbidden - Valid credentials but insufficient permissions
+        body:
+          application/json:
+            type: object
+            properties:
+              error:
+                type: string
+                enum: [access_denied, insufficient_scope]
+              error_description:
+                type: string
+              timestamp:
+                type: datetime-only
+              correlationId:
+                type: string
+
+  api-key-secured:
+    displayName: API Key Security
+    description: |
+      Applies API key-based authentication for simple system access.
+      Less secure than OAuth but simpler to implement for trusted systems.
+    usage: Apply to system APIs with trusted partners or internal services.
+    headers:
+      X-API-Key:
+        displayName: API Key
+        description: |
+          API key for accessing the service.
+          
+          API keys should be:
+          - Kept secure and not exposed in client-side code
+          - Rotated regularly
+          - Scoped to specific permissions
+        type: string
+        pattern: ^[A-Za-z0-9\-_]{32,128}$
+        example: "ak_1234567890abcdef1234567890abcdef12345678"
+        required: true
+    responses:
+      401:
+        description: Unauthorized - Invalid or missing API key
+        body:
+          application/json:
+            type: object
+            properties:
+              error:
+                type: string
+                enum: [invalid_api_key, missing_api_key, api_key_expired]
+              error_description:
+                type: string
+              timestamp:
+                type: datetime-only
+              correlationId:
+                type: string
+
+  idempotent:
+    displayName: Idempotent Operations
+    description: |
+      Ensures operations can be safely retried without side effects.
+      Uses idempotency keys to prevent duplicate operations.
+    usage: Apply to POST and PUT operations that modify data.
+    headers:
+      Idempotency-Key:
+        displayName: Idempotency Key
+        description: |
+          Unique key to ensure operation idempotency.
+          
+          If the same key is used for multiple requests:
+          - If the first request is still processing: returns 409 Conflict
+          - If the first request completed successfully: returns the same result
+          - If the first request failed: processes the new request normally
+        type: string
+        pattern: ^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$
+        example: "550e8400-e29b-41d4-a716-446655440000"
+        required: true
+    responses:
+      409:
+        description: |
+          Conflict - Duplicate request with same idempotency key is being processed.
+        body:
+          application/json:
+            type: object
+            properties:
+              error:
+                type: string
+                enum: [duplicate_request, request_in_progress]
+                example: request_in_progress
+              error_description:
+                type: string
+                example: "A request with the same idempotency key is currently being processed"
+              idempotency_key:
+                type: string
+              timestamp:
+                type: datetime-only
+              correlationId:
+                type: string
+
+  secured-experience-api:
+    displayName: Experience API Security
+    description: |
+      Standard security configuration for Experience Layer APIs.
+      Combines OAuth 2.0, rate limiting, CORS, and audit logging.
+    usage: Apply to all Experience APIs serving customer-facing applications.
+    is: 
+      - oauth2-secured
+
+  secured-process-api:
+    displayName: Process API Security
+    description: |
+      Standard security configuration for Process Layer APIs.
+      Combines client credentials OAuth 2.0, rate limiting, and audit logging.
+    usage: Apply to all Process APIs handling business logic orchestration.
+    is:
+      - client-credentials
+
+  secured-system-api:
+    displayName: System API Security
+    description: |
+      Standard security configuration for System Layer APIs.
+      Combines API key authentication, rate limiting, and audit logging.
+    usage: Apply to all System APIs interfacing with backend systems.
+    is:
+      - api-key-secured
