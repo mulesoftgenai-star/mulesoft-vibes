@@ -1,0 +1,606 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+        http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+
+    <munit:config name="airline-comprehensive-test-suite.xml" />
+
+    <!-- Test Configuration -->
+    <configuration-properties file="test-automation.yaml" />
+
+    <!-- ===================================== -->
+    <!-- GET /api/flights - Happy Path Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="get-all-flights-success-test" description="Test GET /api/flights - returns all flights successfully">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Query" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-all-flights" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET All Flights" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 200" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Content-Type" expression="#[attributes.headers.'content-type']" is="#[MunitTools::containsString('application/json')]"/>
+            <munit-tools:assert-that doc:name="Assert Payload is Array" expression="#[payload]" is="#[MunitTools::instanceOf(Array)]"/>
+            <munit-tools:assert-that doc:name="Assert Array Size" expression="#[sizeOf(payload)]" is="#[MunitTools::greaterThan(0)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="get-flights-by-destination-success-test" description="Test GET /api/flights?destination=LAX - returns filtered flights">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Query with Filter" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-flights-by-destination" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[[{
+                        'ID': 1,
+                        'code': 'AA100',
+                        'price': 299.99,
+                        'departureDate': '2024/06/15',
+                        'origin': 'JFK',
+                        'destination': 'LAX',
+                        'emptySeats': 50,
+                        'plane': {
+                            'type': 'Boeing 737',
+                            'totalSeats': 150
+                        }
+                    }]]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights by Destination" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:query-params>
+                    <http:query-param paramName="destination" value="LAX" />
+                </http:query-params>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 200" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Destination Filter" expression="#[payload[0].destination]" is="#[MunitTools::equalTo('LAX')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- GET /api/flights/{ID} - Happy Path Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="get-flight-by-id-success-test" description="Test GET /api/flights/1 - returns specific flight">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Query by ID" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-flight-by-id" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flight by ID" path="/api/flights/1" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 200" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Flight ID" expression="#[payload.ID]" is="#[MunitTools::equalTo(1)]"/>
+            <munit-tools:assert-that doc:name="Assert Flight Code" expression="#[payload.code]" is="#[MunitTools::notNullValue()]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="get-flight-by-invalid-id-test" description="Test GET /api/flights/999 - flight not found">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Query - No Results" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-flight-by-id" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[[]]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flight by Invalid ID" path="/api/flights/999" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 404" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(404)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="get-flight-by-non-numeric-id-test" description="Test GET /api/flights/abc - invalid ID parameter">
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flight by Non-numeric ID" path="/api/flights/abc" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 400" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- POST /api/flights - Happy Path Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="post-flight-success-test" description="Test POST /api/flights - creates flight successfully">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Insert" processor="db:insert">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="insert-flight" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{ affectedRows: 1 }]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Create Flight" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#[${file::test-data/valid-flight.json}]]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 201" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(201)]"/>
+            <munit-tools:assert-that doc:name="Assert Success Message" expression="#[payload.message]" is="#[MunitTools::containsString('Flight created successfully')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- POST /api/flights - Invalid Payload Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="post-flight-invalid-payload-test" description="Test POST /api/flights - invalid payload structure">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Invalid Flight Data" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#[${file::test-data/invalid-payload-flight.json}]]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 400" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+            <munit-tools:assert-that doc:name="Assert Error Message" expression="#[payload.error]" is="#[MunitTools::containsString('validation')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="post-flight-missing-required-fields-test" description="Test POST /api/flights - missing required fields">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Missing Fields Flight" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#[${file::test-data/missing-required-fields-flight.json}]]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 400" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+            <munit-tools:assert-that doc:name="Assert Missing Fields Error" expression="#[payload.error]" is="#[MunitTools::containsString('required')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="post-flight-invalid-content-type-test" description="Test POST /api/flights - invalid content type">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Invalid Content Type" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#['invalid-plain-text-data']]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="text/plain" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 415" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(415)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="post-flight-empty-body-test" description="Test POST /api/flights - empty request body">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Empty Body" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#['']]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 400" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- DELETE /api/flights/{ID} Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="delete-flight-success-test" description="Test DELETE /api/flights/1 - deletes flight successfully">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Delete" processor="db:delete">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="delete-flight" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{ affectedRows: 1 }]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="DELETE" doc:name="DELETE Flight" path="/api/flights/1" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 200" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Success Message" expression="#[payload.message]" is="#[MunitTools::containsString('Flight deleted successfully')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="delete-flight-not-found-test" description="Test DELETE /api/flights/999 - flight not found">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Delete - No Records" processor="db:delete">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="delete-flight" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{ affectedRows: 0 }]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="DELETE" doc:name="DELETE Non-existent Flight" path="/api/flights/999" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 404" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(404)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="delete-flight-invalid-id-test" description="Test DELETE /api/flights/abc - invalid ID parameter">
+        <munit:execution>
+            <http:request method="DELETE" doc:name="DELETE Invalid ID" path="/api/flights/abc" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 400" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Batch Processing Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="batch-processing-success-test" description="Test POST /api/flights/batch - successful batch processing">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Batch Database Operations" processor="db:insert">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="batch-insert-flight" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{ affectedRows: 1 }]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Batch Flight Data" path="/api/flights/batch" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#[${file::test-data/batch-flight-data.json}]]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 200" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Batch Summary" expression="#[payload.summary.totalRecords]" is="#[MunitTools::greaterThan(0)]"/>
+            <munit-tools:assert-that doc:name="Assert Processing Message" expression="#[payload.message]" is="#[MunitTools::containsString('Batch processing completed')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="batch-processing-partial-failure-test" description="Test POST /api/flights/batch - mixed success and failure">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Batch DB - Some Failures" processor="db:insert">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="batch-insert-flight" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{ affectedRows: 1 }]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Invalid Batch Data" path="/api/flights/batch" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[#[${file::test-data/invalid-batch-data.json}]]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 200" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Failed Records Exist" expression="#[payload.summary.failedRecords]" is="#[MunitTools::greaterThan(0)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Circuit Breaker and Error Handling Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-test" description="Test circuit breaker functionality">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Error" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-all-flights" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-call>
+                    <munit-tools:throw exception="DB:CONNECTIVITY" description="Database connection failed" />
+                </munit-tools:then-call>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Circuit Breaker" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Status Code is 503" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(503)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Performance and Load Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="concurrent-requests-test" description="Test concurrent requests handling">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database for Concurrent" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-all-flights" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <parallel-foreach collection="#[1 to 5]" doc:name="Simulate Concurrent Requests">
+                <http:request method="GET" doc:name="GET Concurrent" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+            </parallel-foreach>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Concurrent Success" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Security Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="sql-injection-protection-test" description="Test SQL injection protection">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock DB Safe Query" processor="db:select">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="get-flights-by-destination" attributeName="config-ref" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[[]]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET SQL Injection Test" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:query-params>
+                    <http:query-param paramName="destination" value="'; DROP TABLE flights; --" />
+                </http:query-params>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert No SQL Error" expression="#[attributes.statusCode]" is="#[MunitTools::not(MunitTools::equalTo(500))]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="xss-protection-test" description="Test XSS protection in flight creation">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST XSS Test" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[{
+    "ID": 999,
+    "code": "<script>alert('xss')</script>",
+    "price": 400,
+    "departureDate": "2024/12/31",
+    "origin": "<img src=x onerror=alert(1)>",
+    "destination": "NYC",
+    "emptySeats": 25,
+    "plane": {
+        "type": "Boeing 737",
+        "totalSeats": 150
+    }
+}]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert XSS Handled" expression="#[attributes.statusCode]" is="#[MunitTools::anyOf([MunitTools::equalTo(400), MunitTools::equalTo(201)])]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Boundary Value Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="negative-price-validation-test" description="Test negative price validation">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Negative Price" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[{
+    "ID": 200,
+    "code": "AA200",
+    "price": -100,
+    "departureDate": "2024/12/25",
+    "origin": "NYC",
+    "destination": "LAX",
+    "emptySeats": 50,
+    "plane": {
+        "type": "Boeing 737",
+        "totalSeats": 150
+    }
+}]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Negative Price Rejected" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="large-data-payload-test" description="Test handling of large data payload">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Large Payload" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[{
+    "ID": 300,
+    "code": "#[('A' * 1000)]",
+    "price": 500,
+    "departureDate": "2024/12/30",
+    "origin": "NYC",
+    "destination": "LAX",
+    "emptySeats": 50,
+    "plane": {
+        "type": "Boeing 737",
+        "totalSeats": 150
+    }
+}]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Large Payload Handled" expression="#[attributes.statusCode]" is="#[MunitTools::anyOf([MunitTools::equalTo(400), MunitTools::equalTo(413)])]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- HTTP Method Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="unsupported-http-method-test" description="Test unsupported HTTP method">
+        <munit:execution>
+            <http:request method="PATCH" doc:name="PATCH Unsupported" path="/api/flights/1" config-ref="HTTP_Request_configuration">
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Method Not Allowed" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(405)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- API Console Test -->
+    <!-- ===================================== -->
+    
+    <munit:test name="api-console-access-test" description="Test API console accessibility">
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Console" path="/console/" config-ref="HTTP_Request_configuration">
+                <http:headers>
+                    <http:header headerName="Accept" value="text/html" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Console Available" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Content-Type Validation Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="unsupported-media-type-test" description="Test unsupported media type">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST XML Data" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[<flight><ID>400</ID><code>AA400</code></flight>]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/xml" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Unsupported Media Type" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(415)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Data Validation Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="empty-string-validation-test" description="Test empty string field validation">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Empty Strings" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[{
+    "ID": 500,
+    "code": "",
+    "price": 300,
+    "departureDate": "",
+    "origin": "",
+    "destination": "",
+    "emptySeats": 50,
+    "plane": {
+        "type": "",
+        "totalSeats": 150
+    }
+}]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Empty String Validation" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="null-values-validation-test" description="Test null values validation">
+        <munit:execution>
+            <http:request method="POST" doc:name="POST Null Values" path="/api/flights" config-ref="HTTP_Request_configuration">
+                <http:body><![CDATA[{
+    "ID": null,
+    "code": null,
+    "price": null,
+    "departureDate": null,
+    "origin": null,
+    "destination": null,
+    "emptySeats": null,
+    "plane": null
+}]]></http:body>
+                <http:headers>
+                    <http:header headerName="Content-Type" value="application/json" />
+                </http:headers>
+            </http:request>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Null Values Rejected" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(400)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- HTTP Request Configuration -->
+    <!-- ===================================== -->
+    
+    <http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration">
+        <http:request-connection protocol="HTTP" host="localhost" port="8081" />
+    </http:request-config>
+
+</mule>

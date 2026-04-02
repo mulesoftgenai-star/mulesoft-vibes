@@ -1,0 +1,41 @@
+[
+  {
+    "ID": 1,
+    "code": "AA100",
+    "price": 299.99,
+    "departureDate": "2024-12-01",
+    "origin": "NYC",
+    "destination": "LAX",
+    "emptySeats": 50,
+    "plane": {
+      "type": "Boeing 737",
+      "totalSeats": 150
+    }
+  },
+  {
+    "ID": 2,
+    "code": "AA200",
+    "price": 449.50,
+    "departureDate": "2024-12-02",
+    "origin": "LAX",
+    "destination": "SFO",
+    "emptySeats": 30,
+    "plane": {
+      "type": "Airbus A320",
+      "totalSeats": 180
+    }
+  },
+  {
+    "ID": 3,
+    "code": "AA300",
+    "price": 199.99,
+    "departureDate": "2024-12-03",
+    "origin": "SFO",
+    "destination": "CLE",
+    "emptySeats": 75,
+    "plane": {
+      "type": "Boeing 777",
+      "totalSeats": 200
+    }
+  }
+]

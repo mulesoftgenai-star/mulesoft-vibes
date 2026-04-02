@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+		http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+		http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+	
+	<munit:config name="batch-processing-test-suite.xml" />
+
+	<!-- HTTP Request Configuration -->
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration">
+		<http:request-connection protocol="HTTP" host="localhost" port="8083" />
+	</http:request-config>
+
+	<!-- =============================================== -->
+	<!-- BATCH PROCESSING HAPPY PATH TESTS -->
+	<!-- =============================================== -->
+
+	<munit:test name="test-batch-processing-valid-records" doc:id="01" description="Test batch processing with valid flight records">
+		<munit:execution>
+			<munit-tools:mock-when doc:name="Mock DB Batch Insert" processor="db:insert">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[3]"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<http:request method="POST" doc:name="POST Batch Flights" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[[
+					{
+						"code": "BATCH001",
+						"destination": "LAX",
+						"departureDate": "2024-04-15",
+						"price": 299.99,
+						"planeType": "Boeing 737"
+					},
+					{
+						"code": "BATCH002",
+						"destination": "SFO",
+						"departureDate": "2024-04-16",
+						"price": 449.50,
+						"planeType": "Airbus A320"
+					},
+					{
+						"code": "BATCH003",
+						"destination": "CLE",
+						"departureDate": "2024-04-17",
+						"price": 199.99,
+						"planeType": "Boeing 777"
+					}
+				]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 200" actual="#[attributes.statusCode]" expected="#[200]"/>
+			<munit-tools:assert-that doc:name="Assert Success Message" expression="#[payload.message]" is="#[MunitTools::containsString('Batch processing completed')]"/>
+			<munit-tools:assert-equals doc:name="Assert Total Records" actual="#[payload.summary.totalRecords]" expected="#[3]"/>
+			<munit-tools:assert-equals doc:name="Assert Successful Records" actual="#[payload.summary.successfulRecords]" expected="#[3]"/>
+			<munit-tools:assert-equals doc:name="Assert Failed Records" actual="#[payload.summary.failedRecords]" expected="#[0]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-mixed-results" doc:id="02" description="Test batch processing with mixed valid and invalid records">
+		<munit:execution>
+			<munit-tools:mock-when doc:name="Mock DB Batch Insert - Mixed" processor="db:insert">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[2]"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<http:request method="POST" doc:name="POST Mixed Batch Data" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[#[${file::test-data/invalid-batch-data.json}]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 200" actual="#[attributes.statusCode]" expected="#[200]"/>
+			<munit-tools:assert-that doc:name="Assert Partial Success Message" expression="#[payload.message]" is="#[MunitTools::containsString('completed')]"/>
+			<munit-tools:assert-that doc:name="Assert Total Records" expression="#[payload.summary.totalRecords]" is="#[MunitTools::greaterThan(0)]"/>
+			<munit-tools:assert-that doc:name="Assert Some Failed Records" expression="#[payload.summary.failedRecords]" is="#[MunitTools::greaterThan(0)]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-empty-array" doc:id="03" description="Test batch processing with empty array">
+		<munit:execution>
+			<http:request method="POST" doc:name="POST Empty Batch Array" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[[]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 400" actual="#[attributes.statusCode]" expected="#[400]"/>
+			<munit-tools:assert-that doc:name="Assert Empty Array Error" expression="#[payload.error]" is="#[MunitTools::containsString('Empty')]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-invalid-json" doc:id="04" description="Test batch processing with malformed JSON">
+		<munit:execution>
+			<http:request method="POST" doc:name="POST Invalid JSON Batch" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[[
+					{
+						"code": "INVALID001",
+						"destination": "LAX"
+						"departureDate": "2024-04-15"
+						// Missing comma and closing bracket
+				]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 400" actual="#[attributes.statusCode]" expected="#[400]"/>
+			<munit-tools:assert-that doc:name="Assert JSON Parse Error" expression="#[payload.error]" is="#[MunitTools::containsString('JSON')]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-large-payload" doc:id="05" description="Test batch processing with large number of records">
+		<munit:execution>
+			<munit-tools:mock-when doc:name="Mock DB Batch Insert - Large" processor="db:insert">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[100]"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<set-payload value="#[1 to 100 map {
+				'code': 'BATCH' ++ $,
+				'destination': 'LAX',
+				'departureDate': '2024-04-15',
+				'price': 299.99,
+				'planeType': 'Boeing 737'
+			}]" doc:name="Generate Large Batch"/>
+			<http:request method="POST" doc:name="POST Large Batch" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-that doc:name="Assert Status Code Success or Limit" expression="#[attributes.statusCode]" is="#[MunitTools::anyOf([MunitTools::equalTo(200), MunitTools::equalTo(413)])]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-database-failure" doc:id="06" description="Test batch processing with database failure">
+		<munit:execution>
+			<munit-tools:mock-when doc:name="Mock DB Failure" processor="db:insert">
+				<munit-tools:then-call>
+					<munit-tools:throw exception="DB:CONNECTIVITY" description="Database connection failed"/>
+				</munit-tools:then-call>
+			</munit-tools:mock-when>
+			<http:request method="POST" doc:name="POST Batch DB Failure" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[#[${file::test-data/batch-flight-data.json}]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 500" actual="#[attributes.statusCode]" expected="#[500]"/>
+			<munit-tools:assert-that doc:name="Assert DB Error Message" expression="#[payload.error]" is="#[MunitTools::containsString('database')]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-timeout" doc:id="07" description="Test batch processing with timeout scenario">
+		<munit:execution>
+			<munit-tools:mock-when doc:name="Mock Timeout" processor="db:insert">
+				<munit-tools:then-call>
+					<munit-tools:throw exception="HTTP:TIMEOUT" description="Request timeout"/>
+				</munit-tools:then-call>
+			</munit-tools:mock-when>
+			<http:request method="POST" doc:name="POST Batch Timeout" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[#[${file::test-data/batch-flight-data.json}]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 408" actual="#[attributes.statusCode]" expected="#[408]"/>
+			<munit-tools:assert-that doc:name="Assert Timeout Message" expression="#[payload.error]" is="#[MunitTools::containsString('timeout')]"/>
+		</munit:validation>
+	</munit:test>
+
+	<!-- =============================================== -->
+	<!-- BATCH VALIDATION TESTS -->
+	<!-- =============================================== -->
+
+	<munit:test name="test-batch-processing-missing-required-fields" doc:id="08" description="Test batch processing with records missing required fields">
+		<munit:execution>
+			<http:request method="POST" doc:name="POST Batch Missing Fields" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[[
+					{
+						"code": "BATCH008"
+					},
+					{
+						"destination": "LAX"
+					},
+					{
+						"price": 299.99
+					}
+				]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 200" actual="#[attributes.statusCode]" expected="#[200]"/>
+			<munit-tools:assert-equals doc:name="Assert All Failed Records" actual="#[payload.summary.successfulRecords]" expected="#[0]"/>
+			<munit-tools:assert-equals doc:name="Assert Failed Count" actual="#[payload.summary.failedRecords]" expected="#[3]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-duplicate-codes" doc:id="09" description="Test batch processing with duplicate flight codes">
+		<munit:execution>
+			<http:request method="POST" doc:name="POST Batch Duplicates" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[[
+					{
+						"code": "DUPLICATE001",
+						"destination": "LAX",
+						"departureDate": "2024-04-15",
+						"price": 299.99,
+						"planeType": "Boeing 737"
+					},
+					{
+						"code": "DUPLICATE001",
+						"destination": "SFO",
+						"departureDate": "2024-04-16",
+						"price": 399.99,
+						"planeType": "Airbus A320"
+					}
+				]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 200" actual="#[attributes.statusCode]" expected="#[200]"/>
+			<munit-tools:assert-that doc:name="Assert Duplicate Handling" expression="#[payload.summary.failedRecords]" is="#[MunitTools::greaterThan(0)]"/>
+		</munit:validation>
+	</munit:test>
+
+	<munit:test name="test-batch-processing-performance" doc:id="10" description="Test batch processing performance metrics">
+		<munit:execution>
+			<munit-tools:mock-when doc:name="Mock DB Performance" processor="db:insert">
+				<munit-tools:then-return>
+					<munit-tools:payload value="#[10]"/>
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+			<set-variable value="#[now()]" doc:name="Set Start Time" variableName="startTime"/>
+			<http:request method="POST" doc:name="POST Performance Test" config-ref="HTTP_Request_configuration" path="/api/flights/batch">
+				<http:body><![CDATA[#[${file::test-data/batch-flight-data.json}]]]></http:body>
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			</http:request>
+			<set-variable value="#[now()]" doc:name="Set End Time" variableName="endTime"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert-equals doc:name="Assert Status Code 200" actual="#[attributes.statusCode]" expected="#[200]"/>
+			<munit-tools:assert-that doc:name="Assert Response Time" expression="#[(vars.endTime as Number) - (vars.startTime as Number)]" is="#[MunitTools::lessThan(30000)]"/>
+			<munit-tools:assert-that doc:name="Assert Processing Time Reported" expression="#[payload.summary.processingTimeMs]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+
+</mule>

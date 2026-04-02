@@ -1,0 +1,51 @@
+# Test Automation Configuration for Airline API MUnit Tests
+# This file contains configuration properties for automated testing
+
+# Test Environment Configuration
+test:
+  environment:
+    name: "test"
+    port: 8081
+    host: "localhost"
+    protocol: "HTTP"
+  
+  # Database Configuration for Tests
+  database:
+    mock: true
+    connection:
+      host: "localhost"
+      port: 1521
+      name: "airline_test_db"
+      
+  # Circuit Breaker Test Configuration
+  circuit-breaker:
+    failure-threshold: 3
+    timeout: 5000
+    reset-timeout: 30000
+    
+  # Batch Processing Configuration
+  batch:
+    max-records: 100
+    timeout: 30000
+    
+  # Test Data Configuration
+  test-data:
+    valid-flight-path: "test-data/valid-flight.json"
+    invalid-flight-path: "test-data/invalid-flight.json"
+    batch-data-path: "test-data/batch-flight-data.json"
+    
+  # Performance Test Configuration
+  performance:
+    max-response-time: 5000
+    concurrent-requests: 10
+    
+  # Security Test Configuration
+  security:
+    enable-sql-injection-tests: true
+    enable-xss-tests: true
+    
+# HTTP Request Configuration for Tests
+http:
+  request:
+    timeout: 10000
+    connection-timeout: 5000

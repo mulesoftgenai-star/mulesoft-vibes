@@ -1,0 +1,10 @@
+{
+  "ID": "not-a-number",
+  "code": "",
+  "price": "invalid-price",
+  "departureDate": "invalid-date-format",
+  "origin": 123,
+  "destination": null,
+  "emptySeats": -5,
+  "plane": "not-an-object"
+}

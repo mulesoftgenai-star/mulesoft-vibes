@@ -1,0 +1,36 @@
+[
+  {
+    "code": "VALID001",
+    "destination": "LAX",
+    "departureDate": "2024-04-15",
+    "origin": "NYC",
+    "price": 299.99,
+    "emptySeats": 50,
+    "plane": {
+      "type": "Boeing 737",
+      "totalSeats": 150
+    }
+  },
+  {
+    "code": "",
+    "destination": "SFO",
+    "departureDate": "invalid-date",
+    "origin": null,
+    "price": "not-a-number",
+    "emptySeats": -5,
+    "plane": {
+      "type": "",
+      "totalSeats": "invalid"
+    }
+  },
+  {
+    "destination": "CLE",
+    "departureDate": "2024-04-17",
+    "price": -100,
+    "emptySeats": 200,
+    "plane": {
+      "type": "Invalid Plane",
+      "totalSeats": 50
+    }
+  }
+]

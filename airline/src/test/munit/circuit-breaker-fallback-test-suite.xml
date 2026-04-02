@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:os="http://www.mulesoft.org/schema/mule/os"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+        http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+
+    <munit:config name="circuit-breaker-fallback-test-suite.xml" />
+
+    <http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration">
+        <http:request-connection protocol="HTTP" host="localhost" port="8081" />
+    </http:request-config>
+
+    <!-- ===================================== -->
+    <!-- Circuit Breaker State Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-closed-state-test" description="Test circuit breaker in closed state">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - Closed State" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-state" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="CLOSED" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Database Success" processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Closed State" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Success Response" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Valid Data" expression="#[payload]" is="#[MunitTools::instanceOf(Array)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="circuit-breaker-open-state-test" description="Test circuit breaker in open state - fallback response">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - Open State" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-state" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="OPEN" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Open State" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Fallback Response" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(503)]"/>
+            <munit-tools:assert-that doc:name="Assert Fallback Message" expression="#[payload.message]" is="#[MunitTools::containsString('service temporarily unavailable')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="circuit-breaker-half-open-test" description="Test circuit breaker in half-open state">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - Half Open" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-state" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="HALF-OPEN" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Database Success" processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Half Open" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Success Response" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Failure Threshold Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-failure-threshold-test" description="Test circuit breaker opens after failure threshold">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - Failure Count" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="failure-count" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="3" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Database Failure" processor="db:select">
+                <munit-tools:then-call>
+                    <munit-tools:throw exception="DB:CONNECTIVITY" description="Database connection timeout" />
+                </munit-tools:then-call>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Threshold Test" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Circuit Opens" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(503)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Fallback Mechanism Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="fallback-cached-data-test" description="Test fallback returns cached data">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - Cached Data" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="cached-flights" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[[
+                        {
+                            'ID': 1,
+                            'code': 'CACHED001',
+                            'price': 199.99,
+                            'departureDate': '2024/01/01',
+                            'origin': 'NYC',
+                            'destination': 'LAX',
+                            'emptySeats': 30,
+                            'plane': {
+                                'type': 'Boeing 737',
+                                'totalSeats': 150
+                            }
+                        }
+                    ]]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Circuit Breaker Open" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-state" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="OPEN" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Fallback Data" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Fallback Success" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Cached Data" expression="#[payload[0].code]" is="#[MunitTools::equalTo('CACHED001')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="fallback-default-data-test" description="Test fallback returns default data when no cache available">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - No Cache" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="cached-flights" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-call>
+                    <munit-tools:throw exception="OS:KEY_NOT_FOUND" description="No cached data"/>
+                </munit-tools:then-call>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Circuit Breaker Open" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-state" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="OPEN" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Default Fallback" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Fallback Response" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(503)]"/>
+            <munit-tools:assert-that doc:name="Assert Service Unavailable" expression="#[payload.message]" is="#[MunitTools::containsString('temporarily unavailable')]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Recovery Mechanism Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-recovery-test" description="Test circuit breaker recovery from half-open to closed state">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Object Store - Half Open" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-state" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="HALF-OPEN" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Database Recovery Success" processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Recovery Test" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Recovery Success" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Valid Flight Data" expression="#[payload]" is="#[MunitTools::instanceOf(Array)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Timeout and Error Handling Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-timeout-test" description="Test circuit breaker with timeout scenarios">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Timeout" processor="db:select">
+                <munit-tools:then-call>
+                    <munit-tools:throw exception="HTTP:TIMEOUT" description="Database query timeout" />
+                </munit-tools:then-call>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Timeout" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Timeout Handling" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(503)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="circuit-breaker-multiple-failures-test" description="Test circuit breaker with multiple consecutive failures">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Multiple Failures" processor="db:select">
+                <munit-tools:then-call>
+                    <munit-tools:throw exception="DB:CONNECTIVITY" description="Multiple database failures" />
+                </munit-tools:then-call>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <foreach collection="#[1 to 5]" doc:name="Multiple Failure Requests">
+                <http:request method="GET" doc:name="GET Flights - Multiple Failures" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+            </foreach>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Circuit Breaker Engaged" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(503)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Cache Management Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="cache-update-mechanism-test" description="Test cache update mechanism during successful operations">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Success" processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Cache Store" processor="os:store">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[true]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Cache Update" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Successful Response" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="cache-expiry-test" description="Test cache expiry and refresh mechanism">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Expired Cache" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="cache-timestamp" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[now() - |PT1H|]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+            <munit-tools:mock-when doc:name="Mock Database Success" processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Flights - Cache Expiry" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Fresh Data Retrieved" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Performance and Load Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-performance-test" description="Test circuit breaker performance under load">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Database Success" processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[${file::test-data/valid-flight-array.json}]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <set-variable value="#[now()]" doc:name="Set Start Time" variableName="startTime"/>
+            <parallel-foreach collection="#[1 to 10]" doc:name="Concurrent Requests">
+                <http:request method="GET" doc:name="GET Concurrent Flights" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+            </parallel-foreach>
+            <set-variable value="#[now()]" doc:name="Set End Time" variableName="endTime"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Performance Success" expression="#[attributes.statusCode]" is="#[MunitTools::equalTo(200)]"/>
+            <munit-tools:assert-that doc:name="Assert Response Time" expression="#[(vars.endTime as Number) - (vars.startTime as Number)]" is="#[MunitTools::lessThan(10000)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- ===================================== -->
+    <!-- Configuration Tests -->
+    <!-- ===================================== -->
+    
+    <munit:test name="circuit-breaker-configuration-test" description="Test circuit breaker configuration parameters">
+        <munit:behavior>
+            <munit-tools:mock-when doc:name="Mock Config Retrieval" processor="os:retrieve">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute whereValue="circuit-config" attributeName="key" />
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[{
+                        'failureThreshold': 5,
+                        'timeout': 30000,
+                        'resetTimeout': 60000
+                    }]" />
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <http:request method="GET" doc:name="GET Configuration Test" path="/api/flights" config-ref="HTTP_Request_configuration"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:name="Assert Configuration Applied" expression="#[attributes.statusCode]" is="#[MunitTools::anyOf([MunitTools::equalTo(200), MunitTools::equalTo(503)])]"/>
+        </munit:validation>
+    </munit:test>
+
+</mule>

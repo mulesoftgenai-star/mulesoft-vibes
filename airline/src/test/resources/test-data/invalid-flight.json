@@ -1,0 +1,13 @@
+{
+  "ID": "invalid_id",
+  "code": "",
+  "price": "not_a_number",
+  "departureDate": "invalid_date_format",
+  "origin": null,
+  "destination": 123,
+  "emptySeats": -5,
+  "plane": {
+    "type": "",
+    "totalSeats": "not_a_number"
+  }
+}

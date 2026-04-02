@@ -1,0 +1,13 @@
+{
+  "ID": 100,
+  "code": "TEST001",
+  "price": 299.99,
+  "departureDate": "2024-12-01",
+  "origin": "NYC",
+  "destination": "LAX",
+  "emptySeats": 50,
+  "plane": {
+    "type": "Boeing 737",
+    "totalSeats": 150
+  }
+}
