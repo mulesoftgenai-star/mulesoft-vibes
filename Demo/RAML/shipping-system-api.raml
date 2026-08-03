@@ -1,0 +1,829 @@
+#%RAML 1.0
+title: Shipping System API
+version: v1
+description: |
+  System layer API for shipping and logistics management.
+  This API provides shipping services and tracking capabilities.
+mediaType: application/json
+baseUri: https://api.mulesoft-vibes.com/system/shipping/{version}
+protocols: [HTTPS]
+
+types:
+  ShipmentDataTypes: !include ../Fragment-Creation/data-types/shipment-data-type.raml
+  SystemErrors: !include ../Fragment-Creation/error-responses/system-layer-errors.raml
+
+traits:
+  oauth2-secured: !include ../Fragment-Creation/security-traits/oauth2-security-trait.raml
+  trackable:
+    headers:
+      X-Tracking-Source:
+        type: string
+        required: false
+        description: Source system requesting tracking information
+        example: "order-management-api"
+  rateLimited:
+    headers:
+      X-Rate-Limit:
+        type: integer
+        required: false
+        description: Current rate limit for shipping operations
+        example: 100
+
+securitySchemes:
+  oauth_2_0:
+    type: OAuth 2.0
+    description: OAuth 2.0 authentication
+    settings:
+      authorizationUri: https://auth.mulesoft-vibes.com/oauth/authorize
+      accessTokenUri: https://auth.mulesoft-vibes.com/oauth/token
+      authorizationGrants: [ client_credentials, authorization_code ]
+
+securedBy: [ oauth_2_0 ]
+
+/shipments:
+  description: Shipment management operations
+  is: [trackable, rateLimited]
+  
+  post:
+    displayName: Create Shipment
+    description: Create a new shipment for order fulfillment
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: object
+        properties:
+          orderId:
+            type: string
+            required: true
+            example: "ORD-12345678"
+          shipmentType:
+            type: string
+            required: true
+            enum: [PACKAGE, DOCUMENT, FREIGHT, DIGITAL]
+            example: "PACKAGE"
+          priority:
+            type: string
+            required: false
+            enum: [STANDARD, EXPRESS, OVERNIGHT, SAME_DAY]
+            default: STANDARD
+            example: "STANDARD"
+          origin:
+            type: object
+            required: true
+            properties:
+              warehouseId:
+                type: string
+                example: "WH-NYC-001"
+              name:
+                type: string
+                example: "MegaCorp Distribution Center"
+              address:
+                type: object
+                properties:
+                  street:
+                    type: string
+                    example: "1000 Warehouse Blvd"
+                  city:
+                    type: string
+                    example: "Newark"
+                  state:
+                    type: string
+                    example: "NJ"
+                  zipCode:
+                    type: string
+                    example: "07102"
+                  country:
+                    type: string
+                    example: "US"
+              contact:
+                type: object
+                properties:
+                  phone:
+                    type: string
+                    example: "+1-555-123-4567"
+                  email:
+                    type: string
+                    example: "shipping@megacorp.com"
+          destination:
+            type: object
+            required: true
+            properties:
+              name:
+                type: string
+                example: "John Doe"
+              address:
+                type: object
+                properties:
+                  street:
+                    type: string
+                    example: "123 Main Street"
+                  city:
+                    type: string
+                    example: "New York"
+                  state:
+                    type: string
+                    example: "NY"
+                  zipCode:
+                    type: string
+                    example: "10001"
+                  country:
+                    type: string
+                    example: "US"
+              contact:
+                type: object
+                properties:
+                  phone:
+                    type: string
+                    example: "+1-555-987-6543"
+                  email:
+                    type: string
+                    example: "john.doe@example.com"
+              isResidential:
+                type: boolean
+                default: true
+                example: true
+              deliveryInstructions:
+                type: string
+                required: false
+                example: "Leave at front door if no answer"
+          packages:
+            type: array
+            required: true
+            items:
+              type: object
+              properties:
+                packageId:
+                  type: string
+                  example: "PKG-001"
+                weight:
+                  type: object
+                  properties:
+                    value:
+                      type: number
+                      example: 2.5
+                    unit:
+                      type: string
+                      enum: [LB, KG, OZ, G]
+                      example: "LB"
+                dimensions:
+                  type: object
+                  properties:
+                    length:
+                      type: number
+                      example: 12.0
+                    width:
+                      type: number
+                      example: 8.0
+                    height:
+                      type: number
+                      example: 4.0
+                    unit:
+                      type: string
+                      enum: [IN, CM, FT, M]
+                      example: "IN"
+                declaredValue:
+                  type: object
+                  required: false
+                  properties:
+                    amount:
+                      type: number
+                      example: 199.99
+                    currency:
+                      type: string
+                      example: "USD"
+                contents:
+                  type: array
+                  required: false
+                  items:
+                    type: object
+                    properties:
+                      itemId:
+                        type: string
+                        example: "ITEM-001"
+                      description:
+                        type: string
+                        example: "Premium Headphones"
+                      quantity:
+                        type: integer
+                        example: 1
+                      value:
+                        type: number
+                        example: 199.99
+          carrierPreferences:
+            type: object
+            required: false
+            properties:
+              preferredCarriers:
+                type: array
+                items:
+                  type: string
+                  enum: [FEDEX, UPS, USPS, DHL, AMAZON, ONTRAC]
+                example: ["FEDEX", "UPS"]
+              excludedCarriers:
+                type: array
+                items:
+                  type: string
+                  enum: [FEDEX, UPS, USPS, DHL, AMAZON, ONTRAC]
+                example: ["USPS"]
+              maxCost:
+                type: number
+                example: 25.00
+              maxDeliveryDays:
+                type: integer
+                example: 5
+        examples:
+          createShipment:
+            orderId: "ORD-12345678"
+            shipmentType: "PACKAGE"
+            priority: "STANDARD"
+            origin:
+              warehouseId: "WH-NYC-001"
+              name: "MegaCorp Distribution Center"
+              address:
+                street: "1000 Warehouse Blvd"
+                city: "Newark"
+                state: "NJ"
+                zipCode: "07102"
+                country: "US"
+              contact:
+                phone: "+1-555-123-4567"
+                email: "shipping@megacorp.com"
+            destination:
+              name: "John Doe"
+              address:
+                street: "123 Main Street"
+                city: "New York"
+                state: "NY"
+                zipCode: "10001"
+                country: "US"
+              contact:
+                phone: "+1-555-987-6543"
+                email: "john.doe@example.com"
+              isResidential: true
+              deliveryInstructions: "Leave at front door if no answer"
+            packages:
+              - packageId: "PKG-001"
+                weight:
+                  value: 2.5
+                  unit: "LB"
+                dimensions:
+                  length: 12.0
+                  width: 8.0
+                  height: 4.0
+                  unit: "IN"
+                declaredValue:
+                  amount: 199.99
+                  currency: "USD"
+                contents:
+                  - itemId: "ITEM-001"
+                    description: "Premium Headphones"
+                    quantity: 1
+                    value: 199.99
+            carrierPreferences:
+              preferredCarriers: ["FEDEX", "UPS"]
+              excludedCarriers: ["USPS"]
+              maxCost: 25.00
+              maxDeliveryDays: 5
+    responses:
+      201:
+        description: Shipment created successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              shipmentId:
+                type: string
+                example: "SHIP-789456123"
+              shipmentNumber:
+                type: string
+                example: "SH-240323-001"
+              orderId:
+                type: string
+                example: "ORD-2024-001234"
+              status:
+                type: string
+                enum: [CREATED, PROCESSING, READY_FOR_PICKUP, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, EXCEPTION]
+                example: "CREATED"
+              carrier:
+                type: object
+                properties:
+                  carrierId:
+                    type: string
+                    example: "FEDEX"
+                  carrierName:
+                    type: string
+                    example: "FedEx"
+                  serviceType:
+                    type: string
+                    example: "FedEx Ground"
+                  serviceCode:
+                    type: string
+                    example: "FDXG"
+              trackingNumber:
+                type: string
+                required: false
+                example: "1Z999AA1234567890"
+              estimatedDelivery:
+                type: object
+                required: false
+                properties:
+                  date:
+                    type: date-only
+                    example: "2024-03-28"
+                  timeWindow:
+                    type: object
+                    properties:
+                      start:
+                        type: string
+                        example: "09:00"
+                      end:
+                        type: string
+                        example: "17:00"
+              shippingCost:
+                type: object
+                properties:
+                  totalCost:
+                    type: number
+                    example: 12.95
+                  baseCost:
+                    type: number
+                    example: 9.99
+                  surcharges:
+                    type: number
+                    example: 1.50
+                  taxes:
+                    type: number
+                    example: 1.46
+                  currency:
+                    type: string
+                    example: "USD"
+              shippingLabel:
+                type: object
+                required: false
+                properties:
+                  url:
+                    type: string
+                    example: "https://labels.shipping.com/label/789456123.pdf"
+                  format:
+                    type: string
+                    example: "PDF"
+            examples:
+              shipmentCreated:
+                shipmentId: "SHIP-789456123"
+                shipmentNumber: "SH-240323-001"
+                orderId: "ORD-2024-001234"
+                status: "CREATED"
+                carrier:
+                  carrierId: "FEDEX"
+                  carrierName: "FedEx"
+                  serviceType: "FedEx Ground"
+                  serviceCode: "FDXG"
+                trackingNumber: "1Z999AA1234567890"
+                estimatedDelivery:
+                  date: "2024-03-28"
+                  timeWindow:
+                    start: "09:00"
+                    end: "17:00"
+                shippingCost:
+                  totalCost: 12.95
+                  baseCost: 9.99
+                  surcharges: 1.50
+                  taxes: 1.46
+                  currency: "USD"
+                shippingLabel:
+                  url: "https://labels.shipping.com/label/789456123.pdf"
+                  format: "PDF"
+      400:
+        body:
+          application/json:
+            type: SystemErrors
+      422:
+        body:
+          application/json:
+            type: SystemErrors
+      500:
+        body:
+          application/json:
+            type: SystemErrors
+
+  /{shipmentId}:
+    uriParameters:
+      shipmentId:
+        type: string
+        pattern: ^SHIP-[0-9]{8}$
+        example: "SHIP-12345678"
+        description: Unique shipment identifier
+    
+    get:
+      displayName: Get Shipment Details
+      description: Retrieve detailed shipment information
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Shipment details retrieved successfully
+          body:
+            application/json:
+              type: ShipmentDataTypes
+              examples:
+                shipmentDetails:
+                  shipmentId: "SHIP-11998877"
+                  shipmentNumber: "SH-240323-001"
+                  orderId: "ORD-12345678"
+                  customerId: "CUST-87654321"
+                  shipmentDate: "2024-03-23T10:00:00"
+                  shipmentStatus: "IN_TRANSIT"
+                  shipmentType: "STANDARD"
+                  priority: "NORMAL"
+                  carrier:
+                    carrierId: "CARR-12345678"
+                    carrierName: "FEDEX"
+                    carrierCode: "FDXG"
+                    serviceType: "FedEx Ground"
+                    serviceCode: "FEDEX_GROUND"
+                  tracking:
+                    trackingNumber: "1Z999AA1234567890"
+                    trackingUrl: "https://www.fedex.com/track?number=1Z999AA1234567890"
+                    estimatedDeliveryDate: "2024-03-28"
+                  addresses:
+                    originAddress:
+                      addressId: "ADDR-11223344"
+                      companyName: "Acme Warehouse"
+                      addressLine1: "1000 Industrial Blvd"
+                      city: "Atlanta"
+                      state: "GA"
+                      postalCode: "30309"
+                      country: "US"
+                    destinationAddress:
+                      addressId: "ADDR-55667788"
+                      recipientName: "John Doe"
+                      addressLine1: "123 Main Street"
+                      city: "New York"
+                      state: "NY"
+                      postalCode: "10001"
+                      country: "US"
+                  items:
+                    - shipmentItemId: "SI-11223344"
+                      lineItemId: "LI-55667788"
+                      productId: "PROD-99887766"
+                      productName: "Premium Wireless Headphones"
+                      sku: "WH-PREM-001"
+                      quantity: 2
+                      weight: 1.5
+                      dimensions:
+                        length: 10.5
+                        width: 8.0
+                        height: 6.0
+                      packageType: "BOX"
+                      specialHandling: ["FRAGILE"]
+                  costs:
+                    shippingCost: 9.99
+                    insuranceCost: 2.50
+                    totalCost: 13.74
+                    currency: "USD"
+                  metadata:
+                    createdBy: "shipping_service"
+                    createdDate: "2024-03-24T10:00:00"
+                    lastModifiedBy: "carrier_webhook"
+                    lastModifiedDate: "2024-03-25T14:30:00"
+                    version: 3
+                    tags: ["express", "international", "high_value"]
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+    put:
+      displayName: Update Shipment
+      description: Update shipment information or status
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: object
+          properties:
+            status:
+              type: string
+              required: false
+              enum: [CANCELLED, RETURNED_TO_SENDER, DELIVERY_ATTEMPTED]
+              example: "CANCELLED"
+            deliveryInstructions:
+              type: string
+              required: false
+              example: "Updated delivery instructions"
+            destinationAddress:
+              type: object
+              required: false
+              properties:
+                street:
+                  type: string
+                  example: "456 New Address St"
+                city:
+                  type: string
+                  example: "New York"
+                state:
+                  type: string
+                  example: "NY"
+                zipCode:
+                  type: string
+                  example: "10002"
+                country:
+                  type: string
+                  example: "US"
+          examples:
+            updateShipment:
+              status: "CANCELLED"
+              deliveryInstructions: "Customer requested cancellation"
+      responses:
+        200:
+          description: Shipment updated successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                shipmentId:
+                  type: string
+                  example: "SHIP-789456123"
+                status:
+                  type: string
+                  example: "CANCELLED"
+                lastUpdated:
+                  type: datetime
+                  example: "2024-03-23T15:30:00Z"
+                message:
+                  type: string
+                  example: "Shipment updated successfully"
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+/tracking:
+  description: Package tracking operations
+  is: [trackable]
+  
+  /{trackingNumber}:
+    uriParameters:
+      trackingNumber:
+        type: string
+        minLength: 6
+        maxLength: 50
+        example: "1Z999AA1234567890"
+        description: Carrier tracking number
+    
+    get:
+      displayName: Track Package
+      description: Get real-time tracking information for a package
+      is: [oauth2-secured]
+      queryParameters:
+        includeHistory:
+          type: boolean
+          required: false
+          default: true
+          description: Include tracking event history
+      responses:
+        200:
+          description: Tracking information retrieved successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                trackingNumber:
+                  type: string
+                  example: "1Z999AA1234567890"
+                shipmentId:
+                  type: string
+                  required: false
+                  example: "SHIP-789456123"
+                currentStatus:
+                  type: string
+                  enum: [LABEL_CREATED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_ATTEMPTED, EXCEPTION, RETURNED]
+                  example: "IN_TRANSIT"
+                estimatedDelivery:
+                  type: date-only
+                  required: false
+                  example: "2024-03-28"
+                lastUpdateTime:
+                  type: datetime
+                  example: "2024-03-25T08:30:00Z"
+                currentLocation:
+                  type: object
+                  required: false
+                  properties:
+                    city:
+                      type: string
+                      example: "Newark"
+                    state:
+                      type: string
+                      example: "NJ"
+                    country:
+                      type: string
+                      example: "US"
+                    facilityName:
+                      type: string
+                      example: "FedEx Ground Newark Hub"
+                carrier:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "FedEx"
+                    serviceType:
+                      type: string
+                      example: "FedEx Ground"
+                trackingEvents:
+                  type: array
+                  required: false
+                  items:
+                    type: object
+                    properties:
+                      eventId:
+                        type: string
+                        example: "EVT-11223344"
+                      eventType:
+                        type: string
+                        enum: [CREATED, LABEL_PRINTED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_ATTEMPTED, EXCEPTION, DELAYED, LOST, DAMAGED]
+                        example: "IN_TRANSIT"
+                      eventDate:
+                        type: datetime
+                        example: "2024-03-25T14:30:00Z"
+                      location:
+                        type: string
+                        example: "Newark, NJ"
+                      description:
+                        type: string
+                        example: "Package has left the Newark distribution center"
+              examples:
+                trackingInfo:
+                  trackingNumber: "1Z999AA1234567890"
+                  shipmentId: "SHIP-789456123"
+                  currentStatus: "IN_TRANSIT"
+                  estimatedDelivery: "2024-03-28"
+                  lastUpdateTime: "2024-03-25T08:30:00Z"
+                  currentLocation:
+                    city: "Newark"
+                    state: "NJ"
+                    country: "US"
+                    facilityName: "FedEx Ground Newark Hub"
+                  carrier:
+                    name: "FedEx"
+                    serviceType: "FedEx Ground"
+                  trackingEvents:
+                    - eventId: "EVT-11223344"
+                      eventType: "PICKED_UP"
+                      eventDate: "2024-03-23T14:30:00Z"
+                      location: "Newark, NJ"
+                      description: "Package picked up at origin facility"
+                    - eventId: "EVT-22334455"
+                      eventType: "IN_TRANSIT"
+                      eventDate: "2024-03-25T08:30:00Z"
+                      location: "Newark, NJ"
+                      description: "Package has left the Newark distribution center"
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+/rates:
+  description: Shipping rate calculation
+  is: [rateLimited]
+  
+  post:
+    displayName: Get Shipping Rates
+    description: Calculate shipping rates for different carriers and service types
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: object
+        properties:
+          origin:
+            type: object
+            required: true
+            properties:
+              zipCode:
+                type: string
+                example: "07102"
+              country:
+                type: string
+                example: "US"
+          destination:
+            type: object
+            required: true
+            properties:
+              zipCode:
+                type: string
+                example: "10001"
+              country:
+                type: string
+                example: "US"
+          packages:
+            type: array
+            required: true
+            items:
+              type: object
+              properties:
+                weight:
+                  type: object
+                  properties:
+                    value:
+                      type: number
+                      example: 5.0
+                    unit:
+                      type: string
+                      enum: [LB, KG, OZ, G]
+                      example: "LB"
+                dimensions:
+                  type: object
+                  properties:
+                    length:
+                      type: number
+                      example: 10.0
+                    width:
+                      type: number
+                      example: 8.0
+                    height:
+                      type: number
+                      example: 6.0
+                    unit:
+                      type: string
+                      enum: [IN, CM, FT, M]
+                      example: "IN"
+        examples:
+          getRates:
+            origin:
+              zipCode: "07102"
+              country: "US"
+            destination:
+              zipCode: "10001"
+              country: "US"
+            packages:
+              - weight:
+                  value: 5.0
+                  unit: "LB"
+                dimensions:
+                  length: 10.0
+                  width: 8.0
+                  height: 6.0
+                  unit: "IN"
+    responses:
+      200:
+        description: Shipping rates retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              rates:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    carrier:
+                      type: string
+                      example: "FedEx"
+                    serviceType:
+                      type: string
+                      example: "Ground"
+                    cost:
+                      type: number
+                      example: 12.50
+                    estimatedDays:
+                      type: integer
+                      example: 3
+                    currency:
+                      type: string
+                      example: "USD"
+            examples:
+              ratesResponse:
+                rates:
+                  - carrier: "FedEx"
+                    serviceType: "Ground"
+                    cost: 12.50
+                    estimatedDays: 3
+                    currency: "USD"
+                  - carrier: "UPS"
+                    serviceType: "Ground"
+                    cost: 11.75
+                    estimatedDays: 3
+                    currency: "USD"
+      400:
+        body:
+          application/json:
+            type: SystemErrors
+      500:
+        body:
+          application/json:
+            type: SystemErrors

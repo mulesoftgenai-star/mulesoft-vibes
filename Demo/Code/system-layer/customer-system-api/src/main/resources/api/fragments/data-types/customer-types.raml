@@ -1,0 +1,214 @@
+#%RAML 1.0 Library
+
+types:
+  # Base Types
+  ID:
+    type: string
+    pattern: ^[A-Z0-9]{10}$
+    description: Standard identifier format
+    example: "CUST789012"
+
+  CustomerProfile:
+    type: object
+    properties:
+      customerId:
+        type: ID
+        description: Unique customer identifier
+      firstName:
+        type: string
+        minLength: 1
+        maxLength: 50
+        description: Customer first name
+      lastName:
+        type: string
+        minLength: 1
+        maxLength: 50
+        description: Customer last name
+      email:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+        description: Primary email address
+      phone:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+        description: Primary phone number
+      dateOfBirth:
+        type: date-only
+        required: false
+        description: Customer date of birth
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, BLOCKED, SUSPENDED]
+        description: Account status
+        default: ACTIVE
+      preferences:
+        type: object
+        required: false
+        properties:
+          newsletter:
+            type: boolean
+            default: false
+            description: Newsletter subscription preference
+          smsNotifications:
+            type: boolean
+            default: false
+            description: SMS notification preference
+          language:
+            type: string
+            pattern: ^[a-z]{2}$
+            default: "en"
+            description: Preferred language (ISO 639-1)
+          currency:
+            type: string
+            pattern: ^[A-Z]{3}$
+            default: "USD"
+            description: Preferred currency
+      loyaltyTier:
+        type: string
+        enum: [BRONZE, SILVER, GOLD, PLATINUM]
+        required: false
+        description: Customer loyalty tier
+      totalOrders:
+        type: integer
+        minimum: 0
+        required: false
+        description: Total number of orders placed
+      createdAt:
+        type: datetime
+        format: rfc3339
+        description: Account creation timestamp
+      updatedAt:
+        type: datetime
+        format: rfc3339
+        description: Last update timestamp
+    example:
+      customerId: "CUST789012"
+      firstName: "John"
+      lastName: "Smith"
+      email: "john.smith@example.com"
+      phone: "+1234567890"
+      dateOfBirth: "1985-06-15"
+      status: "ACTIVE"
+      preferences:
+        newsletter: true
+        smsNotifications: false
+        language: "en"
+        currency: "USD"
+      loyaltyTier: "GOLD"
+      totalOrders: 15
+      createdAt: "2023-01-15T10:30:00.000Z"
+      updatedAt: "2024-03-27T15:30:00.000Z"
+
+  Address:
+    type: object
+    properties:
+      addressId:
+        type: ID
+        description: Unique address identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      addressType:
+        type: string
+        enum: [BILLING, SHIPPING, BOTH]
+        description: Address type designation
+      isDefault:
+        type: boolean
+        default: false
+        description: Whether this is the default address
+      label:
+        type: string
+        required: false
+        maxLength: 50
+        description: Address label (e.g., "Home", "Office")
+      street:
+        type: string
+        minLength: 1
+        maxLength: 100
+        description: Street address line 1
+      street2:
+        type: string
+        required: false
+        maxLength: 100
+        description: Street address line 2 (optional)
+      city:
+        type: string
+        minLength: 1
+        maxLength: 50
+        description: City name
+      state:
+        type: string
+        minLength: 2
+        maxLength: 50
+        description: State or province
+      postalCode:
+        type: string
+        pattern: ^[0-9]{5}(-[0-9]{4})?$
+        description: ZIP or postal code
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        description: ISO 3166-1 alpha-2 country code
+        example: "US"
+      createdAt:
+        type: datetime
+        format: rfc3339
+        description: Address creation timestamp
+      updatedAt:
+        type: datetime
+        format: rfc3339
+        description: Last update timestamp
+    example:
+      addressId: "ADDR456789"
+      customerId: "CUST789012"
+      addressType: "BOTH"
+      isDefault: true
+      label: "Home"
+      street: "123 Main Street"
+      city: "New York"
+      state: "NY"
+      postalCode: "10001"
+      country: "US"
+      createdAt: "2023-01-15T10:30:00.000Z"
+      updatedAt: "2024-03-27T15:30:00.000Z"
+
+  Customer:
+    type: object
+    description: Complete customer information including profile and addresses
+    properties:
+      profile:
+        type: CustomerProfile
+        description: Customer profile information
+      addresses:
+        type: Address[]
+        required: false
+        description: Customer addresses
+    example:
+      profile:
+        customerId: "CUST789012"
+        firstName: "John"
+        lastName: "Smith"
+        email: "john.smith@example.com"
+        phone: "+1234567890"
+        status: "ACTIVE"
+        preferences:
+          newsletter: true
+          smsNotifications: false
+          language: "en"
+          currency: "USD"
+        loyaltyTier: "GOLD"
+        createdAt: "2023-01-15T10:30:00.000Z"
+        updatedAt: "2024-03-27T15:30:00.000Z"
+      addresses:
+        - addressId: "ADDR456789"
+          customerId: "CUST789012"
+          addressType: "BOTH"
+          isDefault: true
+          label: "Home"
+          street: "123 Main Street"
+          city: "New York"
+          state: "NY"
+          postalCode: "10001"
+          country: "US"
+          createdAt: "2023-01-15T10:30:00.000Z"
+          updatedAt: "2024-03-27T15:30:00.000Z"

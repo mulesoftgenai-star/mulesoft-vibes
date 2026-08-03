@@ -1,0 +1,124 @@
+#%RAML 1.0
+title: Inventory System API
+version: v1
+description: |
+  System layer API for inventory and product management.
+  Provides operations for stock management, product lookup, and inventory reservations.
+
+baseUri: https://api.company.com/system/inventory/{version}
+protocols: [HTTPS]
+
+mediaType: 
+  - application/json
+
+documentation:
+  - title: Inventory System API Guide
+    content: |
+      This API provides system-level inventory management capabilities including:
+      - Product information management
+      - Stock level monitoring
+      - Inventory reservations
+      - Stock availability checks
+
+uses:
+  inventoryTypes: fragments/data-types/inventory-types.raml
+
+traits:
+  oauth2-secured: !include fragments/security-traits/oauth2-trait.raml
+
+/products:
+  description: Product information operations
+  
+  /{productId}:
+    uriParameters:
+      productId:
+        type: inventoryTypes.ID
+        description: Unique product identifier
+    
+    get:
+      displayName: Get Product Details
+      description: Retrieve product information
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Product details retrieved successfully
+          body:
+            application/json:
+              type: inventoryTypes.Product
+        404:
+          description: Product not found
+
+/inventory:
+  description: Inventory management operations
+
+  get:
+    displayName: Check Stock Availability
+    description: Check stock availability for products
+    is: [oauth2-secured]
+    queryParameters:
+      productId:
+        type: inventoryTypes.ID
+        required: true
+        description: Product identifier
+      quantity?:
+        type: integer
+        minimum: 1
+        description: Required quantity (optional)
+    responses:
+      200:
+        description: Stock availability information
+        body:
+          application/json:
+            type: inventoryTypes.Inventory
+
+  /reserve:
+    post:
+      displayName: Reserve Inventory
+      description: Reserve inventory for an order
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: inventoryTypes.ReservationRequest
+      responses:
+        201:
+          description: Inventory reserved successfully
+          body:
+            application/json:
+              type: inventoryTypes.ReservationResponse
+        400:
+          description: Bad request - Invalid reservation data
+        409:
+          description: Insufficient inventory available
+
+  /reservations/{reservationId}:
+    uriParameters:
+      reservationId:
+        type: inventoryTypes.ID
+        description: Reservation identifier
+    
+    delete:
+      displayName: Cancel Reservation
+      description: Cancel an inventory reservation
+      is: [oauth2-secured]
+      responses:
+        204:
+          description: Reservation cancelled successfully
+        404:
+          description: Reservation not found
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-27T15:30:00.000Z",
+                "version": "v1"
+              }

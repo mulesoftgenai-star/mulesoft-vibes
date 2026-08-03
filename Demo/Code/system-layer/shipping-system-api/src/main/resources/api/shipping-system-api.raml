@@ -1,0 +1,386 @@
+#%RAML 1.0
+title: Shipping System API
+version: v1
+description: |
+  System layer API for shipping and logistics management.
+  Provides operations for shipment creation, tracking, and carrier integration.
+
+baseUri: https://api.company.com/system/shipping/{version}
+protocols: [HTTPS]
+
+mediaType: 
+  - application/json
+
+documentation:
+  - title: Shipping System API Guide
+    content: |
+      This API provides system-level shipping management capabilities including:
+      - Shipment creation and management
+      - Package tracking and status updates
+      - Shipping rate calculations
+      - Carrier integration and services
+      - Delivery confirmation and exceptions
+
+uses:
+  shippingTypes: fragments/data-types/shipping-types.raml
+
+traits:
+  oauth2-secured: !include fragments/security-traits/oauth2-trait.raml
+
+/shipments:
+  description: Shipment management operations
+  
+  post:
+    displayName: Create Shipment
+    description: Create a new shipment for an order
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: shippingTypes.ShipmentRequest
+        example: |
+          {
+            "orderId": "ORD1234567",
+            "customerId": "CUST789012",
+            "items": [
+              {
+                "productId": "PRD9876543",
+                "productName": "Premium Wireless Headphones",
+                "quantity": 2,
+                "weight": 1.5,
+                "dimensions": {
+                  "length": 8,
+                  "width": 6,
+                  "height": 4,
+                  "unit": "INCHES"
+                }
+              }
+            ],
+            "shippingAddress": {
+              "street": "456 Oak Avenue",
+              "city": "Brooklyn",
+              "state": "NY",
+              "postalCode": "11201",
+              "country": "US"
+            },
+            "shippingMethod": "STANDARD",
+            "specialInstructions": "Handle with care"
+          }
+    responses:
+      201:
+        description: Shipment created successfully
+        body:
+          application/json:
+            type: shippingTypes.Shipment
+            example: |
+              {
+                "shipmentId": "SHP1234567",
+                "orderId": "ORD1234567",
+                "customerId": "CUST789012",
+                "trackingNumber": "1Z999AA1012345675",
+                "carrier": "UPS",
+                "carrierService": "UPS Ground",
+                "status": "PROCESSING",
+                "items": [
+                  {
+                    "productId": "PRD9876543",
+                    "productName": "Premium Wireless Headphones",
+                    "quantity": 2,
+                    "weight": 1.5,
+                    "dimensions": {
+                      "length": 8,
+                      "width": 6,
+                      "height": 4,
+                      "unit": "INCHES"
+                    }
+                  }
+                ],
+                "shippingAddress": {
+                  "street": "456 Oak Avenue",
+                  "city": "Brooklyn",
+                  "state": "NY",
+                  "postalCode": "11201",
+                  "country": "US"
+                },
+                "estimatedDeliveryDate": "2024-03-29",
+                "packageCount": 1,
+                "totalWeight": 3.0,
+                "shippingCost": {
+                  "amount": 9.99,
+                  "currency": "USD"
+                },
+                "createdAt": "2024-03-27T16:00:00.000Z",
+                "updatedAt": "2024-03-27T16:00:00.000Z"
+              }
+      400:
+        description: Bad request - Invalid shipment data
+        body:
+          application/json:
+            example: |
+              {
+                "error": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "Invalid shipment request data",
+                  "timestamp": "2024-03-27T15:30:00.000Z",
+                  "path": "/api/v1/shipments"
+                }
+              }
+      409:
+        description: Conflict - Shipment already exists for order
+        body:
+          application/json:
+            example: |
+              {
+                "error": {
+                  "code": "SHIPMENT_EXISTS",
+                  "message": "Shipment already exists for this order",
+                  "timestamp": "2024-03-27T15:30:00.000Z",
+                  "path": "/api/v1/shipments"
+                }
+              }
+
+  /{shipmentId}:
+    uriParameters:
+      shipmentId:
+        type: shippingTypes.ID
+        description: Unique shipment identifier
+    
+    get:
+      displayName: Get Shipment Details
+      description: Retrieve detailed shipment information including tracking events
+      is: [oauth2-secured]
+      responses:
+        200:
+          description: Shipment details retrieved successfully
+          body:
+            application/json:
+              type: shippingTypes.Shipment
+        404:
+          description: Shipment not found
+          body:
+            application/json:
+              example: |
+                {
+                  "error": {
+                    "code": "SHIPMENT_NOT_FOUND",
+                    "message": "Shipment not found",
+                    "timestamp": "2024-03-27T15:30:00.000Z",
+                    "path": "/api/v1/shipments/{shipmentId}"
+                  }
+                }
+
+    patch:
+      displayName: Update Shipment Status
+      description: Update shipment status and tracking information
+      is: [oauth2-secured]
+      body:
+        application/json:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [PROCESSING, DISPATCHED, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, RETURNED, EXCEPTION]
+              required: false
+            trackingNumber:
+              type: string
+              required: false
+            actualDeliveryDate:
+              type: date-only
+              required: false
+            deliverySignature:
+              type: string
+              required: false
+          example: |
+            {
+              "status": "DELIVERED",
+              "actualDeliveryDate": "2024-03-28",
+              "deliverySignature": "J.Smith"
+            }
+      responses:
+        200:
+          description: Shipment updated successfully
+          body:
+            application/json:
+              type: shippingTypes.Shipment
+        400:
+          description: Bad request - Invalid update data
+        404:
+          description: Shipment not found
+
+    /tracking:
+      get:
+        displayName: Get Tracking Information
+        description: Get tracking events and current status for a shipment
+        is: [oauth2-secured]
+        responses:
+          200:
+            description: Tracking information retrieved successfully
+            body:
+              application/json:
+                type: object
+                properties:
+                  shipmentId:
+                    type: shippingTypes.ID
+                  trackingNumber:
+                    type: string
+                  status:
+                    type: string
+                  estimatedDeliveryDate:
+                    type: date-only
+                    required: false
+                  actualDeliveryDate:
+                    type: date-only
+                    required: false
+                  trackingEvents:
+                    type: shippingTypes.TrackingEvent[]
+                example: |
+                  {
+                    "shipmentId": "SHP1234567",
+                    "trackingNumber": "1Z999AA1012345675",
+                    "status": "IN_TRANSIT",
+                    "estimatedDeliveryDate": "2024-03-29",
+                    "trackingEvents": [
+                      {
+                        "eventId": "EVT1234567",
+                        "shipmentId": "SHP1234567",
+                        "status": "IN_TRANSIT",
+                        "description": "Package is in transit to destination",
+                        "location": "Newark, NJ",
+                        "timestamp": "2024-03-27T18:30:00.000Z"
+                      }
+                    ]
+                  }
+          404:
+            description: Shipment not found
+
+/tracking/{trackingNumber}:
+  uriParameters:
+    trackingNumber:
+      type: string
+      description: Carrier tracking number
+  
+  get:
+    displayName: Track by Tracking Number
+    description: Track shipment using carrier tracking number
+    is: [oauth2-secured]
+    responses:
+      200:
+        description: Tracking information retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              trackingNumber:
+                type: string
+              carrier:
+                type: string
+              status:
+                type: string
+              estimatedDeliveryDate:
+                type: date-only
+                required: false
+              actualDeliveryDate:
+                type: date-only
+                required: false
+              trackingEvents:
+                type: shippingTypes.TrackingEvent[]
+      404:
+        description: Tracking number not found
+
+/rates:
+  description: Shipping rate calculation
+  
+  post:
+    displayName: Calculate Shipping Rates
+    description: Calculate shipping rates for given package and destination
+    is: [oauth2-secured]
+    body:
+      application/json:
+        type: shippingTypes.RateRequest
+        example: |
+          {
+            "originAddress": {
+              "street": "100 Warehouse Dr",
+              "city": "Edison",
+              "state": "NJ",
+              "postalCode": "08817",
+              "country": "US"
+            },
+            "destinationAddress": {
+              "street": "456 Oak Avenue",
+              "city": "Brooklyn",
+              "state": "NY",
+              "postalCode": "11201",
+              "country": "US"
+            },
+            "packages": [
+              {
+                "weight": 3.0,
+                "dimensions": {
+                  "length": 12,
+                  "width": 8,
+                  "height": 6,
+                  "unit": "INCHES"
+                }
+              }
+            ],
+            "serviceTypes": ["STANDARD", "EXPRESS"]
+          }
+    responses:
+      200:
+        description: Shipping rates calculated successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              rates:
+                type: shippingTypes.ShippingRate[]
+              calculatedAt:
+                type: datetime
+                format: rfc3339
+            example: |
+              {
+                "rates": [
+                  {
+                    "rateId": "RATE123456",
+                    "carrier": "UPS",
+                    "service": "Ground",
+                    "cost": {
+                      "amount": 9.99,
+                      "currency": "USD"
+                    },
+                    "estimatedDays": 3,
+                    "estimatedDeliveryDate": "2024-03-30"
+                  },
+                  {
+                    "rateId": "RATE123457",
+                    "carrier": "FEDEX",
+                    "service": "2Day",
+                    "cost": {
+                      "amount": 24.99,
+                      "currency": "USD"
+                    },
+                    "estimatedDays": 2,
+                    "estimatedDeliveryDate": "2024-03-29"
+                  }
+                ],
+                "calculatedAt": "2024-03-27T15:30:00.000Z"
+              }
+      400:
+        description: Bad request - Invalid rate request data
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            example: |
+              {
+                "status": "UP",
+                "timestamp": "2024-03-27T15:30:00.000Z",
+                "version": "v1"
+              }

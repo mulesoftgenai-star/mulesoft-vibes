@@ -1,0 +1,590 @@
+#%RAML 1.0
+title: Customer System API
+version: v1
+description: |
+  System layer API for customer data management and operations.
+  This API provides direct access to customer information systems.
+mediaType: application/json
+baseUri: https://api.mulesoft-vibes.com/system/customer/{version}
+protocols: [HTTPS]
+
+types:
+  CustomerDataTypes: !include ../Fragment-Creation/data-types/customer-data-type.raml
+  SystemErrors: !include ../Fragment-Creation/error-responses/system-layer-errors.raml
+
+traits:
+  oauth2-secured: !include ../Fragment-Creation/security-traits/oauth2-security-trait.raml
+  cacheable:
+    headers:
+      Cache-Control:
+        type: string
+        example: "max-age=300"
+        description: Cache control header for GET operations
+  auditable:
+    headers:
+      X-Audit-User:
+        type: string
+        required: false
+        description: User performing the operation for audit purposes
+        example: "admin_user"
+
+securitySchemes:
+  oauth_2_0:
+    type: OAuth 2.0
+    description: OAuth 2.0 authentication
+    settings:
+      authorizationUri: https://auth.mulesoft-vibes.com/oauth/authorize
+      accessTokenUri: https://auth.mulesoft-vibes.com/oauth/token
+      authorizationGrants: [ client_credentials, authorization_code ]
+
+securedBy: [ oauth_2_0 ]
+
+/customers:
+  description: Customer management operations
+  is: [auditable]
+  
+  get:
+    displayName: Search Customers
+    description: Search for customers based on various criteria
+    is: [cacheable]
+    queryParameters:
+      firstName:
+        type: string
+        required: false
+        description: Filter by first name
+        example: "John"
+      lastName:
+        type: string
+        required: false
+        description: Filter by last name
+        example: "Doe"
+      email:
+        type: string
+        required: false
+        description: Filter by email address
+        example: "john.doe@example.com"
+      phone:
+        type: string
+        required: false
+        description: Filter by phone number
+        example: "+1-555-123-4567"
+      status:
+        type: string
+        required: false
+        enum: [ACTIVE, INACTIVE, SUSPENDED, PENDING_VERIFICATION]
+        description: Filter by customer status
+      customerType:
+        type: string
+        required: false
+        enum: [INDIVIDUAL, BUSINESS, PARTNER, EMPLOYEE]
+        description: Filter by customer type
+      limit:
+        type: integer
+        required: false
+        minimum: 1
+        maximum: 100
+        default: 20
+        description: Maximum number of customers to return
+      offset:
+        type: integer
+        required: false
+        minimum: 0
+        default: 0
+        description: Number of customers to skip for pagination
+    responses:
+      200:
+        description: Customers retrieved successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              customers:
+                type: array
+                items:
+                  type: CustomerDataTypes
+              pagination:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    example: 150
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  hasMore:
+                    type: boolean
+                    example: true
+            examples:
+              searchResults:
+                customers:
+                  - customerId: "CUST-12345678"
+                    customerNumber: "CUSTOMER-2024-001234"
+                    customerType: "INDIVIDUAL"
+                    status: "ACTIVE"
+                    profile:
+                      personalInfo:
+                        firstName: "John"
+                        lastName: "Doe"
+                        dateOfBirth: "1985-06-15"
+                    contactInfo:
+                      primaryEmail: "john.doe@example.com"
+                      primaryPhone:
+                        countryCode: "+1"
+                        phoneNumber: "5551234567"
+                        phoneType: "MOBILE"
+                    metadata:
+                      createdBy: "system"
+                      createdDate: "2024-01-15T10:30:00"
+                      version: 1
+                pagination:
+                  total: 150
+                  limit: 20
+                  offset: 0
+                  hasMore: true
+      400:
+        body:
+          application/json:
+            type: SystemErrors
+      401:
+        body:
+          application/json:
+            type: SystemErrors
+      500:
+        body:
+          application/json:
+            type: SystemErrors
+
+  post:
+    displayName: Create Customer
+    description: Create a new customer record
+    body:
+      application/json:
+        type: CustomerDataTypes
+        examples:
+          newCustomer:
+            customerId: "CUST-87654321"
+            customerNumber: "CUSTOMER-2024-001235"
+            customerType: "INDIVIDUAL"
+            status: "ACTIVE"
+            profile:
+              personalInfo:
+                firstName: "Jane"
+                lastName: "Smith"
+                dateOfBirth: "1990-03-20"
+                gender: "FEMALE"
+            contactInfo:
+              primaryEmail: "jane.smith@example.com"
+              primaryPhone:
+                countryCode: "+1"
+                phoneNumber: "5559876543"
+                phoneType: "MOBILE"
+            addresses:
+              - addressId: "ADDR-11223344"
+                addressType: "HOME"
+                isPrimary: true
+                addressLine1: "456 Oak Avenue"
+                city: "Seattle"
+                state: "WA"
+                postalCode: "98101"
+                country: "US"
+            metadata:
+              createdBy: "system"
+              createdDate: "2024-03-23T14:30:00"
+    responses:
+      201:
+        description: Customer created successfully
+        headers:
+          Location:
+            type: string
+            example: "/customers/CUST-87654321"
+        body:
+          application/json:
+            type: CustomerDataTypes
+            examples:
+              created:
+                customerId: "CUST-87654321"
+                customerNumber: "CUSTOMER-2024-001235"
+                customerType: "INDIVIDUAL"
+                status: "ACTIVE"
+                profile:
+                  personalInfo:
+                    firstName: "Jane"
+                    lastName: "Smith"
+                    dateOfBirth: "1990-03-20"
+                    gender: "FEMALE"
+                contactInfo:
+                  primaryEmail: "jane.smith@example.com"
+                  primaryPhone:
+                    countryCode: "+1"
+                    phoneNumber: "5559876543"
+                    phoneType: "MOBILE"
+                addresses:
+                  - addressId: "ADDR-11223344"
+                    addressType: "HOME"
+                    isPrimary: true
+                    addressLine1: "456 Oak Avenue"
+                    city: "Seattle"
+                    state: "WA"
+                    postalCode: "98101"
+                    country: "US"
+                metadata:
+                  createdBy: "system"
+                  createdDate: "2024-03-23T14:30:00"
+                  version: 1
+      400:
+        body:
+          application/json:
+            type: SystemErrors
+      409:
+        body:
+          application/json:
+            type: SystemErrors
+      500:
+        body:
+          application/json:
+            type: SystemErrors
+
+  /{customerId}:
+    uriParameters:
+      customerId:
+        type: string
+        pattern: ^CUST-[0-9]{8}$
+        example: "CUST-12345678"
+        description: Unique customer identifier
+    
+    get:
+      displayName: Get Customer Details
+      description: Retrieve detailed customer information
+      is: [cacheable]
+      responses:
+        200:
+          description: Customer details retrieved successfully
+          body:
+            application/json:
+              type: CustomerDataTypes
+              examples:
+                customerDetails:
+                  customerId: "CUST-12345678"
+                  customerNumber: "CUSTOMER-2024-001234"
+                  customerType: "INDIVIDUAL"
+                  status: "ACTIVE"
+                  profile:
+                    personalInfo:
+                      firstName: "John"
+                      lastName: "Doe"
+                      dateOfBirth: "1985-06-15"
+                      gender: "MALE"
+                  contactInfo:
+                    primaryEmail: "john.doe@example.com"
+                    primaryPhone:
+                      countryCode: "+1"
+                      phoneNumber: "5551234567"
+                      phoneType: "MOBILE"
+                  addresses:
+                    - addressId: "ADDR-99887766"
+                      addressType: "HOME"
+                      isPrimary: true
+                      addressLine1: "123 Main Street"
+                      city: "New York"
+                      state: "NY"
+                      postalCode: "10001"
+                      country: "US"
+                  creditInfo:
+                    creditLimit: 5000.00
+                    availableCredit: 4750.00
+                    creditRating: "GOOD"
+                  loyaltyInfo:
+                    loyaltyProgram: "GOLD"
+                    points: 2500
+                    memberSince: "2020-01-15"
+                  metadata:
+                    createdBy: "system"
+                    createdDate: "2024-01-15T10:30:00"
+                    lastModifiedBy: "admin_user"
+                    lastModifiedDate: "2024-03-23T14:30:15"
+                    version: 3
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        401:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+    put:
+      displayName: Update Customer
+      description: Update customer information
+      body:
+        application/json:
+          type: CustomerDataTypes
+          examples:
+            updateCustomer:
+              customerId: "CUST-12345678"
+              customerNumber: "CUSTOMER-2024-001234"
+              customerType: "INDIVIDUAL"
+              status: "ACTIVE"
+              profile:
+                personalInfo:
+                  firstName: "John"
+                  lastName: "Doe"
+                  dateOfBirth: "1985-06-15"
+                  gender: "MALE"
+              contactInfo:
+                primaryEmail: "john.doe.new@example.com"
+                primaryPhone:
+                  countryCode: "+1"
+                  phoneNumber: "5551234567"
+                  phoneType: "MOBILE"
+                secondaryPhone:
+                  countryCode: "+1"
+                  phoneNumber: "5559876543"
+                  phoneType: "HOME"
+              preferences:
+                communicationPreferences:
+                  emailMarketing: false
+                  smsMarketing: true
+                  phoneMarketing: false
+                  preferredLanguage: "en-US"
+                  preferredCurrency: "USD"
+              metadata:
+                createdBy: "system"
+                createdDate: "2024-01-15T10:30:00"
+      responses:
+        200:
+          description: Customer updated successfully
+          body:
+            application/json:
+              type: CustomerDataTypes
+              examples:
+                updated:
+                  customerId: "CUST-12345678"
+                  customerNumber: "CUSTOMER-2024-001234"
+                  customerType: "INDIVIDUAL"
+                  status: "ACTIVE"
+                  profile:
+                    personalInfo:
+                      firstName: "John"
+                      lastName: "Doe"
+                      dateOfBirth: "1985-06-15"
+                      gender: "MALE"
+                  contactInfo:
+                    primaryEmail: "john.doe.new@example.com"
+                    primaryPhone:
+                      countryCode: "+1"
+                      phoneNumber: "5551234567"
+                      phoneType: "MOBILE"
+                    secondaryPhone:
+                      countryCode: "+1"
+                      phoneNumber: "5559876543"
+                      phoneType: "HOME"
+                  preferences:
+                    communicationPreferences:
+                      emailMarketing: false
+                      smsMarketing: true
+                      phoneMarketing: false
+                      preferredLanguage: "en-US"
+                      preferredCurrency: "USD"
+                  metadata:
+                    createdBy: "system"
+                    createdDate: "2024-01-15T10:30:00"
+                    lastModifiedBy: "admin_user"
+                    lastModifiedDate: "2024-03-23T15:30:00"
+                    version: 2
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        409:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+    delete:
+      displayName: Delete Customer
+      description: Soft delete a customer record
+      responses:
+        204:
+          description: Customer deleted successfully
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        409:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+  /{customerId}/validate:
+    uriParameters:
+      customerId:
+        type: string
+        pattern: ^CUST-[0-9]{8}$
+        example: "CUST-12345678"
+        description: Unique customer identifier
+    
+    post:
+      displayName: Validate Customer
+      description: Validate customer data and status
+      body:
+        application/json:
+          type: object
+          properties:
+            validationType:
+              type: string
+              enum: [IDENTITY, CREDIT, ADDRESS, CONTACT]
+              description: Type of validation to perform
+            validationLevel:
+              type: string
+              enum: [BASIC, STANDARD, COMPREHENSIVE]
+              description: Level of validation detail
+              default: STANDARD
+          examples:
+            validation:
+              validationType: "IDENTITY"
+              validationLevel: "COMPREHENSIVE"
+      responses:
+        200:
+          description: Customer validation completed
+          body:
+            application/json:
+              type: object
+              properties:
+                customerId:
+                  type: string
+                  example: "CUST-12345678"
+                isValid:
+                  type: boolean
+                  example: true
+                validationScore:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  example: 85
+                validationResults:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      checkType:
+                        type: string
+                        enum: [EMAIL, PHONE, ADDRESS, IDENTITY, CREDIT]
+                      status:
+                        type: string
+                        enum: [PASS, FAIL, WARNING]
+                      score:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      message:
+                        type: string
+                      details:
+                        type: string
+                        required: false
+                riskAssessment:
+                  type: object
+                  properties:
+                    riskLevel:
+                      type: string
+                      enum: [LOW, MEDIUM, HIGH]
+                    riskFactors:
+                      type: array
+                      items:
+                        type: string
+              examples:
+                validationSuccess:
+                  customerId: "CUST-12345678"
+                  isValid: true
+                  validationScore: 85
+                  validationResults:
+                    - checkType: "EMAIL"
+                      status: "PASS"
+                      score: 100
+                      message: "Email address verified"
+                    - checkType: "PHONE"
+                      status: "PASS"
+                      score: 95
+                      message: "Phone number verified"
+                    - checkType: "ADDRESS"
+                      status: "WARNING"
+                      score: 70
+                      message: "Address partially verified"
+                  riskAssessment:
+                    riskLevel: "LOW"
+                    riskFactors: []
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check customer system API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              version:
+                type: string
+              dependencies:
+                type: object
+                properties:
+                  database:
+                    type: string
+                    enum: [UP, DOWN]
+                  crmSystem:
+                    type: string
+                    enum: [UP, DOWN]
+                  cacheService:
+                    type: string
+                    enum: [UP, DOWN]
+            example:
+              status: "UP"
+              timestamp: "2024-03-23T14:30:00Z"
+              version: "v1"
+              dependencies:
+                database: "UP"
+                crmSystem: "UP"
+                cacheService: "UP"
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            type: SystemErrors

@@ -1,0 +1,188 @@
+#%RAML 1.0 Library
+
+uses:
+  orderTypes: ../data-types/order-types.raml
+
+types:
+  OrderResponse:
+    type: object
+    properties:
+      order:
+        type: orderTypes.Order
+      status:
+        type: string
+        enum: [SUCCESS, PENDING_VALIDATION]
+      message:
+        type: string
+        required: false
+    example:
+      order:
+        orderId: "ORD1234567"
+        customerId: "CUST789012"
+        orderNumber: "ORD-2024-001234"
+        orderDate: "2024-03-27T15:30:00.000Z"
+        status: "CONFIRMED"
+        items:
+          - itemId: "ITM1234567"
+            productId: "PRD9876543"
+            productName: "Premium Wireless Headphones"
+            sku: "WHD-001-BLK"
+            quantity: 2
+            unitPrice:
+              amount: 199.99
+              currency: "USD"
+            totalPrice:
+              amount: 399.98
+              currency: "USD"
+        subtotal:
+          amount: 399.98
+          currency: "USD"
+        tax:
+          amount: 32.00
+          currency: "USD"
+        shipping:
+          amount: 9.99
+          currency: "USD"
+        total:
+          amount: 441.97
+          currency: "USD"
+        billingAddress:
+          street: "123 Main Street"
+          city: "New York"
+          state: "NY"
+          postalCode: "10001"
+          country: "US"
+        shippingAddress:
+          street: "456 Oak Avenue"
+          city: "Brooklyn"
+          state: "NY"
+          postalCode: "11201"
+          country: "US"
+        paymentMethod: "CREDIT_CARD"
+        shippingMethod: "STANDARD"
+        createdAt: "2024-03-27T15:30:00.000Z"
+        updatedAt: "2024-03-27T15:30:00.000Z"
+      status: "SUCCESS"
+      message: "Order created successfully"
+
+  OrderListResponse:
+    type: object
+    properties:
+      orders:
+        type: orderTypes.Order[]
+      pagination:
+        type: object
+        properties:
+          page:
+            type: integer
+            minimum: 1
+          pageSize:
+            type: integer
+            minimum: 1
+            maximum: 100
+          totalCount:
+            type: integer
+            minimum: 0
+          totalPages:
+            type: integer
+            minimum: 0
+    example:
+      orders:
+        - orderId: "ORD1234567"
+          customerId: "CUST789012"
+          orderNumber: "ORD-2024-001234"
+          orderDate: "2024-03-27T15:30:00.000Z"
+          status: "CONFIRMED"
+          items:
+            - itemId: "ITM1234567"
+              productId: "PRD9876543"
+              productName: "Premium Wireless Headphones"
+              sku: "WHD-001-BLK"
+              quantity: 2
+              unitPrice:
+                amount: 199.99
+                currency: "USD"
+              totalPrice:
+                amount: 399.98
+                currency: "USD"
+          subtotal:
+            amount: 399.98
+            currency: "USD"
+          tax:
+            amount: 32.00
+            currency: "USD"
+          shipping:
+            amount: 9.99
+            currency: "USD"
+          total:
+            amount: 441.97
+            currency: "USD"
+          billingAddress:
+            street: "123 Main Street"
+            city: "New York"
+            state: "NY"
+            postalCode: "10001"
+            country: "US"
+          shippingAddress:
+            street: "456 Oak Avenue"
+            city: "Brooklyn"
+            state: "NY"
+            postalCode: "11201"
+            country: "US"
+          paymentMethod: "CREDIT_CARD"
+          shippingMethod: "STANDARD"
+          createdAt: "2024-03-27T15:30:00.000Z"
+          updatedAt: "2024-03-27T15:30:00.000Z"
+      pagination:
+        page: 1
+        pageSize: 20
+        totalCount: 45
+        totalPages: 3
+
+  ErrorResponse:
+    type: object
+    properties:
+      error:
+        type: object
+        properties:
+          code:
+            type: string
+          message:
+            type: string
+          timestamp:
+            type: datetime
+            format: rfc3339
+          path:
+            type: string
+          requestId:
+            type: string
+            required: false
+          validationErrors:
+            type: array
+            required: false
+            items:
+              type: object
+              properties:
+                field:
+                  type: string
+                message:
+                  type: string
+                code:
+                  type: string
+    examples:
+      ValidationError:
+        error:
+          code: "VALIDATION_ERROR"
+          message: "Request validation failed"
+          timestamp: "2024-03-27T15:30:00.000Z"
+          path: "/api/v1/orders"
+          validationErrors:
+            - field: "customerId"
+              message: "Customer ID is required"
+              code: "REQUIRED_FIELD"
+      NotFound:
+        error:
+          code: "ORDER_NOT_FOUND"
+          message: "Order not found"
+          timestamp: "2024-03-27T15:30:00.000Z"
+          path: "/api/v1/orders/ORD1234567"

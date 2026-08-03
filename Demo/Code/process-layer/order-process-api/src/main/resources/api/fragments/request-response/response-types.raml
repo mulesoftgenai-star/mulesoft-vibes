@@ -1,0 +1,168 @@
+#%RAML 1.0 Library
+
+uses:
+  processTypes: ../data-types/process-types.raml
+
+types:
+  ProcessOrderResponse:
+    type: object
+    properties:
+      orderId:
+        type: processTypes.ID
+        description: Unique order identifier
+      status:
+        type: string
+        enum: [SUCCESS, FAILED, PARTIAL_SUCCESS]
+      message:
+        type: string
+        required: false
+      processSteps:
+        type: processTypes.ProcessStepResult[]
+        description: Results of each processing step
+      completedAt:
+        type: datetime
+        format: rfc3339
+    example:
+      orderId: "ORD1234567"
+      status: "SUCCESS"
+      message: "Order processed successfully"
+      processSteps:
+        - step: "CUSTOMER_VALIDATION"
+          status: "SUCCESS"
+          result: 
+            customerId: "CUST789012"
+            isValid: true
+        - step: "INVENTORY_CHECK"
+          status: "SUCCESS"
+          result:
+            available: true
+            reservedQuantity: 2
+      completedAt: "2024-03-27T15:30:00.000Z"
+
+  ValidationResponse:
+    type: object
+    properties:
+      orderId:
+        type: processTypes.ID
+        required: false
+      validationResult:
+        type: processTypes.ValidationResult
+      validatedAt:
+        type: datetime
+        format: rfc3339
+    example:
+      orderId: "ORD1234567"
+      validationResult:
+        isValid: true
+        errors: []
+        warnings: []
+      validatedAt: "2024-03-27T15:30:00.000Z"
+
+  ProcessingStatusResponse:
+    type: object
+    properties:
+      orderId:
+        type: processTypes.ID
+      currentStep:
+        type: string
+        enum: [CUSTOMER_VALIDATION, INVENTORY_CHECK, PAYMENT_AUTHORIZATION, ORDER_CREATION, SHIPMENT_REQUEST, COMPLETED]
+      overallStatus:
+        type: string
+        enum: [IN_PROGRESS, SUCCESS, FAILED, CANCELLED]
+      completedSteps:
+        type: processTypes.ProcessStepResult[]
+      startedAt:
+        type: datetime
+        format: rfc3339
+      lastUpdatedAt:
+        type: datetime
+        format: rfc3339
+    example:
+      orderId: "ORD1234567"
+      currentStep: "PAYMENT_AUTHORIZATION"
+      overallStatus: "IN_PROGRESS"
+      completedSteps:
+        - step: "CUSTOMER_VALIDATION"
+          status: "SUCCESS"
+          result: 
+            customerId: "CUST789012"
+            isValid: true
+        - step: "INVENTORY_CHECK"
+          status: "SUCCESS"
+          result:
+            available: true
+            reservedQuantity: 2
+      startedAt: "2024-03-27T15:25:00.000Z"
+      lastUpdatedAt: "2024-03-27T15:28:00.000Z"
+
+  ProcessingErrorResponse:
+    type: object
+    properties:
+      error:
+        type: object
+        properties:
+          code:
+            type: string
+            enum: [VALIDATION_FAILED, CUSTOMER_NOT_FOUND, INSUFFICIENT_INVENTORY, PAYMENT_FAILED, SHIPMENT_FAILED]
+          message:
+            type: string
+          timestamp:
+            type: datetime
+            format: rfc3339
+          path:
+            type: string
+          requestId:
+            type: string
+            required: false
+          processingDetails:
+            type: object
+            required: false
+            properties:
+              failedStep:
+                type: string
+              completedSteps:
+                type: processTypes.ProcessStepResult[]
+              failureReason:
+                type: string
+    example:
+      error:
+        code: "INSUFFICIENT_INVENTORY"
+        message: "Insufficient inventory for requested products"
+        timestamp: "2024-03-27T15:30:00.000Z"
+        path: "/api/v1/orders"
+        requestId: "550e8400-e29b-41d4-a716-446655440000"
+        processingDetails:
+          failedStep: "INVENTORY_CHECK"
+          completedSteps:
+            - step: "CUSTOMER_VALIDATION"
+              status: "SUCCESS"
+              result: 
+                customerId: "CUST789012"
+                isValid: true
+          failureReason: "Product PRD9876543 has only 1 unit available, but 2 units requested"
+
+  ErrorResponse:
+    type: object
+    properties:
+      error:
+        type: object
+        properties:
+          code:
+            type: string
+          message:
+            type: string
+          timestamp:
+            type: datetime
+            format: rfc3339
+          path:
+            type: string
+          requestId:
+            type: string
+            required: false
+    example:
+      error:
+        code: "INTERNAL_SERVER_ERROR"
+        message: "An unexpected error occurred"
+        timestamp: "2024-03-27T15:30:00.000Z"
+        path: "/api/v1/orders"
+        requestId: "550e8400-e29b-41d4-a716-446655440000"

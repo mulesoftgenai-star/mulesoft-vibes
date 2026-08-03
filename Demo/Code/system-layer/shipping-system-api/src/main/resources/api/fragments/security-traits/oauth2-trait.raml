@@ -1,0 +1,58 @@
+#%RAML 1.0 Trait
+
+displayName: OAuth 2.0 Security
+description: OAuth 2.0 security trait for Shipping System API
+
+headers:
+  Authorization:
+    displayName: Authorization Header
+    type: string
+    pattern: ^Bearer\s[A-Za-z0-9\-\._~\+\/]+=*$
+    description: |
+      OAuth 2.0 Bearer token for API authentication.
+      Format: "Bearer {access_token}"
+    example: "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+    required: true
+  X-Client-ID?:
+    displayName: Client Application ID
+    type: string
+    pattern: ^[a-zA-Z0-9\-]{8,64}$
+    description: Client application identifier
+    example: "shipping-system-service"
+    required: false
+  X-Request-ID?:
+    displayName: Request Correlation ID
+    type: string
+    pattern: ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+    description: UUID for request tracing
+    example: "550e8400-e29b-41d4-a716-446655440000"
+    required: false
+
+responses:
+  401:
+    description: Unauthorized - Invalid or missing authentication token
+    body:
+      application/json:
+        example: |
+          {
+            "error": {
+              "code": "UNAUTHORIZED",
+              "message": "Invalid or missing authentication token",
+              "timestamp": "2024-03-27T15:30:00.000Z",
+              "path": "/api/v1/shipping"
+            }
+          }
+
+  403:
+    description: Forbidden - Insufficient permissions
+    body:
+      application/json:
+        example: |
+          {
+            "error": {
+              "code": "FORBIDDEN",
+              "message": "Insufficient permissions to access this resource",
+              "timestamp": "2024-03-27T15:30:00.000Z",
+              "path": "/api/v1/shipping"
+            }
+          }

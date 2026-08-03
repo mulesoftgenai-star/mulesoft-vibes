@@ -1,0 +1,107 @@
+#%RAML 1.0 Library
+
+uses:
+  payment-types: ../data-types/payment-types.raml
+
+types:
+  ProcessPaymentRequest:
+    type: object
+    properties:
+      orderId:
+        type: string
+        description: Order identifier
+        pattern: ^ORD[0-9]{10}$
+        example: "ORD1234567890"
+      amount:
+        type: payment-types.Money
+        description: Payment amount
+      paymentMethodId:
+        type: string
+        description: Payment method identifier
+        example: "PM12345678"
+      customerId:
+        type: string
+        description: Customer identifier
+        pattern: ^CUST[0-9]{8}$
+        example: "CUST12345678"
+      description:
+        type: string
+        description: Payment description
+        example: "Payment for order ORD1234567890"
+        required: false
+
+  RefundRequest:
+    type: object
+    properties:
+      paymentId:
+        type: string
+        description: Original payment identifier
+        example: "PAY123456789"
+      amount:
+        type: payment-types.Money
+        description: Refund amount
+      reason:
+        type: string
+        description: Reason for refund
+        example: "Customer requested cancellation"
+
+  CreatePaymentMethodRequest:
+    type: object
+    properties:
+      customerId:
+        type: string
+        description: Customer identifier
+        pattern: ^CUST[0-9]{8}$
+        example: "CUST12345678"
+      type:
+        type: string
+        enum: ["CREDIT_CARD", "DEBIT_CARD", "BANK_ACCOUNT", "DIGITAL_WALLET"]
+        description: Payment method type
+        example: "CREDIT_CARD"
+      cardDetails:
+        type: payment-types.CardDetails
+        description: Card details for card payments
+        required: false
+      bankDetails:
+        type: payment-types.BankDetails
+        description: Bank account details
+        required: false
+      isDefault:
+        type: boolean
+        description: Set as default payment method
+        example: true
+        default: false
+
+  UpdatePaymentMethodRequest:
+    type: object
+    properties:
+      type:
+        type: string
+        enum: ["CREDIT_CARD", "DEBIT_CARD", "BANK_ACCOUNT", "DIGITAL_WALLET"]
+        description: Payment method type
+        example: "CREDIT_CARD"
+        required: false
+      cardDetails:
+        type: payment-types.CardDetails
+        description: Updated card details
+        required: false
+      bankDetails:
+        type: payment-types.BankDetails
+        description: Updated bank account details
+        required: false
+      isDefault:
+        type: boolean
+        description: Set as default payment method
+        example: true
+        required: false
+
+  PaymentStatusRequest:
+    type: object
+    properties:
+      paymentIds:
+        type: array
+        items: string
+        description: List of payment identifiers to check
+        example: ["PAY123456789", "PAY987654321"]
+        minItems: 1
+        maxItems: 50

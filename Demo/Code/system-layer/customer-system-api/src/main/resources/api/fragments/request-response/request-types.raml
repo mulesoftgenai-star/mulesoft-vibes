@@ -1,0 +1,101 @@
+#%RAML 1.0 Library
+
+uses:
+  customerTypes: ../data-types/customer-types.raml
+
+types:
+  CreateCustomerRequest:
+    type: object
+    properties:
+      firstName:
+        type: string
+        minLength: 1
+        maxLength: 50
+      lastName:
+        type: string
+        minLength: 1
+        maxLength: 50
+      email:
+        type: string
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+      phone:
+        type: string
+        pattern: ^\+?[1-9]\d{1,14}$
+      dateOfBirth:
+        type: date-only
+        required: false
+      preferences:
+        type: object
+        required: false
+        properties:
+          newsletter:
+            type: boolean
+            default: false
+          smsNotifications:
+            type: boolean
+            default: false
+          language:
+            type: string
+            pattern: ^[a-z]{2}$
+            default: "en"
+          currency:
+            type: string
+            pattern: ^[A-Z]{3}$
+            default: "USD"
+    example:
+      firstName: "John"
+      lastName: "Smith"
+      email: "john.smith@example.com"
+      phone: "+1234567890"
+      dateOfBirth: "1985-06-15"
+      preferences:
+        newsletter: true
+        smsNotifications: false
+        language: "en"
+        currency: "USD"
+
+  UpdateCustomerRequest:
+    type: object
+    properties:
+      firstName:
+        type: string
+        required: false
+        minLength: 1
+        maxLength: 50
+      lastName:
+        type: string
+        required: false
+        minLength: 1
+        maxLength: 50
+      email:
+        type: string
+        required: false
+        pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+      phone:
+        type: string
+        required: false
+        pattern: ^\+?[1-9]\d{1,14}$
+      preferences:
+        type: object
+        required: false
+        properties:
+          newsletter:
+            type: boolean
+            required: false
+          smsNotifications:
+            type: boolean
+            required: false
+          language:
+            type: string
+            pattern: ^[a-z]{2}$
+            required: false
+          currency:
+            type: string
+            pattern: ^[A-Z]{3}$
+            required: false
+    example:
+      firstName: "John"
+      lastName: "Doe"
+      phone: "+1234567891"
+      preferences:
+        newsletter: false

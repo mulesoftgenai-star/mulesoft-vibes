@@ -1,0 +1,34 @@
+#%RAML 1.0 Library
+
+uses:
+  inventoryTypes: ../data-types/inventory-types.raml
+
+types:
+  ProductLookupRequest:
+    type: object
+    properties:
+      productId:
+        type: inventoryTypes.ID
+        description: Product identifier to look up
+    example:
+      productId: "PRD1234567"
+
+  InventoryCheckRequest:
+    type: object
+    properties:
+      productId:
+        type: inventoryTypes.ID
+        description: Product identifier
+      quantity:
+        type: integer
+        minimum: 1
+        required: false
+        description: Required quantity to check availability
+      warehouseId:
+        type: inventoryTypes.ID
+        required: false
+        description: Specific warehouse to check (optional)
+    example:
+      productId: "PRD1234567"
+      quantity: 5
+      warehouseId: "WH12345678"

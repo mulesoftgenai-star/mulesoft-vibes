@@ -1,0 +1,162 @@
+#%RAML 1.0 Library
+
+uses:
+  shipping-types: ../data-types/shipping-types.raml
+
+types:
+  ShipmentResponse:
+    type: object
+    properties:
+      shipmentId:
+        type: string
+        description: Unique shipment identifier
+        example: "SHIP123456789"
+      orderId:
+        type: string
+        description: Associated order identifier
+        example: "ORD1234567890"
+      customerId:
+        type: string
+        description: Customer identifier
+        example: "CUST12345678"
+      status:
+        type: string
+        enum: ["PENDING", "PROCESSING", "SHIPPED", "IN_TRANSIT", "DELIVERED", "CANCELLED", "RETURNED"]
+        description: Current shipment status
+        example: "SHIPPED"
+      trackingNumber:
+        type: string
+        description: Carrier tracking number
+        example: "1Z12345E1234567890"
+        required: false
+      carrier:
+        type: string
+        enum: ["UPS", "FEDEX", "DHL", "USPS"]
+        description: Shipping carrier
+        example: "UPS"
+      serviceType:
+        type: string
+        enum: ["STANDARD", "EXPRESS", "OVERNIGHT", "TWO_DAY"]
+        description: Service type used
+        example: "STANDARD"
+      shippingAddress:
+        type: shipping-types.Address
+        description: Delivery address
+      items:
+        type: array
+        items: shipping-types.ShipmentItem
+        description: Items in the shipment
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+        example: "2024-01-20"
+        required: false
+      actualDeliveryDate:
+        type: date-only
+        description: Actual delivery date
+        example: "2024-01-19"
+        required: false
+      createdAt:
+        type: datetime
+        description: Shipment creation timestamp
+        example: "2024-01-15T10:30:00Z"
+      updatedAt:
+        type: datetime
+        description: Last update timestamp
+        example: "2024-01-16T14:22:00Z"
+
+  ShippingRateResponse:
+    type: object
+    properties:
+      rates:
+        type: array
+        items: shipping-types.ShippingRate
+        description: Available shipping rates
+      totalRates:
+        type: integer
+        description: Total number of rates returned
+        example: 4
+
+  TrackingResponse:
+    type: object
+    properties:
+      trackingInfo:
+        type: array
+        items: shipping-types.TrackingInfo
+        description: Tracking information for requested numbers
+      totalTracked:
+        type: integer
+        description: Number of tracking numbers processed
+        example: 2
+
+  ShipmentListResponse:
+    type: object
+    properties:
+      shipments:
+        type: array
+        items: ShipmentResponse
+        description: List of shipments
+      totalCount:
+        type: integer
+        description: Total number of shipments
+        example: 50
+      page:
+        type: integer
+        description: Current page number
+        example: 1
+      pageSize:
+        type: integer
+        description: Number of items per page
+        example: 20
+
+  AddressValidationResponse:
+    type: object
+    properties:
+      isValid:
+        type: boolean
+        description: Whether the address is valid
+        example: true
+      validatedAddress:
+        type: shipping-types.Address
+        description: Validated and standardized address
+        required: false
+      suggestions:
+        type: array
+        items: shipping-types.Address
+        description: Alternative address suggestions
+        required: false
+      validationDetails:
+        type: object
+        properties:
+          confidence:
+            type: string
+            enum: ["HIGH", "MEDIUM", "LOW"]
+            description: Validation confidence level
+            example: "HIGH"
+          issues:
+            type: string[]
+            description: Issues found with the address
+            example: ["ZIP_CODE_CORRECTED"]
+            required: false
+        required: false
+
+  ErrorResponse:
+    type: object
+    properties:
+      code:
+        type: string
+        description: Error code
+        example: "SHIPPING_001"
+      message:
+        type: string
+        description: Error message
+        example: "Invalid shipping address"
+      details:
+        type: string
+        description: Additional error details
+        example: "The provided ZIP code is not valid for the specified city"
+        required: false
+      timestamp:
+        type: datetime
+        description: Error timestamp
+        example: "2024-01-15T10:30:00Z"

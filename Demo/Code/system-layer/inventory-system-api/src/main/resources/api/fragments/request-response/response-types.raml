@@ -1,0 +1,105 @@
+#%RAML 1.0 Library
+
+uses:
+  inventory-types: ../data-types/inventory-types.raml
+
+types:
+  InventoryResponse:
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier
+        example: "PROD001"
+      availableQuantity:
+        type: integer
+        description: Available quantity in stock
+        example: 150
+      reservedQuantity:
+        type: integer
+        description: Reserved quantity for pending orders
+        example: 20
+      totalQuantity:
+        type: integer
+        description: Total quantity in inventory
+        example: 170
+      lastUpdated:
+        type: datetime
+        description: Timestamp of last inventory update
+        example: "2024-01-15T10:30:00Z"
+
+  ProductLookupResponse:
+    type: object
+    properties:
+      products:
+        type: inventory-types.Product[]
+        description: List of products matching search criteria
+      totalCount:
+        type: integer
+        description: Total number of products found
+        example: 25
+
+  ReservationResponse:
+    type: object
+    properties:
+      reservationId:
+        type: string
+        description: Unique identifier for the reservation
+        example: "RES123456789"
+      productId:
+        type: string
+        description: Product identifier
+        example: "PROD001"
+      quantity:
+        type: integer
+        description: Reserved quantity
+        example: 5
+      expirationTime:
+        type: datetime
+        description: When the reservation expires
+        example: "2024-01-15T15:30:00Z"
+      status:
+        type: string
+        enum: ["ACTIVE", "EXPIRED", "RELEASED"]
+        description: Reservation status
+        example: "ACTIVE"
+
+  InventoryListResponse:
+    type: object
+    properties:
+      inventories:
+        type: InventoryResponse[]
+        description: List of inventory records
+      totalCount:
+        type: integer
+        description: Total number of inventory records
+        example: 100
+      page:
+        type: integer
+        description: Current page number
+        example: 1
+      pageSize:
+        type: integer
+        description: Number of items per page
+        example: 20
+
+  ErrorResponse:
+    type: object
+    properties:
+      code:
+        type: string
+        description: Error code
+        example: "INVENTORY_001"
+      message:
+        type: string
+        description: Error message
+        example: "Product not found in inventory"
+      details:
+        type: string
+        description: Additional error details
+        example: "Product ID PROD999 does not exist in the inventory system"
+        required: false
+      timestamp:
+        type: datetime
+        description: Error timestamp
+        example: "2024-01-15T10:30:00Z"

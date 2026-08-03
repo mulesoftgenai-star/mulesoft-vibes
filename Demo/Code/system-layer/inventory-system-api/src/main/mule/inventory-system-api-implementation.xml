@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+
+    <!-- Import Shared Configurations -->
+    <import file="classpath://shared-resources/global-config.xml" />
+    <import file="classpath://shared-resources/error-handlers.xml" />
+    <import file="classpath://shared-resources/security-config.xml" />
+
+    <!-- APIKit Configuration -->
+    <apikit:config name="inventory-system-api-config" 
+                   api="inventory-system-api.raml" 
+                   outboundHeadersMapName="outboundHeaders" 
+                   httpStatusVarName="httpStatus" />
+
+    <!-- Main API Router Flow -->
+    <flow name="inventory-system-api-main">
+        <http:listener config-ref="HTTP_Listener_System_Config" 
+                       path="/api/v1/*" 
+                       allowedMethods="GET, POST, PUT, DELETE, PATCH, OPTIONS">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+
+        <set-variable variableName="correlationId" value="#[correlationId]" />
+        <logger level="INFO" message="Inventory System API Request - Method: #[attributes.method], URI: #[attributes.requestUri], CorrelationId: #[vars.correlationId]" />
+        <apikit:router config-ref="inventory-system-api-config" />
+        <error-handler ref="globalErrorHandler" />
+    </flow>
+
+    <!-- Health Check -->
+    <flow name="get:\health:inventory-system-api-config">
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "UP",
+  timestamp: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  service: "Inventory System API",
+  correlationId: vars.correlationId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- POST /inventory/validate - Validate Inventory -->
+    <flow name="post:\inventory\validate:application\json:inventory-system-api-config">
+        <logger level="INFO" message="Validating inventory - ProductId: #[payload.productId], Quantity: #[payload.quantity], CorrelationId: #[vars.correlationId]" />
+        
+        <choice>
+            <when expression="#[payload.productId == 'PROD001']">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  productId: payload.productId,
+  available: true,
+  availableQuantity: 100,
+  reserved: 0,
+  location: "Warehouse-A"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <when expression="#[payload.productId == 'PROD002']">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  productId: payload.productId,
+  available: true,
+  availableQuantity: 5,
+  reserved: 2,
+  location: "Warehouse-B"
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise>
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  productId: payload.productId,
+  available: false,
+  availableQuantity: 0,
+  reserved: 0,
+  location: null
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+
+        <logger level="INFO" message="Inventory validated - ProductId: #[payload.productId], Available: #[payload.available], CorrelationId: #[vars.correlationId]" />
+    </flow>
+
+    <!-- POST /inventory/reserve - Reserve Inventory -->
+    <flow name="post:\inventory\reserve:application\json:inventory-system-api-config">
+        <logger level="INFO" message="Reserving inventory - ProductId: #[payload.productId], Quantity: #[payload.quantity], CorrelationId: #[vars.correlationId]" />
+        
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  reservationId: uuid(),
+  productId: payload.productId,
+  quantity: payload.quantity,
+  status: "RESERVED",
+  expiresAt: (now() + |PT15M|) as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  orderId: payload.orderId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" message="Inventory reserved - ReservationId: #[payload.reservationId], CorrelationId: #[vars.correlationId]" />
+    </flow>
+
+    <!-- POST /inventory/release - Release Inventory -->
+    <flow name="post:\inventory\release:application\json:inventory-system-api-config">
+        <logger level="INFO" message="Releasing inventory - ProductId: #[payload.productId], Quantity: #[payload.quantity], CorrelationId: #[vars.correlationId]" />
+        
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  productId: payload.productId,
+  quantity: payload.quantity,
+  status: "RELEASED",
+  releasedAt: now() as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+  orderId: payload.orderId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO" message="Inventory released - ProductId: #[payload.productId], CorrelationId: #[vars.correlationId]" />
+    </flow>
+
+</mule>

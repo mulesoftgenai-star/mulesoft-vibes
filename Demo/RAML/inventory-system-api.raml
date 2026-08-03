@@ -1,0 +1,645 @@
+#%RAML 1.0
+title: Inventory System API
+version: v1
+description: |
+  System layer API for inventory management and operations.
+  This API provides direct access to inventory management systems.
+mediaType: application/json
+baseUri: https://api.mulesoft-vibes.com/system/inventory/{version}
+protocols: [HTTPS]
+
+types:
+  SystemErrors: !include ../Fragment-Creation/error-responses/system-layer-errors.raml
+
+traits:
+  oauth2-secured: !include ../Fragment-Creation/security-traits/oauth2-security-trait.raml
+  cacheable:
+    headers:
+      Cache-Control:
+        type: string
+        example: "max-age=60"
+        description: Cache control header for inventory data
+  transactional:
+    headers:
+      X-Transaction-ID:
+        type: string
+        required: false
+        description: Transaction identifier for inventory operations
+        example: "TXN-INV-123456"
+
+securitySchemes:
+  oauth_2_0:
+    type: OAuth 2.0
+    description: OAuth 2.0 authentication
+    settings:
+      authorizationUri: https://auth.mulesoft-vibes.com/oauth/authorize
+      accessTokenUri: https://auth.mulesoft-vibes.com/oauth/token
+      authorizationGrants: [ client_credentials, authorization_code ]
+
+securedBy: [ oauth_2_0 ]
+
+/products:
+  description: Product inventory operations
+  is: [cacheable, transactional]
+  
+  /{productId}/availability:
+    uriParameters:
+      productId:
+        type: string
+        pattern: ^PROD-[0-9]{8}$
+        example: "PROD-98765432"
+        description: Unique product identifier
+    
+    get:
+      displayName: Check Product Availability
+      description: Check current availability of a specific product
+      is: [oauth2-secured]
+      queryParameters:
+        warehouseId:
+          type: string
+          required: false
+          description: Check availability at specific warehouse
+          example: "WH-NYC-001"
+        includeReserved:
+          type: boolean
+          required: false
+          default: false
+          description: Include reserved inventory in availability count
+      responses:
+        200:
+          description: Product availability retrieved successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                productId:
+                  type: string
+                  example: "PROD-98765432"
+                sku:
+                  type: string
+                  example: "WH-PREM-001"
+                productName:
+                  type: string
+                  example: "Premium Wireless Headphones"
+                totalAvailable:
+                  type: integer
+                  minimum: 0
+                  example: 150
+                totalReserved:
+                  type: integer
+                  minimum: 0
+                  example: 25
+                warehouses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      warehouseId:
+                        type: string
+                        example: "WH-NYC-001"
+                      warehouseName:
+                        type: string
+                        example: "New York Distribution Center"
+                      available:
+                        type: integer
+                        minimum: 0
+                        example: 75
+                      reserved:
+                        type: integer
+                        minimum: 0
+                        example: 15
+                      location:
+                        type: object
+                        properties:
+                          city:
+                            type: string
+                            example: "New York"
+                          state:
+                            type: string
+                            example: "NY"
+                          country:
+                            type: string
+                            example: "US"
+                lastUpdated:
+                  type: datetime
+                  example: "2024-03-23T14:30:00Z"
+              examples:
+                availabilityCheck:
+                  productId: "PROD-98765432"
+                  sku: "WH-PREM-001"
+                  productName: "Premium Wireless Headphones"
+                  totalAvailable: 150
+                  totalReserved: 25
+                  warehouses:
+                    - warehouseId: "WH-NYC-001"
+                      warehouseName: "New York Distribution Center"
+                      available: 75
+                      reserved: 15
+                      location:
+                        city: "New York"
+                        state: "NY"
+                        country: "US"
+                    - warehouseId: "WH-LAX-001"
+                      warehouseName: "Los Angeles Distribution Center"
+                      available: 75
+                      reserved: 10
+                      location:
+                        city: "Los Angeles"
+                        state: "CA"
+                        country: "US"
+                  lastUpdated: "2024-03-23T14:30:00Z"
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        401:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+    post:
+      displayName: Check Multiple Product Availability
+      description: Check availability for multiple products in a single request
+      body:
+        application/json:
+          type: object
+          properties:
+            products:
+              type: array
+              items:
+                type: object
+                properties:
+                  productId:
+                    type: string
+                    required: true
+                  quantity:
+                    type: integer
+                    required: true
+                    minimum: 1
+                  warehousePreference:
+                    type: string
+                    required: false
+            options:
+              type: object
+              required: false
+              properties:
+                includeAlternatives:
+                  type: boolean
+                  default: false
+                  description: Include alternative products if requested item unavailable
+                includeBackorder:
+                  type: boolean
+                  default: true
+                  description: Include backordered items in results
+          examples:
+            bulkCheck:
+              products:
+                - productId: "PROD-98765432"
+                  quantity: 2
+                  warehousePreference: "WH-NYC-001"
+                - productId: "PROD-12345678"
+                  quantity: 1
+              options:
+                includeAlternatives: true
+                includeBackorder: false
+      responses:
+        200:
+          description: Bulk availability check completed
+          body:
+            application/json:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      productId:
+                        type: string
+                      requestedQuantity:
+                        type: integer
+                      availableQuantity:
+                        type: integer
+                      status:
+                        type: string
+                        enum: [AVAILABLE, PARTIAL, UNAVAILABLE, BACKORDERED]
+                      fulfillmentOptions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            warehouseId:
+                              type: string
+                            availableQuantity:
+                              type: integer
+                            estimatedShipDate:
+                              type: date-only
+                      alternatives:
+                        type: array
+                        required: false
+                        items:
+                          type: object
+                          properties:
+                            productId:
+                              type: string
+                            availableQuantity:
+                              type: integer
+                            similarity:
+                              type: number
+                              minimum: 0
+                              maximum: 100
+                overallStatus:
+                  type: string
+                  enum: [AVAILABLE, PARTIAL, UNAVAILABLE]
+              examples:
+                bulkResults:
+                  results:
+                    - productId: "PROD-98765432"
+                      requestedQuantity: 2
+                      availableQuantity: 150
+                      status: "AVAILABLE"
+                      fulfillmentOptions:
+                        - warehouseId: "WH-NYC-001"
+                          availableQuantity: 75
+                          estimatedShipDate: "2024-03-25"
+                    - productId: "PROD-12345678"
+                      requestedQuantity: 1
+                      availableQuantity: 0
+                      status: "UNAVAILABLE"
+                      fulfillmentOptions: []
+                      alternatives:
+                        - productId: "PROD-87654321"
+                          availableQuantity: 50
+                          similarity: 85.5
+                  overallStatus: "PARTIAL"
+        400:
+          body:
+            application/json:
+              type: SystemErrors
+        401:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+/reservations:
+  description: Inventory reservation operations
+  is: [transactional]
+  
+  post:
+    displayName: Create Inventory Reservation
+    description: Reserve inventory for order processing
+    body:
+      application/json:
+        type: object
+        properties:
+          orderId:
+            type: string
+            required: true
+            description: Order identifier for the reservation
+            example: "ORD-2024-001234"
+          items:
+            type: array
+            required: true
+            items:
+              type: object
+              properties:
+                productId:
+                  type: string
+                  required: true
+                  example: "PROD-98765432"
+                quantity:
+                  type: integer
+                  required: true
+                  minimum: 1
+                  example: 2
+                warehouseId:
+                  type: string
+                  required: false
+                  example: "WH-NYC-001"
+          reservationDuration:
+            type: integer
+            required: false
+            minimum: 1
+            maximum: 1440
+            default: 30
+            description: Reservation duration in minutes
+            example: 30
+          customerId:
+            type: string
+            required: false
+            description: Customer making the reservation
+            example: "CUST-12345678"
+        examples:
+          createReservation:
+            orderId: "ORD-2024-001234"
+            items:
+              - productId: "PROD-98765432"
+                quantity: 2
+                warehouseId: "WH-NYC-001"
+              - productId: "PROD-12345678"
+                quantity: 1
+            reservationDuration: 30
+            customerId: "CUST-12345678"
+    responses:
+      201:
+        description: Inventory reservation created successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              reservationId:
+                type: string
+                example: "RES-789123456"
+              orderId:
+                type: string
+                example: "ORD-2024-001234"
+              status:
+                type: string
+                enum: [CREATED, PARTIAL, FAILED]
+                example: "CREATED"
+              expirationTime:
+                type: datetime
+                example: "2024-03-23T15:00:00Z"
+              reservedItems:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    productId:
+                      type: string
+                    requestedQuantity:
+                      type: integer
+                    reservedQuantity:
+                      type: integer
+                    warehouseId:
+                      type: string
+                    status:
+                      type: string
+                      enum: [RESERVED, PARTIAL, UNAVAILABLE]
+            examples:
+              reservationCreated:
+                reservationId: "RES-789123456"
+                orderId: "ORD-2024-001234"
+                status: "CREATED"
+                expirationTime: "2024-03-23T15:00:00Z"
+                reservedItems:
+                  - productId: "PROD-98765432"
+                    requestedQuantity: 2
+                    reservedQuantity: 2
+                    warehouseId: "WH-NYC-001"
+                    status: "RESERVED"
+                  - productId: "PROD-12345678"
+                    requestedQuantity: 1
+                    reservedQuantity: 1
+                    warehouseId: "WH-LAX-001"
+                    status: "RESERVED"
+      400:
+        body:
+          application/json:
+            type: SystemErrors
+      422:
+        body:
+          application/json:
+            type: SystemErrors
+      500:
+        body:
+          application/json:
+            type: SystemErrors
+
+  /{reservationId}:
+    uriParameters:
+      reservationId:
+        type: string
+        pattern: ^RES-[0-9]{9}$
+        example: "RES-789123456"
+        description: Unique reservation identifier
+    
+    get:
+      displayName: Get Reservation Details
+      description: Retrieve details of an existing reservation
+      responses:
+        200:
+          description: Reservation details retrieved successfully
+          body:
+            application/json:
+              type: object
+              properties:
+                reservationId:
+                  type: string
+                  example: "RES-789123456"
+                orderId:
+                  type: string
+                  example: "ORD-2024-001234"
+                status:
+                  type: string
+                  enum: [ACTIVE, EXPIRED, RELEASED, CONSUMED]
+                  example: "ACTIVE"
+                createdTime:
+                  type: datetime
+                  example: "2024-03-23T14:30:00Z"
+                expirationTime:
+                  type: datetime
+                  example: "2024-03-23T15:00:00Z"
+                reservedItems:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      productId:
+                        type: string
+                      reservedQuantity:
+                        type: integer
+                      warehouseId:
+                        type: string
+                      status:
+                        type: string
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+    delete:
+      displayName: Release Reservation
+      description: Release an existing inventory reservation
+      responses:
+        204:
+          description: Reservation released successfully
+        404:
+          body:
+            application/json:
+              type: SystemErrors
+        409:
+          body:
+            application/json:
+              type: SystemErrors
+        500:
+          body:
+            application/json:
+              type: SystemErrors
+
+/stock:
+  description: Stock adjustment operations
+  is: [transactional]
+  
+  post:
+    displayName: Adjust Stock Levels
+    description: Adjust inventory stock levels for products
+    body:
+      application/json:
+        type: object
+        properties:
+          adjustments:
+            type: array
+            required: true
+            items:
+              type: object
+              properties:
+                productId:
+                  type: string
+                  required: true
+                  example: "PROD-98765432"
+                warehouseId:
+                  type: string
+                  required: true
+                  example: "WH-NYC-001"
+                adjustmentType:
+                  type: string
+                  required: true
+                  enum: [INCREASE, DECREASE, SET_ABSOLUTE]
+                  example: "INCREASE"
+                quantity:
+                  type: integer
+                  required: true
+                  minimum: 1
+                  example: 100
+                reason:
+                  type: string
+                  required: true
+                  enum: [RESTOCK, SALE, DAMAGED, RETURNED, CORRECTION, TRANSFER]
+                  example: "RESTOCK"
+                notes:
+                  type: string
+                  required: false
+                  example: "Weekly inventory replenishment"
+          adjustedBy:
+            type: string
+            required: true
+            description: User or system making the adjustment
+            example: "inventory_manager"
+        examples:
+          stockAdjustment:
+            adjustments:
+              - productId: "PROD-98765432"
+                warehouseId: "WH-NYC-001"
+                adjustmentType: "INCREASE"
+                quantity: 100
+                reason: "RESTOCK"
+                notes: "Weekly inventory replenishment"
+            adjustedBy: "inventory_manager"
+    responses:
+      200:
+        description: Stock adjustments processed successfully
+        body:
+          application/json:
+            type: object
+            properties:
+              adjustmentId:
+                type: string
+                example: "ADJ-456789123"
+              processedAdjustments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    productId:
+                      type: string
+                    warehouseId:
+                      type: string
+                    previousQuantity:
+                      type: integer
+                    adjustmentQuantity:
+                      type: integer
+                    newQuantity:
+                      type: integer
+                    status:
+                      type: string
+                      enum: [SUCCESS, FAILED]
+            examples:
+              adjustmentResult:
+                adjustmentId: "ADJ-456789123"
+                processedAdjustments:
+                  - productId: "PROD-98765432"
+                    warehouseId: "WH-NYC-001"
+                    previousQuantity: 150
+                    adjustmentQuantity: 100
+                    newQuantity: 250
+                    status: "SUCCESS"
+      400:
+        body:
+          application/json:
+            type: SystemErrors
+      422:
+        body:
+          application/json:
+            type: SystemErrors
+      500:
+        body:
+          application/json:
+            type: SystemErrors
+
+/health:
+  description: API health check endpoint
+  get:
+    displayName: Health Check
+    description: Check inventory system API health status
+    responses:
+      200:
+        description: API is healthy
+        body:
+          application/json:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, DEGRADED]
+              timestamp:
+                type: datetime
+              version:
+                type: string
+              dependencies:
+                type: object
+                properties:
+                  database:
+                    type: string
+                    enum: [UP, DOWN]
+                  warehouseSystem:
+                    type: string
+                    enum: [UP, DOWN]
+                  cacheService:
+                    type: string
+                    enum: [UP, DOWN]
+            example:
+              status: "UP"
+              timestamp: "2024-03-23T14:30:00Z"
+              version: "v1"
+              dependencies:
+                database: "UP"
+                warehouseSystem: "UP"
+                cacheService: "UP"
+      503:
+        description: Service unavailable
+        body:
+          application/json:
+            type: SystemErrors

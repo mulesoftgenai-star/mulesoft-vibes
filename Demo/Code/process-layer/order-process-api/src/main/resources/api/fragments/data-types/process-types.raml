@@ -1,0 +1,176 @@
+#%RAML 1.0 Library
+
+types:
+  # Base Types
+  ID:
+    type: string
+    pattern: ^[A-Z0-9]{10}$
+    description: Standard identifier format
+    example: "ORD1234567"
+
+  Money:
+    type: object
+    properties:
+      amount:
+        type: number
+        format: double
+        minimum: 0
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+    example:
+      amount: 125.99
+      currency: "USD"
+
+  # Process Orchestration Types
+  OrderProcessRequest:
+    type: object
+    properties:
+      orderId:
+        type: ID
+        description: Unique order identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            productId:
+              type: ID
+            quantity:
+              type: integer
+              minimum: 1
+            unitPrice:
+              type: Money
+      billingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+          city:
+            type: string
+          state:
+            type: string
+          postalCode:
+            type: string
+          country:
+            type: string
+      shippingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+          city:
+            type: string
+          state:
+            type: string
+          postalCode:
+            type: string
+          country:
+            type: string
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER]
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, PICKUP]
+    example:
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      items:
+        - productId: "PRD9876543"
+          quantity: 2
+          unitPrice:
+            amount: 199.99
+            currency: "USD"
+      billingAddress:
+        street: "123 Main Street"
+        city: "New York"
+        state: "NY"
+        postalCode: "10001"
+        country: "US"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      paymentMethod: "CREDIT_CARD"
+      shippingMethod: "STANDARD"
+
+  ValidationResult:
+    type: object
+    properties:
+      isValid:
+        type: boolean
+        description: Whether validation passed
+      errors:
+        type: array
+        required: false
+        items:
+          type: object
+          properties:
+            field:
+              type: string
+            message:
+              type: string
+            code:
+              type: string
+      warnings:
+        type: array
+        required: false
+        items:
+          type: object
+          properties:
+            field:
+              type: string
+            message:
+              type: string
+            code:
+              type: string
+    example:
+      isValid: false
+      errors:
+        - field: "customerId"
+          message: "Customer not found"
+          code: "CUSTOMER_NOT_FOUND"
+      warnings:
+        - field: "inventory"
+          message: "Low stock for product"
+          code: "LOW_STOCK_WARNING"
+
+  ProcessStepResult:
+    type: object
+    properties:
+      step:
+        type: string
+        enum: [CUSTOMER_VALIDATION, INVENTORY_CHECK, PAYMENT_AUTHORIZATION, ORDER_CREATION, SHIPMENT_REQUEST]
+      status:
+        type: string
+        enum: [SUCCESS, FAILED, PENDING, SKIPPED]
+      result:
+        type: object
+        required: false
+        description: Step-specific result data
+      message:
+        type: string
+        required: false
+        description: Optional message describing the step result
+      timestamp:
+        type: datetime
+        format: rfc3339
+        required: false
+        description: Timestamp when the step was completed
+    example:
+      step: "CUSTOMER_VALIDATION"
+      status: "SUCCESS"
+      result:
+        customerId: "CUST789012"
+        isValid: true
+        customerStatus: "ACTIVE"
+      message: "Customer validation completed successfully"
+      timestamp: "2024-03-27T15:30:00.000Z"

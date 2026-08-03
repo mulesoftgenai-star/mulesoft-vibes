@@ -1,0 +1,144 @@
+#%RAML 1.0 Library
+
+uses:
+  processTypes: ../data-types/process-types.raml
+
+types:
+  ProcessOrderRequest:
+    type: object
+    properties:
+      orderId:
+        type: processTypes.ID
+        description: Unique order identifier
+      customerId:
+        type: processTypes.ID
+        description: Customer identifier
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            productId:
+              type: processTypes.ID
+            quantity:
+              type: integer
+              minimum: 1
+            unitPrice:
+              type: processTypes.Money
+      billingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+          city:
+            type: string
+          state:
+            type: string
+          postalCode:
+            type: string
+          country:
+            type: string
+      shippingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+          city:
+            type: string
+          state:
+            type: string
+          postalCode:
+            type: string
+          country:
+            type: string
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER]
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, PICKUP]
+    example:
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      items:
+        - productId: "PRD9876543"
+          quantity: 2
+          unitPrice:
+            amount: 199.99
+            currency: "USD"
+      billingAddress:
+        street: "123 Main Street"
+        city: "New York"
+        state: "NY"
+        postalCode: "10001"
+        country: "US"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      paymentMethod: "CREDIT_CARD"
+      shippingMethod: "STANDARD"
+
+  ValidateOrderRequest:
+    type: object
+    properties:
+      customerId:
+        type: processTypes.ID
+        description: Customer identifier
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            productId:
+              type: processTypes.ID
+            quantity:
+              type: integer
+              minimum: 1
+      billingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+          city:
+            type: string
+          state:
+            type: string
+          postalCode:
+            type: string
+          country:
+            type: string
+      shippingAddress:
+        type: object
+        properties:
+          street:
+            type: string
+          city:
+            type: string
+          state:
+            type: string
+          postalCode:
+            type: string
+          country:
+            type: string
+    example:
+      customerId: "CUST789012"
+      items:
+        - productId: "PRD9876543"
+          quantity: 2
+      billingAddress:
+        street: "123 Main Street"
+        city: "New York"
+        state: "NY"
+        postalCode: "10001"
+        country: "US"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"

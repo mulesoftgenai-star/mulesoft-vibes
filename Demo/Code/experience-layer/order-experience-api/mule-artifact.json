@@ -1,0 +1,24 @@
+{
+  "minMuleVersion": "4.6.0",
+  "requiredProducts": [],
+  "classLoaderModelLoaderDescriptor": {
+    "id": "mule",
+    "attributes": {
+      "exportedResources": []
+    }
+  },
+  "bundleDescriptorLoader": {
+    "id": "mule",
+    "attributes": {}
+  },
+  "configs": [],
+  "redeploymentEnabled": true,
+  "name": "order-experience-api",
+  "logConfigFile": "log4j2.xml",
+  "secureProperties": [],
+  "javaSpecificationVersions": [
+    "1.8",
+    "11",
+    "17"
+  ]
+}

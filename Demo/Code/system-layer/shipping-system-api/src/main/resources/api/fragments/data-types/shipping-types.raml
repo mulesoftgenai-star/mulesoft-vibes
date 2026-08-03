@@ -1,0 +1,499 @@
+#%RAML 1.0 Library
+
+types:
+  # Base Types
+  ID:
+    type: string
+    pattern: ^[A-Z0-9]{10}$
+    description: Standard identifier format
+    example: "SHP1234567"
+
+  Address:
+    type: object
+    properties:
+      street:
+        type: string
+        minLength: 1
+        maxLength: 100
+      street2:
+        type: string
+        required: false
+        maxLength: 100
+      city:
+        type: string
+        minLength: 1
+        maxLength: 50
+      state:
+        type: string
+        minLength: 2
+        maxLength: 50
+      postalCode:
+        type: string
+        pattern: ^[0-9]{5}(-[0-9]{4})?$
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        example: "US"
+    example:
+      street: "123 Main Street"
+      city: "New York"
+      state: "NY"
+      postalCode: "10001"
+      country: "US"
+
+  Dimensions:
+    type: object
+    properties:
+      length:
+        type: number
+        minimum: 0.1
+        description: Length measurement
+      width:
+        type: number
+        minimum: 0.1
+        description: Width measurement
+      height:
+        type: number
+        minimum: 0.1
+        description: Height measurement
+      unit:
+        type: string
+        enum: [INCHES, CM]
+        default: INCHES
+        description: Unit of measurement
+    example:
+      length: 12
+      width: 8
+      height: 6
+      unit: "INCHES"
+
+  Money:
+    type: object
+    properties:
+      amount:
+        type: number
+        minimum: 0
+        description: Monetary amount
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+        description: Currency code
+    example:
+      amount: 9.99
+      currency: "USD"
+
+  Package:
+    type: object
+    properties:
+      weight:
+        type: number
+        description: Package weight
+        example: 3.5
+      weightUnit:
+        type: string
+        enum: ["LBS", "KG", "OZ", "G"]
+        description: Weight unit
+        example: "LBS"
+        default: "LBS"
+      dimensions:
+        type: Dimensions
+        description: Package dimensions
+      value:
+        type: Money
+        description: Declared package value
+        required: false
+
+  ShipmentItem:
+    type: object
+    properties:
+      productId:
+        type: string
+        description: Product identifier
+        example: "PROD001"
+      productName:
+        type: string
+        description: Product name
+        example: "Premium Wireless Headphones"
+      quantity:
+        type: integer
+        description: Quantity of items
+        minimum: 1
+        example: 2
+      weight:
+        type: number
+        description: Total weight of items
+        example: 1.5
+      dimensions:
+        type: Dimensions
+        description: Item dimensions
+        required: false
+
+  TrackingInfo:
+    type: object
+    properties:
+      trackingNumber:
+        type: string
+        description: Carrier tracking number
+        example: "1Z12345E1234567890"
+      carrier:
+        type: string
+        enum: ["UPS", "FEDEX", "DHL", "USPS"]
+        description: Shipping carrier
+        example: "UPS"
+      status:
+        type: string
+        enum: ["PENDING", "PROCESSING", "SHIPPED", "IN_TRANSIT", "DELIVERED", "CANCELLED", "RETURNED"]
+        description: Current tracking status
+        example: "IN_TRANSIT"
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+        example: "2024-01-20"
+        required: false
+      actualDeliveryDate:
+        type: date-only
+        description: Actual delivery date
+        example: "2024-01-19"
+        required: false
+      events:
+        type: TrackingEvent[]
+        description: List of tracking events
+        required: false
+
+  ShipmentRequest:
+    type: object
+    properties:
+      orderId:
+        type: ID
+        description: Associated order identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            productId:
+              type: ID
+            productName:
+              type: string
+            quantity:
+              type: integer
+              minimum: 1
+            weight:
+              type: number
+              minimum: 0
+              description: Weight in pounds
+            dimensions:
+              type: object
+              required: false
+              properties:
+                length:
+                  type: number
+                  minimum: 0
+                width:
+                  type: number
+                  minimum: 0
+                height:
+                  type: number
+                  minimum: 0
+                unit:
+                  type: string
+                  enum: [INCHES, CM]
+                  default: INCHES
+      shippingAddress:
+        type: Address
+        description: Delivery address
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, PICKUP, FREIGHT]
+        description: Shipping method requested
+      specialInstructions:
+        type: string
+        required: false
+        maxLength: 500
+        description: Special delivery instructions
+    example:
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      items:
+        - productId: "PRD9876543"
+          productName: "Premium Wireless Headphones"
+          quantity: 2
+          weight: 1.5
+          dimensions:
+            length: 8
+            width: 6
+            height: 4
+            unit: "INCHES"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      shippingMethod: "STANDARD"
+      specialInstructions: "Handle with care"
+
+  Shipment:
+    type: object
+    properties:
+      shipmentId:
+        type: ID
+        description: Unique shipment identifier
+      orderId:
+        type: ID
+        description: Associated order identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      trackingNumber:
+        type: string
+        minLength: 5
+        maxLength: 50
+        description: Carrier tracking number
+      carrier:
+        type: string
+        enum: [FEDEX, UPS, USPS, DHL, LOCAL_DELIVERY]
+        description: Shipping carrier
+      carrierService:
+        type: string
+        description: Specific carrier service
+        example: "FedEx Ground"
+      status:
+        type: string
+        enum: [PENDING, PROCESSING, DISPATCHED, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, RETURNED, EXCEPTION]
+        description: Current shipment status
+      shippingAddress:
+        type: Address
+        description: Delivery address
+      estimatedDeliveryDate:
+        type: date-only
+        required: false
+        description: Estimated delivery date
+      actualDeliveryDate:
+        type: date-only
+        required: false
+        description: Actual delivery date
+      deliverySignature:
+        type: string
+        required: false
+        description: Signature on delivery
+      packageCount:
+        type: integer
+        minimum: 1
+        description: Number of packages
+      totalWeight:
+        type: number
+        minimum: 0
+        description: Total weight in pounds
+      shippingCost:
+        type: object
+        properties:
+          amount:
+            type: number
+            minimum: 0
+          currency:
+            type: string
+            pattern: ^[A-Z]{3}$
+            example: "USD"
+        description: Shipping cost
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            productId:
+              type: ID
+            productName:
+              type: string
+            quantity:
+              type: integer
+            weight:
+              type: number
+      trackingEvents:
+        type: TrackingEvent[]
+        required: false
+        description: Tracking event history
+      createdAt:
+        type: datetime
+        format: rfc3339
+        description: Shipment creation timestamp
+      updatedAt:
+        type: datetime
+        format: rfc3339
+        description: Last update timestamp
+    example:
+      shipmentId: "SHP1234567"
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      trackingNumber: "1Z999AA1012345675"
+      carrier: "UPS"
+      carrierService: "UPS Ground"
+      status: "IN_TRANSIT"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      estimatedDeliveryDate: "2024-03-29"
+      packageCount: 1
+      totalWeight: 3.0
+      shippingCost:
+        amount: 9.99
+        currency: "USD"
+      items:
+        - productId: "PRD9876543"
+          productName: "Premium Wireless Headphones"
+          quantity: 2
+          weight: 1.5
+      createdAt: "2024-03-27T16:00:00.000Z"
+      updatedAt: "2024-03-27T18:30:00.000Z"
+
+  TrackingEvent:
+    type: object
+    properties:
+      eventId:
+        type: ID
+        description: Unique event identifier
+      shipmentId:
+        type: ID
+        description: Associated shipment identifier
+      status:
+        type: string
+        enum: [LABEL_CREATED, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, EXCEPTION, RETURNED]
+        description: Event status
+      description:
+        type: string
+        maxLength: 500
+        description: Event description
+      location:
+        type: string
+        required: false
+        maxLength: 200
+        description: Event location
+      timestamp:
+        type: datetime
+        format: rfc3339
+        description: Event timestamp
+      carrierEventCode:
+        type: string
+        required: false
+        description: Carrier-specific event code
+    example:
+      eventId: "EVT1234567"
+      shipmentId: "SHP1234567"
+      status: "IN_TRANSIT"
+      description: "Package is in transit to destination"
+      location: "Newark, NJ"
+      timestamp: "2024-03-27T18:30:00.000Z"
+      carrierEventCode: "IT"
+
+  ShippingRate:
+    type: object
+    properties:
+      rateId:
+        type: ID
+        description: Unique rate identifier
+      carrier:
+        type: string
+        enum: [FEDEX, UPS, USPS, DHL, LOCAL_DELIVERY]
+        description: Shipping carrier
+      service:
+        type: string
+        description: Service type
+        example: "Ground"
+      cost:
+        type: object
+        properties:
+          amount:
+            type: number
+            minimum: 0
+          currency:
+            type: string
+            pattern: ^[A-Z]{3}$
+            example: "USD"
+      estimatedDays:
+        type: integer
+        minimum: 1
+        description: Estimated delivery days
+      estimatedDeliveryDate:
+        type: date-only
+        description: Estimated delivery date
+    example:
+      rateId: "RATE123456"
+      carrier: "UPS"
+      service: "Ground"
+      cost:
+        amount: 9.99
+        currency: "USD"
+      estimatedDays: 3
+      estimatedDeliveryDate: "2024-03-30"
+
+  RateRequest:
+    type: object
+    properties:
+      originAddress:
+        type: Address
+        description: Shipping origin address
+      destinationAddress:
+        type: Address
+        description: Shipping destination address
+      packages:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            weight:
+              type: number
+              minimum: 0.1
+              description: Package weight in pounds
+            dimensions:
+              type: object
+              properties:
+                length:
+                  type: number
+                  minimum: 0.1
+                width:
+                  type: number
+                  minimum: 0.1
+                height:
+                  type: number
+                  minimum: 0.1
+                unit:
+                  type: string
+                  enum: [INCHES, CM]
+                  default: INCHES
+      serviceTypes:
+        type: array
+        required: false
+        items:
+          type: string
+          enum: [STANDARD, EXPRESS, OVERNIGHT]
+        description: Requested service types (optional)
+    example:
+      originAddress:
+        street: "100 Warehouse Dr"
+        city: "Edison"
+        state: "NJ"
+        postalCode: "08817"
+        country: "US"
+      destinationAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      packages:
+        - weight: 3.0
+          dimensions:
+            length: 12
+            width: 8
+            height: 6
+            unit: "INCHES"
+      serviceTypes: ["STANDARD", "EXPRESS"]

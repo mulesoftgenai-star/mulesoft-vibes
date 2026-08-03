@@ -1,0 +1,287 @@
+#%RAML 1.0 Library
+
+types:
+  # Base Types
+  ID:
+    type: string
+    pattern: ^[A-Z0-9]{10}$
+    description: Standard identifier format
+    example: "PAY1234567"
+
+  Money:
+    type: object
+    properties:
+      amount:
+        type: number
+        format: double
+        minimum: 0
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+    example:
+      amount: 125.99
+      currency: "USD"
+
+  PaymentMethod:
+    type: object
+    properties:
+      paymentMethodId:
+        type: ID
+        description: Unique payment method identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      type:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER, DIGITAL_WALLET]
+        description: Payment method type
+      isDefault:
+        type: boolean
+        default: false
+        description: Whether this is the default payment method
+      cardDetails:
+        type: object
+        required: false
+        properties:
+          lastFourDigits:
+            type: string
+            pattern: ^[0-9]{4}$
+            description: Last 4 digits of card number
+          expiryMonth:
+            type: integer
+            minimum: 1
+            maximum: 12
+            description: Card expiry month
+          expiryYear:
+            type: integer
+            minimum: 2024
+            maximum: 2034
+            description: Card expiry year
+          cardType:
+            type: string
+            enum: [VISA, MASTERCARD, AMERICAN_EXPRESS, DISCOVER]
+            description: Card brand
+          holderName:
+            type: string
+            maxLength: 100
+            description: Cardholder name
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, EXPIRED, BLOCKED]
+        description: Payment method status
+      createdAt:
+        type: datetime
+        format: rfc3339
+      updatedAt:
+        type: datetime
+        format: rfc3339
+    example:
+      paymentMethodId: "PM12345678"
+      customerId: "CUST789012"
+      type: "CREDIT_CARD"
+      isDefault: true
+      cardDetails:
+        lastFourDigits: "1234"
+        expiryMonth: 12
+        expiryYear: 2026
+        cardType: "VISA"
+        holderName: "John Smith"
+      status: "ACTIVE"
+      createdAt: "2023-01-15T10:30:00.000Z"
+      updatedAt: "2024-03-27T15:30:00.000Z"
+
+  CardDetails:
+    type: object
+    properties:
+      cardNumber:
+        type: string
+        description: Credit/debit card number (masked for security)
+        pattern: ^\d{4}\*{8}\d{4}$
+        example: "1234********5678"
+      expiryMonth:
+        type: integer
+        description: Expiry month (1-12)
+        minimum: 1
+        maximum: 12
+        example: 12
+      expiryYear:
+        type: integer
+        description: Expiry year
+        minimum: 2024
+        example: 2026
+      cardholderName:
+        type: string
+        description: Name on the card
+        example: "John Doe"
+      cvv:
+        type: string
+        description: Card verification value (for new registrations only)
+        pattern: ^\d{3,4}$
+        example: "123"
+        required: false
+
+  BankDetails:
+    type: object
+    properties:
+      accountNumber:
+        type: string
+        description: Bank account number (masked for security)
+        pattern: ^\*{8}\d{4}$
+        example: "********1234"
+      routingNumber:
+        type: string
+        description: Bank routing number
+        pattern: ^\d{9}$
+        example: "123456789"
+      accountType:
+        type: string
+        enum: ["CHECKING", "SAVINGS"]
+        description: Type of bank account
+        example: "CHECKING"
+      bankName:
+        type: string
+        description: Name of the bank
+        example: "First National Bank"
+      accountHolderName:
+        type: string
+        description: Name of the account holder
+        example: "John Doe"
+
+  PaymentTransaction:
+    type: object
+    properties:
+      transactionId:
+        type: ID
+        description: Unique transaction identifier
+      orderId:
+        type: ID
+        description: Associated order identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      paymentMethodId:
+        type: ID
+        description: Payment method used
+      amount:
+        type: Money
+        description: Transaction amount
+      type:
+        type: string
+        enum: [AUTHORIZATION, CAPTURE, REFUND, VOID]
+        description: Transaction type
+      status:
+        type: string
+        enum: [PENDING, AUTHORIZED, CAPTURED, FAILED, REFUNDED]
+        description: Transaction status
+      gateway:
+        type: string
+        enum: [STRIPE, PAYPAL, SQUARE, AUTHORIZE_NET]
+        description: Payment gateway used
+      gatewayTransactionId:
+        type: string
+        required: false
+        description: Gateway-specific transaction ID
+      authorizationCode:
+        type: string
+        required: false
+        description: Authorization code from gateway
+      failureReason:
+        type: string
+        required: false
+        description: Reason for failure (if applicable)
+      processingFee:
+        type: Money
+        required: false
+        description: Processing fee charged
+      createdAt:
+        type: datetime
+        format: rfc3339
+      updatedAt:
+        type: datetime
+        format: rfc3339
+    example:
+      transactionId: "TXN9876543"
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      paymentMethodId: "PM12345678"
+      amount:
+        amount: 441.97
+        currency: "USD"
+      type: "CAPTURE"
+      status: "CAPTURED"
+      gateway: "STRIPE"
+      gatewayTransactionId: "ch_1234567890"
+      authorizationCode: "AUTH123456"
+      processingFee:
+        amount: 12.82
+        currency: "USD"
+      createdAt: "2024-03-27T15:30:00.000Z"
+      updatedAt: "2024-03-27T15:32:00.000Z"
+
+  AuthorizationRequest:
+    type: object
+    properties:
+      orderId:
+        type: ID
+        description: Order identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      paymentMethodId:
+        type: ID
+        description: Payment method to use
+      amount:
+        type: Money
+        description: Amount to authorize
+      description:
+        type: string
+        required: false
+        maxLength: 500
+        description: Payment description
+    example:
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      paymentMethodId: "PM12345678"
+      amount:
+        amount: 441.97
+        currency: "USD"
+      description: "Payment for Order ORD1234567"
+
+  CaptureRequest:
+    type: object
+    properties:
+      transactionId:
+        type: ID
+        description: Authorization transaction to capture
+      amount:
+        type: Money
+        required: false
+        description: Amount to capture (defaults to full authorized amount)
+    example:
+      transactionId: "TXN9876543"
+      amount:
+        amount: 441.97
+        currency: "USD"
+
+  RefundRequest:
+    type: object
+    properties:
+      transactionId:
+        type: ID
+        description: Transaction to refund
+      amount:
+        type: Money
+        required: false
+        description: Amount to refund (defaults to full transaction amount)
+      reason:
+        type: string
+        required: false
+        maxLength: 500
+        description: Reason for refund
+    example:
+      transactionId: "TXN9876543"
+      amount:
+        amount: 200.00
+        currency: "USD"
+      reason: "Customer requested partial refund"

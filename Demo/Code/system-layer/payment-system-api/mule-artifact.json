@@ -1,0 +1,25 @@
+{
+  "minMuleVersion": "4.6.0",
+  "requiredProduct": "MULE_EE",
+  "classLoaderModelLoaderDescriptor": {
+    "id": "mule",
+    "attributes": {
+      "exportedResources": [],
+      "exportedPackages": [],
+      "includeTestDependencies": false
+    }
+  },
+  "bundleDescriptorLoader": {
+    "id": "mule",
+    "attributes": {}
+  },
+  "configs": [
+    "payment-system-api.xml"
+  ],
+  "redeploymentEnabled": true,
+  "name": "payment-system-api",
+  "logConfigFile": "log4j2.xml",
+  "secureProperties": [
+    "secure-properties-${mule.env}.yaml"
+  ]
+}

@@ -1,0 +1,201 @@
+#%RAML 1.0 Library
+
+types:
+  # Base Types
+  ID:
+    type: string
+    pattern: ^[A-Z0-9]{10}$
+    description: Standard identifier format
+    example: "ORD1234567"
+
+  Money:
+    type: object
+    properties:
+      amount:
+        type: number
+        format: double
+        minimum: 0
+      currency:
+        type: string
+        pattern: ^[A-Z]{3}$
+        example: "USD"
+    example:
+      amount: 125.99
+      currency: "USD"
+
+  Address:
+    type: object
+    properties:
+      street:
+        type: string
+        minLength: 1
+        maxLength: 100
+      street2:
+        type: string
+        required: false
+        maxLength: 100
+      city:
+        type: string
+        minLength: 1
+        maxLength: 50
+      state:
+        type: string
+        minLength: 2
+        maxLength: 50
+      postalCode:
+        type: string
+        pattern: ^[0-9]{5}(-[0-9]{4})?$
+      country:
+        type: string
+        pattern: ^[A-Z]{2}$
+        example: "US"
+    example:
+      street: "123 Main Street"
+      city: "New York"
+      state: "NY"
+      postalCode: "10001"
+      country: "US"
+
+  OrderItem:
+    type: object
+    properties:
+      itemId:
+        type: ID
+        description: Unique identifier for the order item
+      productId:
+        type: ID
+        description: Product identifier
+      productName:
+        type: string
+        minLength: 1
+        maxLength: 200
+      sku:
+        type: string
+        minLength: 1
+        maxLength: 50
+      quantity:
+        type: integer
+        minimum: 1
+        maximum: 9999
+      unitPrice:
+        type: Money
+      totalPrice:
+        type: Money
+      category:
+        type: string
+        required: false
+        maxLength: 100
+    example:
+      itemId: "ITM1234567"
+      productId: "PRD9876543"
+      productName: "Premium Wireless Headphones"
+      sku: "WHD-001-BLK"
+      quantity: 2
+      unitPrice:
+        amount: 199.99
+        currency: "USD"
+      totalPrice:
+        amount: 399.98
+        currency: "USD"
+      category: "Electronics"
+
+  Order:
+    type: object
+    properties:
+      orderId:
+        type: ID
+        description: Unique order identifier
+      customerId:
+        type: ID
+        description: Customer identifier
+      orderNumber:
+        type: string
+        minLength: 1
+        maxLength: 50
+        description: Human-readable order number
+      orderDate:
+        type: datetime
+        format: rfc3339
+        description: Order creation timestamp
+      status:
+        type: string
+        enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, REFUNDED]
+        default: PENDING
+      items:
+        type: OrderItem[]
+        minItems: 1
+        description: List of ordered items
+      subtotal:
+        type: Money
+      tax:
+        type: Money
+      shipping:
+        type: Money
+      total:
+        type: Money
+      billingAddress:
+        type: Address
+      shippingAddress:
+        type: Address
+      paymentMethod:
+        type: string
+        enum: [CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER]
+      shippingMethod:
+        type: string
+        enum: [STANDARD, EXPRESS, OVERNIGHT, PICKUP]
+      notes:
+        type: string
+        required: false
+        maxLength: 500
+      createdAt:
+        type: datetime
+        format: rfc3339
+      updatedAt:
+        type: datetime
+        format: rfc3339
+    example:
+      orderId: "ORD1234567"
+      customerId: "CUST789012"
+      orderNumber: "ORD-2024-001234"
+      orderDate: "2024-03-27T15:30:00.000Z"
+      status: "CONFIRMED"
+      items:
+        - itemId: "ITM1234567"
+          productId: "PRD9876543"
+          productName: "Premium Wireless Headphones"
+          sku: "WHD-001-BLK"
+          quantity: 2
+          unitPrice:
+            amount: 199.99
+            currency: "USD"
+          totalPrice:
+            amount: 399.98
+            currency: "USD"
+      subtotal:
+        amount: 399.98
+        currency: "USD"
+      tax:
+        amount: 32.00
+        currency: "USD"
+      shipping:
+        amount: 9.99
+        currency: "USD"
+      total:
+        amount: 441.97
+        currency: "USD"
+      billingAddress:
+        street: "123 Main Street"
+        city: "New York"
+        state: "NY"
+        postalCode: "10001"
+        country: "US"
+      shippingAddress:
+        street: "456 Oak Avenue"
+        city: "Brooklyn"
+        state: "NY"
+        postalCode: "11201"
+        country: "US"
+      paymentMethod: "CREDIT_CARD"
+      shippingMethod: "STANDARD"
+      createdAt: "2024-03-27T15:30:00.000Z"
+      updatedAt: "2024-03-27T15:30:00.000Z"
